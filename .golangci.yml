@@ -4,9 +4,6 @@ run:
   timeout: 5m
   modules-download-mode: readonly
   tests: false
-  exclude-dirs:
-    - licenses
-    - vendor
 
 formatters:
   enable:
@@ -16,6 +13,10 @@ formatters:
     goimports:
       local-prefixes:
         - github.com/ravinald/wifimgr
+  exclusions:
+    paths:
+      - licenses
+      - vendor
 
 linters:
   enable:
@@ -34,6 +35,10 @@ linters:
         - "-QF*"
         - "-ST*"
         - "-S1023"
+  exclusions:
+    paths:
+      - licenses
+      - vendor
 
 issues:
   max-issues-per-linter: 0
