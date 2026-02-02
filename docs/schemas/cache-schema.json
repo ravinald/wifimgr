@@ -1,0 +1,587 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "wifimgr API Cache Schema",
+  "description": "Schema for per-API cache files used by wifimgr. Each configured API (e.g., mist-prod, meraki-corp) has its own cache file.",
+  "type": "object",
+  "required": ["version", "api_label", "meta", "site_index", "sites", "inventory"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Cache schema version"
+    },
+    "api_label": {
+      "type": "string",
+      "description": "The API label this cache belongs to (e.g., 'mist-prod', 'meraki-corp')"
+    },
+    "meta": {
+      "$ref": "#/definitions/cacheMeta"
+    },
+    "site_index": {
+      "$ref": "#/definitions/siteIndex"
+    },
+    "sites": {
+      "type": "object",
+      "description": "Site data from the API",
+      "properties": {
+        "info": {
+          "type": "array",
+          "description": "Array of site information objects",
+          "items": {
+            "$ref": "#/definitions/siteInfo"
+          }
+        },
+        "settings": {
+          "type": "array",
+          "description": "Vendor-specific site settings (optional)",
+          "items": {}
+        }
+      },
+      "required": ["info"]
+    },
+    "inventory": {
+      "type": "object",
+      "description": "Device inventory organized by device type, keyed by normalized MAC address",
+      "properties": {
+        "ap": {
+          "type": "object",
+          "description": "Access points indexed by normalized MAC address",
+          "additionalProperties": {
+            "$ref": "#/definitions/inventoryItem"
+          }
+        },
+        "switch": {
+          "type": "object",
+          "description": "Switches indexed by normalized MAC address",
+          "additionalProperties": {
+            "$ref": "#/definitions/inventoryItem"
+          }
+        },
+        "gateway": {
+          "type": "object",
+          "description": "Gateways indexed by normalized MAC address",
+          "additionalProperties": {
+            "$ref": "#/definitions/inventoryItem"
+          }
+        }
+      },
+      "required": ["ap", "switch", "gateway"]
+    },
+    "templates": {
+      "type": "object",
+      "description": "RF and other templates (optional)",
+      "properties": {
+        "rf": {
+          "type": "array",
+          "description": "RF templates/profiles",
+          "items": {
+            "$ref": "#/definitions/rfTemplate"
+          }
+        },
+        "gateway": {
+          "type": "array",
+          "description": "Gateway templates",
+          "items": {
+            "$ref": "#/definitions/gatewayTemplate"
+          }
+        },
+        "wlan": {
+          "type": "array",
+          "description": "WLAN templates",
+          "items": {
+            "$ref": "#/definitions/wlanTemplate"
+          }
+        }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "description": "Device profiles (Mist-specific, may be empty for other vendors)",
+      "properties": {
+        "devices": {
+          "type": "array",
+          "description": "Device profile objects",
+          "items": {
+            "$ref": "#/definitions/deviceProfile"
+          }
+        }
+      }
+    },
+    "wlans": {
+      "type": "object",
+      "description": "WLAN/SSID configurations keyed by ID",
+      "additionalProperties": {
+        "$ref": "#/definitions/wlan"
+      }
+    },
+    "configs": {
+      "type": "object",
+      "description": "Device configurations by MAC address",
+      "properties": {
+        "ap": {
+          "type": "object",
+          "description": "AP configurations indexed by normalized MAC address",
+          "additionalProperties": {
+            "$ref": "#/definitions/apConfig"
+          }
+        },
+        "switch": {
+          "type": "object",
+          "description": "Switch configurations indexed by normalized MAC address",
+          "additionalProperties": {
+            "$ref": "#/definitions/switchConfig"
+          }
+        },
+        "gateway": {
+          "type": "object",
+          "description": "Gateway configurations indexed by normalized MAC address",
+          "additionalProperties": {
+            "$ref": "#/definitions/gatewayConfig"
+          }
+        }
+      }
+    },
+    "device_status": {
+      "type": "object",
+      "description": "Device status data indexed by normalized MAC address",
+      "additionalProperties": {
+        "$ref": "#/definitions/deviceStatus"
+      }
+    }
+  },
+  "definitions": {
+    "cacheMeta": {
+      "type": "object",
+      "description": "Metadata about the cache",
+      "required": ["vendor", "org_id", "last_refresh"],
+      "properties": {
+        "vendor": {
+          "type": "string",
+          "description": "Vendor type (mist, meraki, etc.)"
+        },
+        "org_id": {
+          "type": "string",
+          "description": "Organization ID"
+        },
+        "last_refresh": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of last cache refresh"
+        },
+        "refresh_duration_ms": {
+          "type": "integer",
+          "description": "Duration of last refresh in milliseconds"
+        },
+        "item_counts": {
+          "type": "object",
+          "description": "Count of items in each cache section",
+          "additionalProperties": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "siteIndex": {
+      "type": "object",
+      "description": "O(1) lookup indexes for sites",
+      "properties": {
+        "by_name": {
+          "type": "object",
+          "description": "Site name to site ID mapping",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "by_id": {
+          "type": "object",
+          "description": "Site ID to site name mapping",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["by_name", "by_id"]
+    },
+    "siteInfo": {
+      "type": "object",
+      "description": "Site information from the API",
+      "required": ["id", "name"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Site UUID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Site name"
+        },
+        "address": {
+          "type": "string",
+          "description": "Site physical address"
+        },
+        "country_code": {
+          "type": "string",
+          "description": "Two-letter country code"
+        },
+        "timezone": {
+          "type": "string",
+          "description": "Timezone of the site"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional notes about the site"
+        },
+        "latlng": {
+          "type": "object",
+          "properties": {
+            "lat": {
+              "type": "number",
+              "description": "Latitude coordinate"
+            },
+            "lng": {
+              "type": "number",
+              "description": "Longitude coordinate"
+            }
+          },
+          "required": ["lat", "lng"]
+        },
+        "org_id": {
+          "type": "string",
+          "description": "Organization ID"
+        },
+        "created_time": {
+          "type": "integer",
+          "description": "Unix timestamp of creation time"
+        },
+        "modified_time": {
+          "type": "integer",
+          "description": "Unix timestamp of last modification time"
+        }
+      }
+    },
+    "inventoryItem": {
+      "type": "object",
+      "description": "Device inventory item",
+      "required": ["id", "mac", "type"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Device UUID"
+        },
+        "site_id": {
+          "type": "string",
+          "description": "Site UUID the device belongs to"
+        },
+        "name": {
+          "type": "string",
+          "description": "Device name"
+        },
+        "mac": {
+          "type": "string",
+          "description": "MAC address"
+        },
+        "serial": {
+          "type": "string",
+          "description": "Device serial number"
+        },
+        "model": {
+          "type": "string",
+          "description": "Device model"
+        },
+        "sku": {
+          "type": "string",
+          "description": "Device SKU"
+        },
+        "hw_rev": {
+          "type": "string",
+          "description": "Hardware revision"
+        },
+        "magic": {
+          "type": "string",
+          "description": "Device magic/claim code"
+        },
+        "type": {
+          "type": "string",
+          "description": "Device type (ap, switch, gateway)"
+        },
+        "org_id": {
+          "type": "string",
+          "description": "Organization ID"
+        },
+        "created_time": {
+          "type": "integer",
+          "description": "Unix timestamp of creation time"
+        },
+        "modified_time": {
+          "type": "integer",
+          "description": "Unix timestamp of last modification time"
+        },
+        "connected": {
+          "type": "boolean",
+          "description": "Whether the device is currently connected"
+        },
+        "deviceprofile_id": {
+          "type": ["string", "null"],
+          "description": "Device profile ID"
+        },
+        "version": {
+          "type": "string",
+          "description": "Firmware version"
+        }
+      }
+    },
+    "rfTemplate": {
+      "type": "object",
+      "description": "RF template/profile",
+      "required": ["id", "name"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Template UUID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Template name"
+        },
+        "org_id": {
+          "type": "string",
+          "description": "Organization ID"
+        },
+        "site_id": {
+          "type": "string",
+          "description": "Site ID (for site-level templates)"
+        },
+        "ant_gain_24": {
+          "type": "integer",
+          "description": "2.4GHz antenna gain"
+        },
+        "ant_gain_5": {
+          "type": "integer",
+          "description": "5GHz antenna gain"
+        },
+        "ant_gain_6": {
+          "type": "integer",
+          "description": "6GHz antenna gain"
+        },
+        "band_24": {
+          "type": "object",
+          "description": "2.4GHz band configuration"
+        },
+        "band_5": {
+          "type": "object",
+          "description": "5GHz band configuration"
+        },
+        "band_6": {
+          "type": "object",
+          "description": "6GHz band configuration"
+        },
+        "country_code": {
+          "type": "string",
+          "description": "Country code for RF regulations"
+        }
+      }
+    },
+    "gatewayTemplate": {
+      "type": "object",
+      "description": "Gateway template",
+      "required": ["id", "name"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Template UUID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Template name"
+        },
+        "org_id": {
+          "type": "string",
+          "description": "Organization ID"
+        },
+        "type": {
+          "type": "string",
+          "description": "Gateway type"
+        }
+      }
+    },
+    "wlanTemplate": {
+      "type": "object",
+      "description": "WLAN template",
+      "required": ["id", "name"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Template UUID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Template name"
+        },
+        "org_id": {
+          "type": "string",
+          "description": "Organization ID"
+        },
+        "ssid": {
+          "type": "string",
+          "description": "SSID name"
+        }
+      }
+    },
+    "deviceProfile": {
+      "type": "object",
+      "description": "Device profile",
+      "required": ["id", "name", "type"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Profile UUID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Profile name"
+        },
+        "type": {
+          "type": "string",
+          "description": "Profile type (ap, switch, gateway)"
+        },
+        "org_id": {
+          "type": "string",
+          "description": "Organization ID"
+        }
+      }
+    },
+    "wlan": {
+      "type": "object",
+      "description": "WLAN/SSID configuration",
+      "required": ["id", "ssid"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "WLAN UUID (Mist) or SSID number 0-14 (Meraki)"
+        },
+        "ssid": {
+          "type": "string",
+          "description": "SSID name visible to users"
+        },
+        "org_id": {
+          "type": "string",
+          "description": "Organization ID"
+        },
+        "site_id": {
+          "type": "string",
+          "description": "Site ID (for site-level WLANs)"
+        },
+        "vlan_id": {
+          "type": "integer",
+          "description": "VLAN ID"
+        },
+        "band": {
+          "type": "string",
+          "description": "Radio band (2.4, 5, 6, dual, all)"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the WLAN is enabled"
+        },
+        "hidden": {
+          "type": "boolean",
+          "description": "Whether the SSID is hidden"
+        },
+        "auth_type": {
+          "type": "string",
+          "description": "Authentication type (open, psk, wpa2-enterprise, etc.)"
+        }
+      }
+    },
+    "apConfig": {
+      "type": "object",
+      "description": "AP configuration",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "AP name"
+        },
+        "location": {
+          "type": "array",
+          "description": "Location coordinates [lat, lng]",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "orientation": {
+          "type": "number",
+          "description": "AP orientation in degrees"
+        },
+        "led": {
+          "type": "boolean",
+          "description": "Whether the LED is enabled"
+        }
+      }
+    },
+    "switchConfig": {
+      "type": "object",
+      "description": "Switch configuration",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Switch name"
+        },
+        "hostname": {
+          "type": "string",
+          "description": "Switch hostname"
+        },
+        "role": {
+          "type": "string",
+          "description": "Switch role (access, aggregation, core)"
+        }
+      }
+    },
+    "gatewayConfig": {
+      "type": "object",
+      "description": "Gateway configuration",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Gateway name"
+        },
+        "hostname": {
+          "type": "string",
+          "description": "Gateway hostname"
+        }
+      }
+    },
+    "deviceStatus": {
+      "type": "object",
+      "description": "Device status information",
+      "properties": {
+        "mac": {
+          "type": "string",
+          "description": "Device MAC address"
+        },
+        "status": {
+          "type": "string",
+          "description": "Device status (connected, disconnected, etc.)"
+        },
+        "last_seen": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last seen timestamp"
+        },
+        "ip": {
+          "type": "string",
+          "description": "Device IP address"
+        },
+        "version": {
+          "type": "string",
+          "description": "Firmware version"
+        },
+        "uptime": {
+          "type": "integer",
+          "description": "Device uptime in seconds"
+        }
+      }
+    }
+  }
+}

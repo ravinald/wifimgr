@@ -1,0 +1,61 @@
+######################################
+### Line endings
+######################################
+# Default: enforce LF everywhere
+* text=auto eol=lf
+
+# Windows batch files use CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell scripts stay LF
+*.sh text eol=lf
+
+######################################
+### Diff & merge settings
+######################################
+# Treat lockfiles as text, but don’t auto-merge
+package-lock.json -merge
+yarn.lock -merge
+pnpm-lock.yaml -merge
+
+# Mark binary files (no diff in Git)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.jar binary
+*.war binary
+*.ear binary
+
+######################################
+### Language-specific rules
+######################################
+# Go modules
+go.sum merge=union
+
+# Python notebooks (use nbstripout if needed)
+*.ipynb text
+
+# C / C++
+*.c text
+*.h text
+*.cpp text
+*.hpp text
+
+######################################
+### Documentation
+######################################
+*.md text
+*.rst text
+*.txt text
+*.json text
+*.yaml text
+*.yml text
+*.toml text
+

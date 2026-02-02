@@ -1,0 +1,22 @@
+{
+		"version": 1.0,
+		"config": {
+			"TEST-SITE": {
+				"site_config": {
+					"name": "TEST-SITE",
+					"address": "123 Test St",
+					"country_code": "US",
+					"timezone": "America/New_York"
+				},
+				"devices": {
+					"aps": [
+						{
+							"name": "test-ap-1",
+							"magic": "test-magic-1",
+							"notes": "Test AP 1"
+						}
+					]
+				}
+			}
+		}
+	}

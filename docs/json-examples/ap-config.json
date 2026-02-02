@@ -1,0 +1,129 @@
+{
+    "results": [
+        {
+            "org_id": "623c5d95-b7ba-4dc1-8e4d-97e7740f46f3",
+            "site_id": "564935c5-8063-4031-a463-eb9c715acacf",
+            "mac": "003e73123b76",
+            "device_type": "ap",
+            "model": "AP43",
+            "name": "US-PHI-RAND-01-000176",
+            "timestamp": 1747085390.24709,
+            "version": "apfw-0.12.27139-lollys-c4ed",
+            "errors": [
+                "Radio[5] cannot use RRM dfs_jump_channel[0], fallback to first_available[36]"
+            ],
+            "ap": "003e73123b76",
+            "radios": [
+                {
+                    "band": "24",
+                    "channel": 140,
+                    "src": "rrm"
+                },
+                {
+                    "band": "5",
+                    "channel": 40,
+                    "src": "rrm"
+                }
+            ],
+            "wlans": [
+                {
+                    "id": "132f0d10-64b6-4ac0-afaf-b13ae6fddc5f",
+                    "auth": "psk",
+                    "ssid": "Flexport",
+                    "bands": [
+                        "24",
+                        "5"
+                    ],
+                    "vlan_ids": [
+                        120
+                    ],
+                    "template_id": "6394d325-6e87-4f5d-9d15-568e2179fec7",
+                    "template_name": "US-WPHI-RAND WLAN"
+                },
+                {
+                    "id": "03bf6844-dc7c-4ee2-9a65-d2d12bc736ff",
+                    "auth": "psk",
+                    "ssid": "FlexFixed",
+                    "bands": [
+                        "24",
+                        "5"
+                    ],
+                    "vlan_ids": [
+                        120
+                    ],
+                    "template_id": "6394d325-6e87-4f5d-9d15-568e2179fec7",
+                    "template_name": "US-WPHI-RAND WLAN"
+                },
+                {
+                    "id": "8c9d05cb-239d-4529-b3d0-582a42e1c090",
+                    "auth": "psk",
+                    "ssid": "FlexGuest",
+                    "bands": [
+                        "24",
+                        "5"
+                    ],
+                    "vlan_ids": [
+                        224
+                    ],
+                    "template_id": "6394d325-6e87-4f5d-9d15-568e2179fec7",
+                    "template_name": "US-WPHI-RAND WLAN"
+                },
+                {
+                    "id": "01d66c29-4d12-4905-baa8-dd816a4c7adc",
+                    "auth": "psk",
+                    "ssid": "FlexHouse",
+                    "bands": [
+                        "24",
+                        "5"
+                    ],
+                    "vlan_ids": [
+                        120
+                    ],
+                    "template_id": "6394d325-6e87-4f5d-9d15-568e2179fec7",
+                    "template_name": "US-WPHI-RAND WLAN"
+                }
+            ],
+            "radio_macs": [
+                "003e73c71620",
+                "003e73c71630",
+                "003e73c71640"
+            ],
+            "band_24_usage": "5",
+            "channel_24": 140,
+            "channel_5": 40,
+            "ssids_24": [
+                "FlexFixed",
+                "FlexHouse",
+                "Flexport",
+                "FlexGuest"
+            ],
+            "ssids_5": [
+                "FlexFixed",
+                "FlexHouse",
+                "Flexport",
+                "FlexGuest"
+            ],
+            "ssids_6": [],
+            "ssids": [
+                "FlexFixed",
+                "FlexHouse",
+                "Flexport",
+                "FlexGuest"
+            ],
+            "wlan_ids": [
+                "132f0d10-64b6-4ac0-afaf-b13ae6fddc5f",
+                "03bf6844-dc7c-4ee2-9a65-d2d12bc736ff",
+                "8c9d05cb-239d-4529-b3d0-582a42e1c090",
+                "01d66c29-4d12-4905-baa8-dd816a4c7adc"
+            ],
+            "last_config_was_bad": false,
+            "uses_mxtunnel": false,
+            "cc_mismatch": false
+        }
+    ],
+    "limit": 1,
+    "start": 1747083834,
+    "end": 1747087434,
+    "total": 212,
+    "next": "/api/v1/sites/564935c5-8063-4031-a463-eb9c715acacf/devices/last_config/search?device_id=00000000-0000-0000-1000-003e730bfa6d&end=1747087434&limit=1&search_after=%5B1747085390247%5D&start=1747083834"
+}

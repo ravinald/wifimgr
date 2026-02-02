@@ -1,0 +1,21 @@
+{
+  "timestamp": 1640995300,
+  "site_id": "site-test-456",
+  "site_name": "US-TEST-PARTIAL",
+  "operation": "partial_recovery",
+  "device_count": 1,
+  "devices": {
+    "112233445566": {
+      "name": "PARTIAL-AP-01",
+      "magic": "partial-magic-789",
+      "model": "AP43",
+      "radio_config": {
+        "band_24": {
+          "power": 8,
+          "channel": 1
+        }
+      },
+      "notes": "Partial recovery test device"
+    }
+  }
+}

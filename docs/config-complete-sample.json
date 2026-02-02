@@ -1,0 +1,191 @@
+{
+  "_comment": "Complete wifimgr configuration with all options documented",
+  "version": 1,
+
+  "files": {
+    "_comment_files": "File and directory paths for wifimgr data",
+    "config_dir": "./config",
+    "site_configs": [
+      "sites/us-office.json",
+      "sites/eu-datacenter.json"
+    ],
+    "cache": "./cache.json",
+    "cache_ttl": 86400,
+    "inventory": "./config/inventory.json",
+    "log_file": "./wifimgr.log",
+    "schemas": "./config/schemas",
+    "device_profiles": [
+      "device-profiles.json"
+    ],
+    "config_backups": 5
+  },
+
+  "api": {
+    "_comment_api": "Multiple API connections can be defined. Each key is a label used with --api flag",
+
+    "mist-prod": {
+      "_comment": "Primary Mist production environment",
+      "vendor": "mist",
+      "url": "https://api.mist.com/api/v1",
+      "credentials": {
+        "org_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "api_token": "your-mist-api-token-here"
+      },
+      "rate_limit": 5000,
+      "results_limit": 100,
+      "managed_keys": {
+        "_comment": "Keys that wifimgr will manage/update. Others are preserved.",
+        "ap": ["name", "notes", "tags", "led", "deviceprofile_id", "radio_config"],
+        "switch": ["name", "notes", "tags", "role", "port_config", "networks"],
+        "gateway": ["name", "notes", "tags"]
+      }
+    },
+
+    "mist-lab": {
+      "_comment": "Lab/test Mist environment",
+      "vendor": "mist",
+      "url": "https://api.mist.com/api/v1",
+      "credentials": {
+        "org_id": "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
+        "api_token": "your-mist-lab-token-here"
+      },
+      "rate_limit": 5000,
+      "results_limit": 100
+    },
+
+    "meraki-corp": {
+      "_comment": "Meraki corporate network",
+      "vendor": "meraki",
+      "url": "https://api.meraki.com/api/v1",
+      "credentials": {
+        "org_id": "123456",
+        "api_key": "your-meraki-api-key-here"
+      },
+      "rate_limit": 10
+    }
+  },
+
+  "defaults": {
+    "_comment_defaults": "Default values applied to devices when not specified in config",
+    "ap": {
+      "band_24": {
+        "bandwidth": 20,
+        "disabled": false
+      },
+      "band_5": {
+        "bandwidth": 40,
+        "disabled": false
+      },
+      "band_6": {
+        "bandwidth": 160,
+        "disabled": false
+      }
+    }
+  },
+
+  "display": {
+    "_comment_display": "Output formatting and color configuration",
+
+    "jsoncolor": {
+      "_comment": "Colors for JSON output. Supports hex, ansi256, and ansi formats",
+      "null":   { "hex": "#767676", "ansi256": "244", "ansi": "8" },
+      "bool":   { "hex": "#FFFFFF", "ansi256": "15",  "ansi": "7" },
+      "number": { "hex": "#00FFFF", "ansi256": "51",  "ansi": "6" },
+      "string": { "hex": "#00FF00", "ansi256": "46",  "ansi": "2" },
+      "key":    { "hex": "#0000FF", "ansi256": "21",  "ansi": "4" },
+      "bytes":  { "hex": "#767676", "ansi256": "244", "ansi": "8" },
+      "time":   { "hex": "#00FF00", "ansi256": "46",  "ansi": "2" }
+    },
+
+    "commands": {
+      "_comment_commands": "Per-command display customization",
+
+      "show.api.sites": {
+        "format": "table",
+        "title": "Sites",
+        "fields": [
+          { "field": "name",  "title": "Name", "width": -1 },
+          { "field": "id", "title":  "ID", "width": -1 },
+          { "field": "address", "title": "Address" },
+          { "field": "country_code", "title": "Country" },
+          { "field": "timezone", "title": "Timezone" }
+        ]
+      },
+
+      "show.api.ap": {
+        "format": "table",
+        "title": "AP Devices",
+        "fields": [
+          { "field": "status", "title": "Status", "width": 6 },
+          { "field": "name", "title": "Name", "width": -1 },
+          { "field": "mac", "title": "MAC", "width": -1 },
+          { "field": "serial", "title": "Serial", "width": -1 },
+          { "field": "model", "title": "Model", "width": -1 },
+          { "field": "site_name", "title": "Site", "width": -1 },
+          { "field": "api", "title": "API", "width": -1 }
+        ]
+      },
+
+      "show.inventory.ap": {
+        "format": "table",
+        "title": "AP Inventory",
+        "fields": [
+          { "field": "status", "title": "Status", "width": 6 },
+          { "field": "name", "title": "Name", "width": -1 },
+          { "field": "mac", "title": "MAC", "width": -1 },
+          { "field": "serial", "title": "Serial", "width": -1 },
+          { "field": "model", "title": "Model", "width": -1 },
+          { "field": "site_name", "title": "Site", "width": -1 }
+        ]
+      },
+
+      "show.inventory.switch": {
+        "format": "table",
+        "title": "Switch Inventory",
+        "fields": [
+          { "field": "status", "title": "Status", "width": 6 },
+          { "field": "name", "title": "Name", "width": -1 },
+          { "field": "mac", "title": "MAC", "width": -1 },
+          { "field": "serial", "title": "Serial", "width": -1 },
+          { "field": "model", "title": "Model", "width": -1 },
+          { "field": "site_name", "title": "Site", "width": -1 }
+        ]
+      },
+
+      "show.inventory.gateway": {
+        "format": "table",
+        "title": "Gateway Inventory",
+        "fields": [
+          { "field": "status", "title": "Status", "width": 6 },
+          { "field": "name", "title": "Name", "width": -1 },
+          { "field": "mac", "title": "MAC", "width": -1 },
+          { "field": "serial", "title": "Serial", "width": -1 },
+          { "field": "model", "title": "Model", "width": -1 },
+          { "field": "site_name", "title": "Site", "width": -1 }
+        ]
+      },
+
+      "search": {
+        "format": "table",
+        "title": "Search Results",
+        "fields": [
+          { "field": "type", "title": "Type", "width": 8 },
+          { "field": "mac", "title": "Client MAC", "width": -1 },
+          { "field": "hostname", "title": "Hostname", "width": -1 },
+          { "field": "device_name", "title": "Connected To", "width": -1 },
+          { "field": "port", "title": "Port", "width": -1 },
+          { "field": "vlan", "title": "VLAN", "width": 6 },
+          { "field": "site_name", "title": "Site", "width": -1 }
+        ]
+      }
+    }
+  },
+
+  "logging": {
+    "_comment_logging": "Logging configuration",
+    "enable": true,
+    "level": "info",
+    "format": "text",
+    "stdout": false
+  }
+}

@@ -1,0 +1,41 @@
+[
+    {
+        "mac": "a83a79608101",
+        "serial": "A161623020D97",
+        "model": "AP45",
+        "sku": "AP45-US",
+        "hw_rev": "AA",
+        "type": "ap",
+        "magic": "7M63SL9BSASCZ7M",
+        "jsi": false,
+        "org_id": "623c5d95-b7ba-4dc1-8e4d-97e7740f46f3",
+        "site_id": "16bece54-546f-49dc-900e-3d77ecd888a4",
+        "created_time": 1693430804,
+        "modified_time": 1698968504,
+        "bundled_mac": null,
+        "id": "00000000-0000-0000-1000-a83a79608101",
+        "version": "0.12.27139",
+        "name": "US-DFW-NOEL-19-11",
+        "deviceprofile_id": "1abbbf87-d55d-4e44-8535-7f6990f742e6",
+        "connected": true
+    },
+    {
+        "mac": "a8f7d982dd61",
+        "serial": "A165322020078",
+        "model": "AP45",
+        "sku": "AP45-US",
+        "hw_rev": "AA",
+        "type": "ap",
+        "magic": "8VGMM7DSVELYHHL",
+        "jsi": false,
+        "org_id": "623c5d95-b7ba-4dc1-8e4d-97e7740f46f3",
+        "site_id": null,
+        "created_time": 1682322520,
+        "modified_time": 1739400279,
+        "bundled_mac": null,
+        "id": "00000000-0000-0000-1000-a8f7d982dd61",
+        "connected": false
+    }
+]
+
+    

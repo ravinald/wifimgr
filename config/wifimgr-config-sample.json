@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "files": {
+    "config_dir": "./config",
+    "site_configs": [
+      "sample-site.json"
+    ],
+    "cache": "./cache",
+    "cache_ttl": 86400,
+    "inventory": "./config/inventory.json",
+    "log_file": "./wifimgr.log",
+    "schemas": "./config/schemas",
+    "device_profiles": [
+      "device-profiles.json"
+    ],
+    "config_backups": 5
+  },
+  "api": {
+    "mist-prod": {
+      "vendor": "mist",
+      "url": "https://api.mist.com/api/v1",
+      "credentials": {
+        "org_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "api_token": "your-mist-api-token-here"
+      },
+      "rate_limit": 5000,
+      "results_limit": 100,
+      "managed_keys": {
+        "ap": ["name"],
+        "switch": ["name", "notes", "tags", "role", "ip_config", "oob_ip_config", "port_config", "port_config_overwrite", "networks", "other_ip_configs", "router_id", "extra_routes", "aggregate_routes", "ospf_config", "vrrp_config", "vrf_config", "stp_config", "dhcpd_config", "dhcp_snooping", "dns_servers", "dns_suffix", "ntp_servers", "radius_config", "acl_tags", "acl_policies", "managed", "disable_auto_config", "port_mirroring", "iot_config", "deviceprofile_id", "additional_config_cmds", "vars"],
+        "gateway": ["name", "notes", "tags"]
+      }
+    },
+    "mist-lab": {
+      "vendor": "mist",
+      "url": "https://api.mist.com/api/v1",
+      "credentials": {
+        "org_id": "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
+        "api_token": "your-mist-lab-api-token-here"
+      },
+      "rate_limit": 5000,
+      "results_limit": 100
+    },
+    "meraki-corp": {
+      "vendor": "meraki",
+      "url": "https://api.meraki.com/api/v1",
+      "credentials": {
+        "org_id": "123456",
+        "api_key": "your-meraki-api-key-here"
+      },
+      "rate_limit": 10
+    }
+  },
+  "defaults": {
+    "ap": {
+      "band_24": {
+        "bandwidth": 20
+      },
+      "band_5": {
+        "bandwidth": 40
+      },
+      "band_6": {
+        "bandwidth": 160
+      }
+    }
+  },
+  "display": {
+    "jsoncolor": {
+      "null":   { "hex": "#767676", "ansi256": "244", "ansi": "8" },
+      "bool":   { "hex": "#FFFFFF", "ansi256": "15",  "ansi": "7" },
+      "number": { "hex": "#00FFFF", "ansi256": "51",  "ansi": "6" },
+      "string": { "hex": "#00FF00", "ansi256": "46",  "ansi": "2" },
+      "key":    { "hex": "#0000FF", "ansi256": "21",  "ansi": "4" },
+      "bytes":  { "hex": "#767676", "ansi256": "244", "ansi": "8" },
+      "time":   { "hex": "#00FF00", "ansi256": "46",  "ansi": "2" }
+    },
+    "commands": {
+      "show.api.sites": {
+        "format": "table",
+        "title": "Sites",
+        "fields": [
+          { "field": "name",  "title": "Name", "width": -1 },
+          { "field": "id", "title":  "ID", "width": -1 },
+          { "field": "address", "title": "Address" },
+          { "field": "country_code", "title": "Country" },
+          { "field": "timezone", "title": "Timezone" }
+        ]
+      },
+      "show.api.ap": {
+        "format": "table",
+        "title": "AP Devices",
+        "fields": [
+          { "field": "status", "title": "Status", "width": 6 },
+          { "field": "name", "title": "Name", "width": -1 },
+          { "field": "mac", "title": "MAC", "width": -1 },
+          { "field": "serial", "title": "Serial", "width": -1 },
+          { "field": "model", "title": "Model", "width": -1 },
+          { "field": "site_name", "title": "Site", "width": -1 },
+          { "field": "api", "title": "API", "width": -1 }
+        ]
+      },
+      "show.inventory.ap": {
+        "format": "table",
+        "title": "AP Inventory",
+        "fields": [
+          { "field": "status", "title": "Status", "width": 6 },
+          { "field": "name", "title": "Name", "width": -1 },
+          { "field": "mac", "title": "MAC", "width": -1 },
+          { "field": "serial", "title": "Serial", "width": -1 },
+          { "field": "model", "title": "Model", "width": -1 },
+          { "field": "site_name", "title": "Site", "width": -1 },
+          { "field": "api", "title": "API", "width": -1 }
+        ]
+      },
+      "show.inventory.switch": {
+        "format": "table",
+        "title": "Switch Inventory",
+        "fields": [
+          { "field": "status", "title": "Status", "width": 6 },
+          { "field": "name", "title": "Name", "width": -1 },
+          { "field": "mac", "title": "MAC", "width": -1 },
+          { "field": "serial", "title": "Serial", "width": -1 },
+          { "field": "model", "title": "Model", "width": -1 },
+          { "field": "site_name", "title": "Site", "width": -1 },
+          { "field": "api", "title": "API", "width": -1 }
+        ]
+      },
+      "show.inventory.gateway": {
+        "format": "table",
+        "title": "Gateway Inventory",
+        "fields": [
+          { "field": "status", "title": "Status", "width": 6 },
+          { "field": "name", "title": "Name", "width": -1 },
+          { "field": "mac", "title": "MAC", "width": -1 },
+          { "field": "serial", "title": "Serial", "width": -1 },
+          { "field": "model", "title": "Model", "width": -1 },
+          { "field": "site_name", "title": "Site", "width": -1 },
+          { "field": "api", "title": "API", "width": -1 }
+        ]
+      }
+    }
+  },
+  "logging": {
+    "enable": true,
+    "level": "info",
+    "format": "text",
+    "stdout": false
+  }
+}

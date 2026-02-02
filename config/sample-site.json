@@ -1,0 +1,73 @@
+{
+  "version": 1.0,
+  "config": {
+    "sites": {
+      "ZZ-SITE-TEST": {
+      "site_config": {
+        "name": "ZZ-SITE-TEST",
+        "address": "123 Main St, City, State, Zip",
+        "country_code": "US",
+        "timezone": "America/New_York",
+        "notes": "Main Office",
+        "latlng": {
+          "lat": 37.123456,
+          "lng": -122.123456
+        }
+      },
+      "devices": {
+        "aps": [
+          {
+            "name": "Reception-AP",
+            "tags": [
+              "reception",
+              "ground-floor"
+            ],
+            "notes": "Reception area access point",
+            "location": [
+              37.7749,
+              -122.4193
+            ],
+            "orientation": 90,
+            "magic": "ABCDEF123456",
+            "config": {
+              "led_enabled": true,
+              "band_24": {
+                "disabled": false,
+                "tx_power": 10,
+                "channel": 6
+              },
+              "band_5": {
+                "disabled": false,
+                "tx_power": 15,
+                "channel": 36
+              }
+            }
+          }
+        ],
+        "switches": [
+          {
+            "name": "Core-Switch-01",
+            "tags": [
+              "core",
+              "datacenter"
+            ],
+            "notes": "Primary core switch",
+            "magic": "SWITCH123456"
+          }
+        ],
+        "wan_edge": [
+          {
+            "name": "Gateway-01",
+            "tags": [
+              "primary",
+              "gateway"
+            ],
+            "notes": "Primary WAN gateway",
+            "magic": "GATEWAY123456"
+          }
+        ]
+      }
+    }
+    }
+  }
+}

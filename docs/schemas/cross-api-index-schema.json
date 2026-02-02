@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "wifimgr Cross-API Index Schema",
+  "description": "Schema for the cross-API index file that provides lookups across all configured APIs",
+  "type": "object",
+  "required": ["version", "last_rebuilt", "mac_to_api", "site_name_to_apis"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Index schema version"
+    },
+    "last_rebuilt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the index was last rebuilt"
+    },
+    "mac_to_api": {
+      "type": "object",
+      "description": "Maps normalized MAC addresses to their API label",
+      "additionalProperties": {
+        "type": "string",
+        "description": "API label (e.g., 'mist-prod', 'meraki-corp')"
+      },
+      "examples": [
+        {
+          "a83a79608101": "mist-prod",
+          "001122aabbcc": "meraki-corp"
+        }
+      ]
+    },
+    "site_name_to_apis": {
+      "type": "object",
+      "description": "Maps site names to the list of APIs that have that site",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "List of API labels that contain this site"
+      },
+      "examples": [
+        {
+          "US-SFO-HQ": ["mist-prod"],
+          "US-NYC-OFFICE": ["mist-prod", "meraki-corp"]
+        }
+      ]
+    }
+  },
+  "examples": [
+    {
+      "version": 1,
+      "last_rebuilt": "2025-01-27T12:00:00Z",
+      "mac_to_api": {
+        "a83a79608101": "mist-prod",
+        "a83a79608102": "mist-prod",
+        "001122aabbcc": "meraki-corp"
+      },
+      "site_name_to_apis": {
+        "US-SFO-HQ": ["mist-prod"],
+        "US-NYC-OFFICE": ["mist-prod"],
+        "EU-LON-OFFICE": ["meraki-corp"]
+      }
+    }
+  ]
+}

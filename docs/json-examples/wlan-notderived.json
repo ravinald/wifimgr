@@ -1,0 +1,191 @@
+[
+    {
+        "ssid": "Flexport",
+        "enabled": true,
+        "hide_ssid": false,
+        "hostname_ie": true,
+        "no_static_ip": false,
+        "no_static_dns": false,
+        "bands": [
+            "5"
+        ],
+        "band_steer": false,
+        "airwatch": {
+            "enabled": false,
+            "console_url": "",
+            "api_key": "",
+            "username": "",
+            "password": ""
+        },
+        "disable_wmm": false,
+        "disable_uapsd": false,
+        "use_eapol_v1": false,
+        "roam_mode": "11r",
+        "legacy_overds": false,
+        "auth_servers_nas_id": "",
+        "auth_servers_nas_ip": "",
+        "auth_server_selection": "ordered",
+        "disable_11ax": false,
+        "vlan_enabled": true,
+        "arp_filter": false,
+        "limit_bcast": false,
+        "allow_mdns": false,
+        "allow_ssdp": false,
+        "allow_ipv6_ndp": true,
+        "limit_probe_response": false,
+        "vlan_id": 120,
+        "wxtunnel_remote_id": null,
+        "wlan_limit_up": 10000,
+        "wlan_limit_down": 20000,
+        "client_limit_up": 512,
+        "client_limit_down": 1000,
+        "portal": {
+            "enabled": false,
+            "bypass_when_cloud_down": true,
+            "auth": "none",
+            "privacy": false,
+            "external_portal_url": "",
+            "sso_issuer": "",
+            "sso_nameid_format": "email",
+            "sso_idp_sign_algo": "sha1",
+            "sso_idp_cert": "",
+            "sso_idp_sso_url": "",
+            "sso_default_role": "",
+            "sso_forced_role": "",
+            "password": "",
+            "expire": 1440,
+            "forward": false,
+            "forward_url": "",
+            "passphrase_enabled": false,
+            "email_enabled": false,
+            "sms_enabled": false,
+            "smsMessageFormat": "Code {{code}} expires in {{duration}} minutes.",
+            "sms_provider": "manual",
+            "sponsor_enabled": false,
+            "sponsor_email_domains": [],
+            "sponsor_link_validity_duration": "60",
+            "google_enabled": false,
+            "google_client_id": "",
+            "google_client_secret": "",
+            "google_email_domains": [],
+            "facebook_enabled": false,
+            "facebook_client_id": "",
+            "facebook_client_secret": "",
+            "facebook_email_domains": [],
+            "amazon_enabled": false,
+            "amazon_client_id": "",
+            "amazon_client_secret": "",
+            "amazon_email_domains": [],
+            "microsoft_enabled": false,
+            "microsoft_client_id": "",
+            "microsoft_client_secret": "",
+            "microsoft_email_domains": [],
+            "azure_enabled": false,
+            "azure_client_id": "",
+            "azure_client_secret": "",
+            "azure_tenant_id": "",
+            "sponsors": [],
+            "sponsor_notify_all": true,
+            "predefined_sponsors_enabled": false,
+            "sponsor_status_notify": false
+        },
+        "portal_allowed_subnets": [],
+        "portal_allowed_hostnames": [],
+        "portal_denied_hostnames": [],
+        "portal_api_secret": "",
+        "cisco_cwa": {
+            "enabled": false,
+            "allowed_subnets": [],
+            "allowed_hostnames": []
+        },
+        "auth_servers": [],
+        "acct_servers": [],
+        "acct_interim_interval": 0,
+        "schedule": {
+            "enabled": false,
+            "hours": {}
+        },
+        "radsec": {
+            "enabled": false,
+            "server_name": "",
+            "servers": []
+        },
+        "dtim": 2,
+        "app_qos": {
+            "enabled": false,
+            "apps": {}
+        },
+        "auth": {
+            "type": "psk",
+            "enable_mac_auth": false,
+            "private_wlan": false,
+            "keys": [
+                null,
+                null,
+                null,
+                null
+            ],
+            "key_idx": 1,
+            "multi_psk_only": false,
+            "eap_reauth": false,
+            "pairwise": [
+                "wpa2-ccmp",
+                "wpa3"
+            ],
+            "psk": "23giMVxdRYtV8Qp"
+        },
+        "dynamic_psk": null,
+        "dynamic_vlan": null,
+        "dns_server_rewrite": null,
+        "qos": {
+            "overwrite": false,
+            "class": "best_effort"
+        },
+        "coa_servers": null,
+        "mist_nac": {
+            "enabled": false
+        },
+        "rateset": {
+            "5": {
+                "template": "high-density",
+                "min_rssi": 0
+            },
+            "6": {
+                "template": "high-density",
+                "min_rssi": 0
+            },
+            "24": {
+                "template": "high-density",
+                "min_rssi": 0
+            }
+        },
+        "app_limit": {
+            "enabled": false,
+            "apps": {},
+            "wxtag_ids": {}
+        },
+        "max_idletime": 1800,
+        "vlan_pooling": false,
+        "vlan_ids": [],
+        "bonjour": {
+            "services": {},
+            "additional_vlan_ids": ""
+        },
+        "hotspot20": {},
+        "wxtag_ids": null,
+        "ap_ids": null,
+        "apply_to": "site",
+        "template_name": "US-WPHI-RAND WLAN",
+        "id": "132f0d10-64b6-4ac0-afaf-b13ae6fddc5f",
+        "for_site": false,
+        "template_id": "6394d325-6e87-4f5d-9d15-568e2179fec7",
+        "site_id": "00000000-0000-0000-0000-000000000000",
+        "org_id": "623c5d95-b7ba-4dc1-8e4d-97e7740f46f3",
+        "created_time": 1695681500,
+        "modified_time": 1727327991,
+        "portal_template_url": "https://papi-use1prod2.s3.us-east-1.amazonaws.com/portal_template/132f0d10-64b6-4ac0-afaf-b13ae6fddc5f.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ASIARKDJAUCUZWSQXKXK%2F20250512%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250512T224131Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEDYaCXVzLWVhc3QtMSJHMEUCIQDPHlIQKTgIUsyFiMxhFSzUAbMU%2BWDe5yAuY%2BHjceR8qgIgKUkslSOnUaNLsdVWRPwJ23k6UzW4GI%2B9x3k3qe0kBGUqxwUI3%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARAFGgwwOTA0MTQ1NTUzMDUiDG73ACgI1Orop6HYtiqbBery5IZFUzNLLw9IqqenzuEAMDtui2ZXGVkfRhYgtTTxV9E4FGM7rUeIVKrwVBocUw6cwOBKvs%2FSVN4MQ9jPbOl41K2J3i%2B8Zy2ZFTiDarFPrEZ2J7eNC7vDmqCdARcnkAU79oAQDIDKm3wuowE9hWEG9g0C10babbLZn%2BiHtXLJPXCIjI%2B5FRfXa12px2GpBZl94RCptl4DS1XrMHXDR%2FxcNkx85r4ktPbos2yPlp73qi4KvxOMaeRpjlhPRD6QJsVdHSIYzzSR0uDqfTbM9Uw7xTxelwCeACNicKGP5DL60mHiPrU9HfIHUetM1qwy%2FwctRc5xJmcm2Gy%2BKGdZ47RHfvmy54E%2BrGZwd3dTguFNfoLIjpaWustatTYBc2YEQtgDAh%2BJ4BVv3kfYH65wUPghPp7Bo52nogXJWEnphpBiFcMAeG6eIsfztOLSdxkpnCLnOQ71ZV45zZLA%2B2Dun5%2B23DrKajzixoMSvfBmvAY3Vm%2BOig7DGuNHtFRbAuZb%2F%2FVjoE2b8Svti%2FtC6fztL4NYlNuvaUkhh1tOgBa8LJdHLoRmZooE71evYcojTzgvgd%2FnEL0iUBiD0j8B052gXc%2Fa5TT6oOnT4%2F1k7tt0VKLolOTg5PB%2BKcHipw6pgiOWYGzz0kjfSlh1cf1wqgdmuFc%2BuRC0yoVhnEYCr3Kaaka%2F%2B1GaNxWtyGYiH%2BQmjdGPaY6IygweJaTBL3u%2BZQ1DuU4Pz0vB8exxWv1URl7e9lQLUSk2NJeaFemGkq%2F9j7CroYeEkokLGoF3%2BVkMnfEIDDydLwGDaEe9E3BuaR8CFCPuSYu2oRIg34ALp4yh%2Bfifhf3K5JRND3N4%2B9g66WnFeetkXQiNvulxG8joFewu%2Bhvn4Plujy4z3rkp%2B28wrteJwQY6sQGie0ChbYjdd61xwyJgrjCjPbi%2BwX5AGsVYl2t%2F99thxHSlEWYSn0jz4H5qMBhU1PkCpumq99i9ykLb8AV7%2FCgQJbq4RgelzRSmHDQqmyx6oPhW9t51Z02Zt5NSsVfBQONlj%2BEgoDXaeKCTBcTHbBIDjUqirhXwG2V7BnRwPocHkJa4kgt%2FQQD6JvO5CAeDJN6Ln%2BMENzhiCQ8QIYE2JCKbt4Qa5RMCIcgr%2FGr6qJ9ONtg%3D&X-Amz-Signature=d79e6c6a2f9d4c214d755592e6bbbf56a04755631f4afe25cf79681806cb97de",
+        "mxtunnel_id": null,
+        "wxtunnel_id": null,
+        "interface": "all"
+    }
+]

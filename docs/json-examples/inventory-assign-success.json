@@ -1,0 +1,12 @@
+{
+    "op": "assign",
+    "success": [
+        "003e7311b0ac"
+    ],
+    "error": [
+        "003e7311b0d9"
+    ],
+    "reason": [
+        "already assigned to site 3fc11aba-584d-4834-b643-011268003851"
+    ]
+}
