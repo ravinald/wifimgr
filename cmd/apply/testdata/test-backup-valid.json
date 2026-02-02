@@ -1,0 +1,52 @@
+{
+  "timestamp": 1640995200,
+  "site_id": "site-test-123",
+  "site_name": "US-TEST-SITE",
+  "operation": "apply_configuration",
+  "device_count": 2,
+  "devices": {
+    "001122334455": {
+      "name": "TEST-AP-01",
+      "magic": "test-magic-123",
+      "model": "AP41",
+      "radio_config": {
+        "band_24": {
+          "power": 10,
+          "channel": 6
+        },
+        "band_5": {
+          "power": 15,
+          "channel": 36
+        }
+      },
+      "ip_config": {
+        "type": "static",
+        "ip": "192.168.1.10",
+        "netmask": "255.255.255.0",
+        "gateway": "192.168.1.1"
+      },
+      "height": 3.0,
+      "orientation": 0
+    },
+    "aabbccddeeff": {
+      "name": "TEST-AP-02", 
+      "magic": "test-magic-456",
+      "model": "AP45",
+      "location": [40.7128, -74.0060],
+      "orientation": 45,
+      "radio_config": {
+        "band_24": {
+          "power": 12,
+          "channel": 11
+        },
+        "band_5": {
+          "power": 18,
+          "channel": 48
+        }
+      },
+      "ip_config": {
+        "type": "dhcp"
+      }
+    }
+  }
+}

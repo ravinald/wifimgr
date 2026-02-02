@@ -1,0 +1,40 @@
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  tests: false
+  exclude-dirs:
+    - licenses
+    - vendor
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/ravinald/wifimgr
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unconvert
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+    staticcheck:
+      checks:
+        - "all"
+        - "-QF*"
+        - "-ST*"
+        - "-S1023"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

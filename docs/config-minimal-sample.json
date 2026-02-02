@@ -1,0 +1,19 @@
+{
+  "version": 1,
+
+  "files": {
+    "config_dir": "./config",
+    "site_configs": ["sites/my-site.json"],
+    "cache": "./cache.json"
+  },
+
+  "api": {
+    "mist": {
+      "vendor": "mist",
+      "url": "https://api.mist.com/api/v1",
+      "credentials": {
+        "org_id": "your-org-uuid-here"
+      }
+    }
+  }
+}

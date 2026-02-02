@@ -1,0 +1,33 @@
+{
+  "version": 1.0,
+  "config": {
+    "US-TEST-BACKUP": {
+      "site_config": {
+        "name": "US-TEST-BACKUP",
+        "address": "123 Test Backup Street",
+        "country_code": "US",
+        "timezone": "America/Los_Angeles"
+      },
+      "devices": {
+        "aps": {
+          "001122334455": {
+            "name": "TEST-AP-01",
+            "magic": "test-magic-123",
+            "model": "AP41",
+            "height": 3.0,
+            "orientation": 0
+          },
+          "aabbccddeeff": {
+            "name": "TEST-AP-02",
+            "magic": "test-magic-456", 
+            "model": "AP45",
+            "location": [40.7128, -74.0060],
+            "orientation": 45
+          }
+        },
+        "switches": {},
+        "wan_edge": {}
+      }
+    }
+  }
+}

@@ -1,0 +1,80 @@
+# Claude Code
+.claude/
+CLAUDE.md
+DOCUMENTATION_CHANGES_*.md
+DOCUMENTATION_REVIEW_*.md
+
+# Local cache and metadata
+cache.json
+*.json.meta
+.cache.json.meta
+.file_hashes.json
+
+# Local configuration (contains credentials)
+config/wifimgr-config.json
+config/.file_hashes.json
+config/inventory.json
+config/device-profiles.json
+config/profiles.json
+config/help.json
+config/backups/
+config/demo/
+config/schemas/
+config/meraki/
+config/mist/
+
+# Site configs (user-specific)
+config/us-*.json
+config/US-*.json
+config/uk-*.json
+config/UK-*.json
+
+# PDF files
+*.pdf
+
+# Build artifacts
+wifimgr
+wifimgr-*
+*.exe
+*.out
+*.test
+mm
+
+# Go
+vendor/
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files (may contain secrets)
+*.env
+.env.*
+
+# Internal docs (not for public release)
+docs-internal/
+
+# Schema source (internal)
+schema-source/
+
+# Mist API schemas (contains example secret patterns)
+schemas/
+
+# Test artifacts
+coverage.out
+coverage.html
+
+# Temporary files
+*.tmp
+*.bak
+devicetype.json
+setup_schemas.sh

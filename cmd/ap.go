@@ -1,0 +1,44 @@
+/*
+Copyright © 2025 Ravi Pina <ravi@pina.org>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package cmd
+
+import (
+	"github.com/spf13/cobra"
+
+	"github.com/ravinald/wifimgr/cmd/ap"
+	"github.com/ravinald/wifimgr/internal/cmdutils"
+)
+
+// apCmd represents the "set ap" command
+var apCmd = &cobra.Command{
+	Use:   "ap",
+	Short: "Manage access point assignments",
+	Long: `Manage access point site assignments and configurations.
+
+Examples:
+  wifimgr set ap site <site-name>           - Assign AP to site interactively
+  wifimgr set ap site -f <file> -s <site>   - Assign APs from file to site`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if cmdutils.ContainsHelp(args) {
+			return cmd.Help()
+		}
+		return ap.HandleCommand(globalContext, globalClient, args, "", false)
+	},
+}
+
+func init() {
+	setCmd.AddCommand(apCmd)
+}

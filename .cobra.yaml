@@ -1,0 +1,4 @@
+author: Ravi Pina <ravi@pina.org>
+license: Apache-2.0
+useViper: true
+pkgName: github.com/ravinald/wifimgr

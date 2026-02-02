@@ -1,0 +1,29 @@
+{
+  "version": 1.0,
+  "config": {
+    "US-SFO-TEST": {
+      "site_config": {
+        "name": "US-SFO-TEST",
+        "address": "123 Test Street",
+        "country_code": "US",
+        "timezone": "America/Los_Angeles"
+      },
+      "devices": {
+        "aps": {
+          "001122334455": {
+            "name": "US-SFO-TEST-AP-1",
+            "magic": "abc123",
+            "model": "AP45"
+          },
+          "aabbccddeeff": {
+            "name": "US-SFO-TEST-AP-2",
+            "magic": "def456",
+            "model": "AP41"
+          }
+        },
+        "switches": {},
+        "wan_edge": {}
+      }
+    }
+  }
+}

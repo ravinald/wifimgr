@@ -1,0 +1,12 @@
+{
+  "timestamp": 1640995400,
+  "site_id": "site-test-789",
+  "site_name": "US-TEST-CORRUPTED",
+  "operation": "test_corruption",
+  "device_count": 1,
+  "devices": {
+    "998877665544": {
+      "name": "CORRUPTED-AP-01"
+      // Missing comma and closing brace to create invalid JSON
+    }
+  }
