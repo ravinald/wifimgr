@@ -334,7 +334,7 @@ type SiteConfigData struct {
 	API        string           `json:"api,omitempty"`
 	SiteConfig map[string]any   `json:"site_config"`
 	Devices    *DevicesConfig   `json:"devices,omitempty"`
-	WLANs      []map[string]any `json:"wlans,omitempty"`
+	WLANs      []map[string]any `json:"wlan,omitempty"`
 	Profiles   []map[string]any `json:"profiles,omitempty"`
 }
 

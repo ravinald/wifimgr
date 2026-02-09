@@ -6,6 +6,26 @@ import (
 	"sync"
 )
 
+// Global registry for cross-package access (same pattern as globalCacheAccessor)
+var (
+	globalRegistryMu sync.RWMutex
+	globalRegistry   *APIClientRegistry
+)
+
+// SetGlobalRegistry sets the global API client registry for cross-package access.
+func SetGlobalRegistry(r *APIClientRegistry) {
+	globalRegistryMu.Lock()
+	defer globalRegistryMu.Unlock()
+	globalRegistry = r
+}
+
+// GetGlobalRegistry returns the global API client registry.
+func GetGlobalRegistry() *APIClientRegistry {
+	globalRegistryMu.RLock()
+	defer globalRegistryMu.RUnlock()
+	return globalRegistry
+}
+
 // APIConfig holds configuration for a single API connection.
 type APIConfig struct {
 	Label        string
@@ -95,19 +115,6 @@ func (r *APIClientRegistry) GetClient(apiLabel string) (Client, error) {
 		return nil, &APINotFoundError{APILabel: apiLabel}
 	}
 	return client, nil
-}
-
-// MustGetClient returns the client or panics if not found.
-//
-// Deprecated: MustGetClient panics on error which can crash the application.
-// Use GetClient() with proper error handling instead. This function is retained
-// only for backward compatibility in tests and should not be used in production code.
-func (r *APIClientRegistry) MustGetClient(apiLabel string) Client {
-	client, err := r.GetClient(apiLabel)
-	if err != nil {
-		panic(fmt.Sprintf("MustGetClient(%q): %v - use GetClient() with error handling instead", apiLabel, err))
-	}
-	return client
 }
 
 // GetAllLabels returns all registered API labels in sorted order.

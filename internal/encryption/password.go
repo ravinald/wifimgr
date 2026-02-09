@@ -101,3 +101,26 @@ var PromptForExistingPassword = func() (string, error) {
 func IsTerminal(fd int) bool {
 	return term.IsTerminal(fd)
 }
+
+// PasswordEnvVar is the environment variable name for the decryption password
+const PasswordEnvVar = "WIFIMGR_PASSWORD"
+
+// GetPasswordFromEnv returns the decryption password from environment variable if set.
+// Returns empty string if not set.
+func GetPasswordFromEnv() string {
+	return os.Getenv(PasswordEnvVar)
+}
+
+// GetPasswordOrPrompt returns the decryption password from environment variable,
+// or prompts the user interactively if not set.
+// The prompt parameter is used for the interactive prompt message.
+func GetPasswordOrPrompt(prompt string) (string, error) {
+	// First check environment variable
+	if password := GetPasswordFromEnv(); password != "" {
+		logging.Debug("Using decryption password from environment variable")
+		return password, nil
+	}
+
+	// Fall back to interactive prompt
+	return PromptForPassword(prompt)
+}

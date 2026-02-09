@@ -136,3 +136,20 @@ type WLANsService interface {
 	Update(ctx context.Context, id string, wlan *WLAN) (*WLAN, error)
 	Delete(ctx context.Context, id string) error
 }
+
+// LegacyClientAccessor provides access to the underlying legacy client.
+// This interface is implemented by vendor adapters that wrap legacy clients.
+// Use this when you need vendor-specific functionality not available in the
+// generic vendors.Client interface.
+//
+// Example:
+//
+//	if accessor, ok := client.(vendors.LegacyClientAccessor); ok {
+//	    legacyClient := accessor.LegacyClient()
+//	    // Use Mist-specific methods via legacyClient
+//	}
+type LegacyClientAccessor interface {
+	// LegacyClient returns the underlying legacy client (e.g., api.Client for Mist).
+	// Returns nil if no legacy client is available.
+	LegacyClient() any
+}

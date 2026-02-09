@@ -85,14 +85,12 @@ func TestDefaultIO(t *testing.T) {
 func TestTokenManagerWithIO(t *testing.T) {
 	// Create a mock config
 	mockConfig := &mockConfig{
-		apiToken:        "test-token",
-		tokenEncrypted:  false,
-		apiURL:          "https://test.com",
-		orgID:           "test-org",
-		saveError:       nil,
-		currentToken:    "",
-		isTokenSaved:    false,
-		isEncryptedFlag: false,
+		apiToken:     "test-token",
+		apiURL:       "https://test.com",
+		orgID:        "test-org",
+		saveError:    nil,
+		currentToken: "",
+		isTokenSaved: false,
 	}
 
 	// Create a mock validator
@@ -130,14 +128,12 @@ func TestTokenManagerWithIO(t *testing.T) {
 
 // mockConfig implements Config for testing
 type mockConfig struct {
-	apiToken        string
-	tokenEncrypted  bool
-	apiURL          string
-	orgID           string
-	saveError       error
-	currentToken    string
-	isTokenSaved    bool
-	isEncryptedFlag bool
+	apiToken     string
+	apiURL       string
+	orgID        string
+	saveError    error
+	currentToken string
+	isTokenSaved bool
 }
 
 func (c *mockConfig) GetAPIToken() string {
@@ -147,10 +143,6 @@ func (c *mockConfig) GetAPIToken() string {
 func (c *mockConfig) SetAPIToken(token string) {
 	c.apiToken = token
 	c.isTokenSaved = true
-}
-
-func (c *mockConfig) SetKeyEncrypted(encrypted bool) {
-	c.isEncryptedFlag = encrypted
 }
 
 func (c *mockConfig) GetAPIURL() string {

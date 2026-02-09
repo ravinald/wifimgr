@@ -81,13 +81,50 @@ This document details how vendor-specific API fields map to wifimgr's common sch
 
 #### Per-Band Configuration (6 GHz)
 
-| Common Schema Field   | Mist API Field        | Meraki API Field               | Notes                    |
-|-----------------------|-----------------------|--------------------------------|--------------------------|
-| `radio_config.band_6` | `radio_config.band_6` | `radioSettings.sixGhzSettings` | Per-band settings object |
-| `band_6.disabled`     | `band_6.disabled`     | -                              | Disable radio, Mist only |
-| `band_6.channel`      | `band_6.channel`      | `sixGhzSettings.channel`       | Channel number           |
-| `band_6.power`        | `band_6.power`        | `sixGhzSettings.targetPower`   | Transmit power in dBm    |
-| `band_6.bandwidth`    | `band_6.bandwidth`    | `sixGhzSettings.channelWidth`  | 20, 40, 80, 160 MHz      |
+| Common Schema Field   | Mist API Field        | Meraki API Field               | Notes                           |
+|-----------------------|-----------------------|--------------------------------|---------------------------------|
+| `radio_config.band_6` | `radio_config.band_6` | `radioSettings.sixGhzSettings` | Per-band settings object        |
+| `band_6.disabled`     | `band_6.disabled`     | -                              | Disable radio, Mist only        |
+| `band_6.channel`      | `band_6.channel`      | `sixGhzSettings.channel`       | Channel number (1-233, step 4)  |
+| `band_6.power`        | `band_6.power`        | `sixGhzSettings.targetPower`   | Transmit power in dBm (1-30)    |
+| `band_6.bandwidth`    | `band_6.bandwidth`    | `sixGhzSettings.channelWidth`  | 20, 40, 80, 160, 320 MHz        |
+
+#### Dual-Band / Flex Radio Configuration (band_dual)
+
+For APs with dual-band radios (Mist) or flex radios (Meraki):
+
+| Common Schema Field        | Mist API Translation                | Meraki API Translation          | Notes                              |
+|----------------------------|-------------------------------------|---------------------------------|------------------------------------|
+| `radio_config.band_dual`   | -                                   | -                               | Unified config for dual/flex radio |
+| `band_dual.disabled`       | (in band_5_on_24_radio)             | (in target band settings)       | Enable/disable the radio           |
+| `band_dual.radio_mode`     | `band_24_usage` ("24" or "5")       | `flexRadioBand` ("five"/"six")  | Target band selection              |
+| `band_dual.channel`        | `band_5_on_24_radio.channel`        | (in target band)                | Channel number                     |
+| `band_dual.power`          | `band_5_on_24_radio.power`          | (in target band)                | Transmit power in dBm              |
+| `band_dual.bandwidth`      | `band_5_on_24_radio.bandwidth`      | (in target band)                | Channel width in MHz               |
+
+**Vendor-specific `radio_mode` values:**
+- **Mist**: 24 or 5 (dual-band radios can convert 2.4GHz radio to 5GHz)
+- **Meraki**: 5 or 6 (flex radios toggle between 5GHz and 6GHz)
+
+**Translation Examples:**
+
+Mist with `radio_mode: 5`:
+```json
+// wifimgr config:
+{ "band_dual": { "radio_mode": 5, "channel": 149, "power": 12 } }
+
+// Translated to Mist API:
+{ "band_24_usage": "5", "band_5_on_24_radio": { "channel": 149, "power": 12 } }
+```
+
+Meraki with `radio_mode: 6`:
+```json
+// wifimgr config:
+{ "band_dual": { "radio_mode": 6, "channel": 37, "power": 15 } }
+
+// Translated to Meraki API:
+{ "flexRadioBand": "six", "sixGhzSettings": { "channel": 37, "targetPower": 15 } }
+```
 
 ### IP Configuration Fields
 

@@ -168,13 +168,7 @@ func TestResolveSiteID(t *testing.T) {
 	// Create test config
 	cfg := &config.Config{
 		API: config.API{
-			Credentials: struct {
-				APIID             string `json:"api_id"`
-				APIToken          string `json:"api_token"`
-				OrgID             string `json:"org_id"`
-				KeyEncryptionSalt string `json:"key_encryption_salt,omitempty"`
-				KeyEncrypted      bool   `json:"key_encrypted,omitempty"`
-			}{
+			Credentials: config.Credentials{
 				OrgID: "test-org-id",
 			},
 			URL:          "https://api.mist.com/api/v1",

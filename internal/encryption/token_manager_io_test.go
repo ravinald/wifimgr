@@ -9,14 +9,12 @@ import (
 func TestTokenManagerWithCustomIO(t *testing.T) {
 	// Create a mock config
 	mockConfig := &mockConfig{
-		apiToken:        "test-token",
-		tokenEncrypted:  false,
-		apiURL:          "https://test.com",
-		orgID:           "test-org",
-		saveError:       nil,
-		currentToken:    "",
-		isTokenSaved:    false,
-		isEncryptedFlag: false,
+		apiToken:     "test-token",
+		apiURL:       "https://test.com",
+		orgID:        "test-org",
+		saveError:    nil,
+		currentToken: "",
+		isTokenSaved: false,
 	}
 
 	// Create a mock validator
@@ -69,10 +67,9 @@ func TestTokenManagerWithCustomIO(t *testing.T) {
 func TestTokenManagerPrintValidationSuccess(t *testing.T) {
 	// Create a mock config
 	mockConfig := &mockConfig{
-		apiToken:       "test-token",
-		tokenEncrypted: false,
-		apiURL:         "https://test.com",
-		orgID:          "test-org",
+		apiToken: "test-token",
+		apiURL:   "https://test.com",
+		orgID:    "test-org",
 	}
 
 	// Create a mock validator
@@ -125,10 +122,9 @@ func TestTokenManagerPrintValidationSuccess(t *testing.T) {
 func TestTokenManagerWithContext(t *testing.T) {
 	// Create a mock config
 	mockConfig := &mockConfig{
-		apiToken:       "",
-		tokenEncrypted: false,
-		apiURL:         "https://test.com",
-		orgID:          "",
+		apiToken: "",
+		apiURL:   "https://test.com",
+		orgID:    "",
 	}
 
 	// Create a mock validator

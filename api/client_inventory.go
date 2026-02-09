@@ -27,14 +27,16 @@ func (c *mistClient) GetInventory(ctx context.Context, orgID string, deviceType 
 			var result []*MistInventoryItem
 			for _, item := range items {
 				newItem := &MistInventoryItem{
-					ID:     (*string)(item.Id),
-					MAC:    item.Mac,
-					Serial: item.Serial,
-					Name:   item.Name,
-					Model:  item.Model,
-					Type:   item.Type,
-					SiteID: (*string)(item.SiteId),
-					OrgID:  (*string)(item.OrgId),
+					ID:        (*string)(item.Id),
+					MAC:       item.Mac,
+					Serial:    item.Serial,
+					Name:      item.Name,
+					Model:     item.Model,
+					Type:      item.Type,
+					SiteID:    (*string)(item.SiteId),
+					OrgID:     (*string)(item.OrgId),
+					Connected: item.Connected,
+					Adopted:   item.Adopted,
 				}
 				result = append(result, newItem)
 			}
@@ -43,167 +45,8 @@ func (c *mistClient) GetInventory(ctx context.Context, orgID string, deviceType 
 		}
 	}
 
-	// Try to populate from file cache first
-	cacheAccessor := c.GetCacheAccessor()
-	if cacheAccessor != nil {
-		c.logDebug("Checking file cache for inventory type %s", displayType)
-
-		var fileInventory []*MistInventoryItem
-
-		// Get inventory from file cache based on device type
-		switch deviceType {
-		case "ap":
-			configs, err := cacheAccessor.GetAllAPConfigs()
-			if err == nil && len(configs) > 0 {
-				for _, config := range configs {
-					if config.OrgID != nil && *config.OrgID == orgID {
-						item := &MistInventoryItem{
-							ID:     config.ID,
-							MAC:    config.MAC,
-							Serial: config.Serial,
-							Name:   config.Name,
-							Model:  config.Model,
-							Type:   StringPtr("ap"),
-							SiteID: config.SiteID,
-							OrgID:  config.OrgID,
-						}
-						fileInventory = append(fileInventory, item)
-					}
-				}
-				c.logDebug("Found %d APs in file cache for org %s", len(fileInventory), orgID)
-			}
-		case "switch":
-			configs, err := cacheAccessor.GetAllSwitchConfigs()
-			if err == nil && len(configs) > 0 {
-				for _, config := range configs {
-					if config.OrgID != nil && *config.OrgID == orgID {
-						item := &MistInventoryItem{
-							ID:     config.ID,
-							MAC:    config.MAC,
-							Serial: config.Serial,
-							Name:   config.Name,
-							Model:  config.Model,
-							Type:   StringPtr("switch"),
-							SiteID: config.SiteID,
-							OrgID:  config.OrgID,
-						}
-						fileInventory = append(fileInventory, item)
-					}
-				}
-				c.logDebug("Found %d switches in file cache for org %s", len(fileInventory), orgID)
-			}
-		case "gateway":
-			configs, err := cacheAccessor.GetAllGatewayConfigs()
-			if err == nil && len(configs) > 0 {
-				for _, config := range configs {
-					if config.OrgID != nil && *config.OrgID == orgID {
-						item := &MistInventoryItem{
-							ID:     config.ID,
-							MAC:    config.MAC,
-							Serial: config.Serial,
-							Name:   config.Name,
-							Model:  config.Model,
-							Type:   StringPtr("gateway"),
-							SiteID: config.SiteID,
-							OrgID:  config.OrgID,
-						}
-						fileInventory = append(fileInventory, item)
-					}
-				}
-				c.logDebug("Found %d gateways in file cache for org %s", len(fileInventory), orgID)
-			}
-		case "", "all":
-			// Get all device types
-			apConfigs, _ := cacheAccessor.GetAllAPConfigs()
-			for _, config := range apConfigs {
-				if config.OrgID != nil && *config.OrgID == orgID {
-					item := &MistInventoryItem{
-						ID:     config.ID,
-						MAC:    config.MAC,
-						Serial: config.Serial,
-						Name:   config.Name,
-						Model:  config.Model,
-						Type:   StringPtr("ap"),
-						SiteID: config.SiteID,
-						OrgID:  config.OrgID,
-					}
-					fileInventory = append(fileInventory, item)
-				}
-			}
-
-			switchConfigs, _ := cacheAccessor.GetAllSwitchConfigs()
-			for _, config := range switchConfigs {
-				if config.OrgID != nil && *config.OrgID == orgID {
-					item := &MistInventoryItem{
-						ID:     config.ID,
-						MAC:    config.MAC,
-						Serial: config.Serial,
-						Name:   config.Name,
-						Model:  config.Model,
-						Type:   StringPtr("switch"),
-						SiteID: config.SiteID,
-						OrgID:  config.OrgID,
-					}
-					fileInventory = append(fileInventory, item)
-				}
-			}
-
-			gatewayConfigs, _ := cacheAccessor.GetAllGatewayConfigs()
-			for _, config := range gatewayConfigs {
-				if config.OrgID != nil && *config.OrgID == orgID {
-					item := &MistInventoryItem{
-						ID:     config.ID,
-						MAC:    config.MAC,
-						Serial: config.Serial,
-						Name:   config.Name,
-						Model:  config.Model,
-						Type:   StringPtr("gateway"),
-						SiteID: config.SiteID,
-						OrgID:  config.OrgID,
-					}
-					fileInventory = append(fileInventory, item)
-				}
-			}
-			c.logDebug("Found %d total devices in file cache for org %s", len(fileInventory), orgID)
-		}
-
-		if len(fileInventory) > 0 {
-			// Populate in-memory cache with file cache data
-			if c.inventoryCache != nil {
-				// Convert to old format for cache storage
-				var cacheItems []InventoryItem
-				for _, item := range fileInventory {
-					cacheItem := InventoryItem{
-						Mac:    item.MAC,
-						Serial: item.Serial,
-						Name:   item.Name,
-						Model:  item.Model,
-						Type:   item.Type,
-					}
-					if item.ID != nil {
-						id := UUID(*item.ID)
-						cacheItem.Id = &id
-					}
-					if item.SiteID != nil {
-						siteId := UUID(*item.SiteID)
-						cacheItem.SiteId = &siteId
-					}
-					if item.OrgID != nil {
-						orgId := UUID(*item.OrgID)
-						cacheItem.OrgId = &orgId
-					}
-					cacheItems = append(cacheItems, cacheItem)
-				}
-				c.inventoryCache.Set(cacheKey, cacheItems)
-				c.logDebug("Populated in-memory cache with %d items from file cache", len(fileInventory))
-			}
-
-			c.logDebug("File cache hit for inventory type %s: returning %d items", displayType, len(fileInventory))
-			return fileInventory, nil
-		}
-	}
-
-	c.logDebug("Cache miss for inventory type %s in both memory and file cache", displayType)
+	// Note: Legacy file cache fallback removed. Use vendors.GetGlobalCacheAccessor() for cache lookups.
+	c.logDebug("In-memory cache miss for inventory type %s, fetching from API", displayType)
 
 	// Determine the results limit to use
 	limit := 100 // Default value
@@ -277,11 +120,13 @@ func (c *mistClient) GetInventory(ctx context.Context, orgID string, deviceType 
 		var cacheItems []InventoryItem
 		for _, item := range allItems {
 			cacheItem := InventoryItem{
-				Mac:    item.MAC,
-				Serial: item.Serial,
-				Name:   item.Name,
-				Model:  item.Model,
-				Type:   item.Type,
+				Mac:       item.MAC,
+				Serial:    item.Serial,
+				Name:      item.Name,
+				Model:     item.Model,
+				Type:      item.Type,
+				Connected: item.Connected,
+				Adopted:   item.Adopted,
 			}
 			if item.ID != nil {
 				id := UUID(*item.ID)

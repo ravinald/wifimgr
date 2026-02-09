@@ -16,9 +16,6 @@ cp docs/config-minimal-sample.json ~/.config/wifimgr/wifimgr-config.json
 
 ## Site Configuration
 
-- Site names should follow the format: `\w{2}\-[Ww]?\w{3}\-\w{3,10}`
-  - Example: `US-SFO-TESTDRY`, `US-NYC-OFFICE`, etc.
-  
 - The `site_config.name` is what the CLI commands use to identify sites, NOT the config ID
   - For apply commands, use the value in `site_config.name`, not the config ID
   - For example: `./wifimgr apply US-SFO-TESTDRY ap` uses the name in the `site_config.name` field
@@ -26,6 +23,53 @@ cp docs/config-minimal-sample.json ~/.config/wifimgr/wifimgr-config.json
 - Best practice: The `site_config.name` should match the site config ID in the configuration file
   - For example, if the config ID is "US-SFO-TESTDRY", then `site_config.name` should also be "US-SFO-TESTDRY"
   - This helps avoid confusion between config IDs and actual site names
+
+> **Note on examples:** Site names used throughout this documentation (e.g., `US-SFO-TESTDRY`, `US-NYC-OFFICE`) follow an adaptation of [UN/LOCODE](https://en.wikipedia.org/wiki/UN/LOCODE) for illustrative purposes. The tool does not enforce any specific naming convention—use whatever naming scheme works best for your organization.
+
+## Templates
+
+Templates are an **app-level convenience** that expand into explicit device settings at apply time—they are NOT vendor-side profile management. wifimgr templates exist only in your local configuration. When you apply changes, templates are expanded into fully explicit configurations that are pushed directly to each device.
+
+```json
+{
+  "files": {
+    "templates": ["templates/radio.json", "templates/wlan.json"]
+  }
+}
+```
+
+Template files contain named configurations that can be referenced in site and device configs:
+
+```json
+{
+  "sites": {
+    "US-NYC-OFFICE": {
+      "profiles": {
+        "wlan": ["corp-secure", "guest"]
+      },
+      "wlan": ["corp-secure", "guest"],
+      "devices": {
+        "ap": {
+          "aa:bb:cc:dd:ee:01": {
+            "name": "AP-01",
+            "radio_profile": "high-density"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+- **profiles.wlan**: WLANs to create at the site
+- **wlan** (site-level): WLANs to apply to all APs by default
+- **devices.ap[mac].wlan**: WLANs to apply to specific APs (overrides site default)
+
+At apply time, `radio_profile` and `wlan` are expanded into explicit configuration values, which are then sent to the API. This is simpler than vendor-side template systems because all configuration is local and explicit.
+
+WLAN assignments are validated during `apply` and `lint config` — site-level and device-level WLANs must be declared in `profiles.wlan`, and each profile must have a corresponding template. See **[Templates — WLAN Validation](templates.md#wlan-validation)** for details.
+
+For complete template documentation, see **[Templates](templates.md)**.
 
 ## File Structure
 
@@ -181,13 +225,138 @@ The application will automatically read this file during startup and use the tok
 - Development environments where you don't want to encrypt the token in the config
 - CI/CD pipelines that need to run tests against the API
 
-The `.env.wifimgr` file should contain the environment variable `WIFIMGR_API_TOKEN` with your actual unencrypted API token:
+The `.env.wifimgr` file should contain credentials following the pattern `WIFIMGR_API_<LABEL>_CREDENTIALS_KEY`:
 
 ```
-WIFIMGR_API_TOKEN=your_actual_api_token_here
+WIFIMGR_API_MIST_CREDENTIALS_KEY=your_api_key_here
+WIFIMGR_API_MIST_CREDENTIALS_ORG=your_org_id_here
 ```
 
 This approach keeps sensitive credentials separate from your configuration files, making it safer to share or version control your configurations.
+
+### .env.wifimgr File Format
+
+The file uses a simple `KEY=value` format with support for comments and quoted values.
+
+**Basic syntax:**
+```bash
+# Comments start with #
+WIFIMGR_API_MIST_CREDENTIALS_KEY=your-api-key-here
+WIFIMGR_PASSWORD=simple-password
+```
+
+**Quoting rules:**
+
+Values can be wrapped in single or double quotes. Quotes are required if your value contains leading/trailing spaces:
+
+```bash
+# Both single and double quotes work
+WIFIMGR_PASSWORD="my secret password"
+WIFIMGR_PASSWORD='my secret password'
+
+# Use double quotes with single quotes inside
+WIFIMGR_PASSWORD="it's a secret"
+
+# Use single quotes with double quotes inside
+WIFIMGR_PASSWORD='say "hello"'
+```
+
+**Escape sequences (within quoted strings):**
+
+| Sequence | Result |
+|----------|--------|
+| `\\` | Literal backslash `\` |
+| `\"` | Literal double quote `"` |
+| `\'` | Literal single quote `'` |
+| `\n` | Newline |
+| `\t` | Tab |
+
+**Examples with escapes:**
+```bash
+# Password containing a double quote
+WIFIMGR_PASSWORD="pass\"word"
+
+# Password containing a backslash
+WIFIMGR_PASSWORD="path\\to\\secret"
+
+# Password containing both quote types
+WIFIMGR_PASSWORD="it\'s \"complex\""
+```
+
+**Note:** The `WIFIMGR_` prefix is automatically added if not present, so `PASSWORD=x` becomes `WIFIMGR_PASSWORD=x`.
+
+## Encrypting Secrets
+
+The `encrypt` command allows you to encrypt sensitive values for use in configuration files. This is useful for storing secrets like WLAN PSKs, RADIUS shared secrets, or additional API tokens.
+
+**Note:** The `encrypt` command works without any configuration file or API credentials. You can run it immediately after installing wifimgr.
+
+### Using the encrypt Command
+
+```bash
+# Encrypt any secret (interactive, hidden input)
+wifimgr encrypt
+
+# Encrypt a WiFi PSK with validation
+wifimgr encrypt psk
+```
+
+The command prompts for:
+1. The secret value (hidden input, with confirmation)
+2. An encryption password (min 8 chars, hidden input, with confirmation)
+
+Output is an encrypted string with `enc:` prefix:
+```
+enc:U2FsdGVkX1+abc123def456...
+```
+
+### Using Encrypted Values in Configuration
+
+Paste encrypted values directly into config files:
+
+```json
+{
+  "templates": {
+    "wlan": {
+      "Corp-WiFi": {
+        "ssid": "CorpNet",
+        "auth": {
+          "type": "psk",
+          "psk": "enc:U2FsdGVkX1+abc123def456..."
+        }
+      }
+    }
+  }
+}
+```
+
+When the application reads an encrypted value (detected by `enc:` prefix), it will prompt for the decryption password unless `WIFIMGR_PASSWORD` is set.
+
+### Non-Interactive Decryption
+
+For CI/CD pipelines, automated scripts, or non-interactive usage, provide the decryption password via environment variable:
+
+```bash
+export WIFIMGR_PASSWORD="your-decryption-password"
+wifimgr show api sites
+```
+
+Or in `.env.wifimgr`:
+```
+WIFIMGR_PASSWORD=your-decryption-password
+```
+
+When `WIFIMGR_PASSWORD` is set (either as an environment variable or in `.env.wifimgr`), the application will use it automatically to decrypt any `enc:` prefixed values without prompting.
+
+**Security note:** The password is cleared from memory after use when loaded via `.env.wifimgr` with the `-e` flag.
+
+### PSK Validation
+
+When encrypting WiFi passwords, use `encrypt psk` to validate against IEEE 802.11i requirements:
+- Length: 8-63 characters
+- Characters: Printable ASCII only (codes 32-126)
+
+This ensures the PSK will be accepted by both Mist and Meraki platforms.
 
 ## Viper Configuration System
 
@@ -217,16 +386,17 @@ The main configuration file (`~/.config/wifimgr/wifimgr-config.json`) supports t
     "schemas": "~/.local/share/wifimgr/schemas"
   },
   "api": {
-    "credentials": {
-      "api_id": "...",
-      "api_token": "...",
-      "org_id": "...",
-      "token_encrypted": true
-    },
-    "url": "https://api.mist.com/",
-    "rate_limit": 5000,
-    "results_limit": 100,
-    "cache_ttl": 86400
+    "mist": {
+      "vendor": "mist",
+      "url": "https://api.mist.com",
+      "credentials": {
+        "org_id": "...",
+        "api_key": "..."
+      },
+      "rate_limit": 5000,
+      "results_limit": 100,
+      "cache_ttl": 86400
+    }
   },
   "display": {
     "jsoncolor": {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/viper"
 
+	"github.com/ravinald/wifimgr/internal/encryption"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
@@ -85,17 +86,29 @@ func BuildAPIConfigsFromViper() (map[string]*vendors.APIConfig, []ValidationWarn
 		// Apply vendor-specific defaults
 		applyVendorDefaults(config)
 
+		// Normalize credential key names based on vendor
+		// This allows using "api_key" in config for Mist (maps to api_token)
+		normalizeCredentialNames(config)
+
 		logging.Debugf("  Built config for %q: vendor=%s, url=%s, creds=%d fields",
 			label, config.Vendor, config.URL, len(config.Credentials))
 
 		configs[label] = config
 	}
 
-	// Apply environment variable overrides BEFORE validation
+	// Apply environment variable overrides BEFORE decryption and validation
 	// This allows credentials to come from env vars (e.g., WIFIMGR_API_MIST_CREDENTIALS_KEY)
 	applyEnvOverrides(configs)
 
-	// Validate credentials AFTER env overrides have been applied
+	// Decrypt encrypted credentials (those with "enc:" prefix)
+	// This must happen after env overrides so that WIFIMGR_PASSWORD is available
+	for _, config := range configs {
+		if warns := decryptCredentials(config); len(warns) > 0 {
+			warnings = append(warnings, warns...)
+		}
+	}
+
+	// Validate credentials AFTER env overrides and decryption
 	for label, config := range configs {
 		if warns := validateCredentials(config); len(warns) > 0 {
 			warnings = append(warnings, warns...)
@@ -111,6 +124,16 @@ func BuildAPIConfigsFromViper() (map[string]*vendors.APIConfig, []ValidationWarn
 
 // DefaultCacheTTL is the default cache TTL in seconds (1 day).
 const DefaultCacheTTL = 86400
+
+// normalizeCredentialNames normalizes credential field names to app-standard names.
+// The app uses "api_key" as the standard field; "api_token" is accepted as an alias.
+func normalizeCredentialNames(config *vendors.APIConfig) {
+	// Normalize api_token -> api_key (app standard is api_key)
+	if config.Credentials["api_key"] == "" && config.Credentials["api_token"] != "" {
+		config.Credentials["api_key"] = config.Credentials["api_token"]
+		delete(config.Credentials, "api_token")
+	}
+}
 
 // applyVendorDefaults applies vendor-specific default values.
 func applyVendorDefaults(config *vendors.APIConfig) {
@@ -144,27 +167,54 @@ func applyVendorDefaults(config *vendors.APIConfig) {
 	}
 }
 
+// decryptCredentials decrypts encrypted credential values (those with "enc:" prefix).
+// Returns warnings if decryption fails or password is not available.
+func decryptCredentials(config *vendors.APIConfig) []ValidationWarning {
+	var warnings []ValidationWarning
+
+	for key, value := range config.Credentials {
+		if !encryption.IsEncrypted(value) {
+			continue
+		}
+
+		// Need password to decrypt
+		password := encryption.GetPasswordFromEnv()
+		if password == "" {
+			warnings = append(warnings, ValidationWarning{
+				Level:   "api",
+				API:     config.Label,
+				Message: fmt.Sprintf("API %q credential %q is encrypted but %s not set", config.Label, key, encryption.PasswordEnvVar),
+			})
+			continue
+		}
+
+		// Attempt decryption
+		decrypted, err := encryption.Decrypt(value, password)
+		if err != nil {
+			warnings = append(warnings, ValidationWarning{
+				Level:   "api",
+				API:     config.Label,
+				Message: fmt.Sprintf("API %q failed to decrypt credential %q: %v", config.Label, key, err),
+			})
+			continue
+		}
+
+		// Replace with decrypted value
+		config.Credentials[key] = decrypted
+		logging.Debugf("Decrypted credential api.%s.credentials.%s", config.Label, key)
+	}
+
+	return warnings
+}
+
 // validateCredentials checks that required credentials are present.
+// All vendors use the normalized field names: api_key, org_id
 func validateCredentials(config *vendors.APIConfig) []ValidationWarning {
 	var warnings []ValidationWarning
 
+	// All vendors require org_id and api_key (normalized field names)
 	switch config.Vendor {
-	case "mist":
-		if config.Credentials["org_id"] == "" {
-			warnings = append(warnings, ValidationWarning{
-				Level:   "api",
-				API:     config.Label,
-				Message: fmt.Sprintf("API %q missing required credential 'org_id'", config.Label),
-			})
-		}
-		if config.Credentials["api_token"] == "" {
-			warnings = append(warnings, ValidationWarning{
-				Level:   "api",
-				API:     config.Label,
-				Message: fmt.Sprintf("API %q missing required credential 'api_token'", config.Label),
-			})
-		}
-	case "meraki":
+	case "mist", "meraki":
 		if config.Credentials["org_id"] == "" {
 			warnings = append(warnings, ValidationWarning{
 				Level:   "api",
@@ -186,20 +236,15 @@ func validateCredentials(config *vendors.APIConfig) []ValidationWarning {
 
 // applyEnvOverrides applies environment variable overrides to API configs.
 // Environment variables follow the pattern: WIFIMGR_API_<LABEL>_CREDENTIALS_<FIELD>
-// Supported fields: KEY, ORG, URL
+// Supported fields: KEY (maps to api_key), ORG (maps to org_id), URL
 // Note: Label dashes are converted to underscores (e.g., "mist-prod" -> "MIST_PROD")
 func applyEnvOverrides(configs map[string]*vendors.APIConfig) {
 	for label, config := range configs {
 		envPrefix := fmt.Sprintf("WIFIMGR_API_%s_CREDENTIALS_", strings.ToUpper(strings.ReplaceAll(label, "-", "_")))
 
-		// KEY maps to api_token (Mist) or api_key (Meraki) based on vendor
+		// KEY maps to api_key (normalized field name for all vendors)
 		if key := os.Getenv(envPrefix + "KEY"); key != "" {
-			switch config.Vendor {
-			case "meraki":
-				config.Credentials["api_key"] = key
-			default: // mist and others use api_token
-				config.Credentials["api_token"] = key
-			}
+			config.Credentials["api_key"] = key
 		}
 
 		// ORG maps to org_id
@@ -211,22 +256,6 @@ func applyEnvOverrides(configs map[string]*vendors.APIConfig) {
 		if url := os.Getenv(envPrefix + "URL"); url != "" {
 			config.URL = url
 		}
-	}
-}
-
-// GetDefinedAPILabels returns a map of defined API labels for validation.
-func GetDefinedAPILabels(configs map[string]*vendors.APIConfig) map[string]bool {
-	labels := make(map[string]bool, len(configs))
-	for label := range configs {
-		labels[label] = true
-	}
-	return labels
-}
-
-// PrintAPIConfigWarnings prints validation warnings to stderr.
-func PrintAPIConfigWarnings(warnings []ValidationWarning) {
-	for _, w := range warnings {
-		fmt.Fprintf(os.Stderr, "WARN  Config validation: %s\n", w.Message)
 	}
 }
 

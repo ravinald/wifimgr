@@ -120,8 +120,7 @@ Add NetBox configuration to your wifimgr config file (typically `wifimgr-config.
   "netbox": {
     "url": "https://netbox.example.com",
     "credentials": {
-      "api_key": "your-api-key-here",
-      "key_encrypted": false
+      "api_key": "your-api-key-here"
     },
     "ssl_verify": true,
     "mappings": {
@@ -147,8 +146,7 @@ Add NetBox configuration to your wifimgr config file (typically `wifimgr-config.
 #### Configuration Fields
 
 - **`url`** (string, required): NetBox API endpoint (e.g., `https://netbox.example.com`)
-- **`credentials.api_key`** (string, required): Your NetBox API token for authentication
-- **`credentials.key_encrypted`** (boolean, optional): Set to `true` if the API key is encrypted
+- **`credentials.api_key`** (string, required): Your NetBox API token for authentication. Can be encrypted with `enc:` prefix.
 - **`ssl_verify`** (boolean, optional): Whether to verify SSL certificates. Default: `true`
 - **`settings_source`** (string, optional): Source for device configuration metadata. Valid values: `"api"` (default) or `"netbox"`. See [Reverse Sync](#reverse-sync-netbox-as-configuration-source) for details.
 - **`mappings.tag`** (string, optional): NetBox tag to apply to all devices and interfaces created by wifimgr. Useful for identifying objects managed by wifimgr.
@@ -158,21 +156,28 @@ Add NetBox configuration to your wifimgr config file (typically `wifimgr-config.
 
 #### Encrypted API Keys
 
-For added security, you can encrypt the API key in the configuration file:
+For added security, you can encrypt the API key using `wifimgr encrypt`:
+
+```bash
+wifimgr encrypt
+# Enter the NetBox API key when prompted
+# Copy the enc:... output
+```
+
+Then use the encrypted value in your configuration file:
 
 ```json
 {
   "netbox": {
     "url": "https://netbox.example.com",
     "credentials": {
-      "api_key": "enc:U2FsdGVkX1...",
-      "key_encrypted": true
+      "api_key": "enc:U2FsdGVkX1..."
     }
   }
 }
 ```
 
-When `key_encrypted` is true, you'll be prompted for the encryption password when running export commands.
+When wifimgr detects the `enc:` prefix, it will decrypt the value using `WIFIMGR_PASSWORD` from the environment or `.env.wifimgr` file. If the password is not available, you'll be prompted interactively.
 
 ## Mappings
 

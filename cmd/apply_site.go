@@ -39,9 +39,10 @@ type applyOptions struct {
 	diffMode  bool
 	splitDiff bool
 	noRefresh bool
+	force     bool
 }
 
-// parseApplyOptions parses optional positional arguments (diff, split, no-refresh)
+// parseApplyOptions parses optional positional arguments (diff, split, no-refresh, force)
 func parseApplyOptions(args []string) applyOptions {
 	opts := applyOptions{}
 	for _, arg := range args {
@@ -52,6 +53,8 @@ func parseApplyOptions(args []string) applyOptions {
 			opts.splitDiff = true
 		case "no-refresh":
 			opts.noRefresh = true
+		case "force":
+			opts.force = true
 		}
 	}
 	return opts
@@ -62,13 +65,14 @@ var validApplyOptions = map[string]bool{
 	"diff":       true,
 	"split":      true,
 	"no-refresh": true,
+	"force":      true,
 }
 
 // validateApplyOptions checks that all optional args are valid
 func validateApplyOptions(args []string) error {
 	for _, arg := range args {
 		if !validApplyOptions[strings.ToLower(arg)] {
-			return fmt.Errorf("unexpected argument: %s (valid options: diff, split, no-refresh)", arg)
+			return fmt.Errorf("unexpected argument: %s (valid options: diff, split, no-refresh, force)", arg)
 		}
 	}
 	return nil
@@ -76,7 +80,7 @@ func validateApplyOptions(args []string) error {
 
 // applySiteCmd represents the "apply site" command
 var applySiteCmd = &cobra.Command{
-	Use:   "site <site-name> <device-type> [diff [split]] [no-refresh]",
+	Use:   "site <site-name> <device-type> [diff [split]] [no-refresh] [force]",
 	Short: "Apply configuration to devices in a site",
 	Long: `Apply configuration changes to devices in a specific site.
 
@@ -116,7 +120,7 @@ Examples:
 		siteName := args[0]
 		deviceType := args[1]
 		opts := parseApplyOptions(args[2:])
-		force, _ := cmd.Flags().GetBool("force")
+		force := opts.force
 
 		// Validate device type
 		validTypes := map[string]bool{
@@ -170,7 +174,7 @@ Examples:
 
 // Device type subcommands for more intuitive usage
 var applyApCmd = &cobra.Command{
-	Use:   "ap <site-name> [diff [split]] [no-refresh]",
+	Use:   "ap <site-name> [diff [split]] [no-refresh] [force]",
 	Short: "Apply access point configuration to a site",
 	Long: `Apply access point configuration to a site.
 
@@ -196,7 +200,7 @@ Options:
 
 		siteName := args[0]
 		opts := parseApplyOptions(args[1:])
-		force, _ := cmd.Flags().GetBool("force")
+		force := opts.force
 
 		apiLabel, err := ValidateMultiVendorApply(globalContext, siteName, nil)
 		if err != nil {
@@ -233,7 +237,7 @@ Options:
 }
 
 var applySwitchCmd = &cobra.Command{
-	Use:   "switch <site-name> [diff [split]] [no-refresh]",
+	Use:   "switch <site-name> [diff [split]] [no-refresh] [force]",
 	Short: "Apply switch configuration to a site (not yet supported)",
 	Long: `Apply switch configuration to a site.
 
@@ -255,7 +259,7 @@ for a future release. Currently only AP configuration is supported.`,
 
 		siteName := args[0]
 		opts := parseApplyOptions(args[1:])
-		force, _ := cmd.Flags().GetBool("force")
+		force := opts.force
 
 		apiLabel, err := ValidateMultiVendorApply(globalContext, siteName, nil)
 		if err != nil {
@@ -292,7 +296,7 @@ for a future release. Currently only AP configuration is supported.`,
 }
 
 var applyGatewayCmd = &cobra.Command{
-	Use:   "gateway <site-name> [diff [split]] [no-refresh]",
+	Use:   "gateway <site-name> [diff [split]] [no-refresh] [force]",
 	Short: "Apply gateway configuration to a site (not yet supported)",
 	Long: `Apply gateway configuration to a site.
 
@@ -314,7 +318,7 @@ for a future release. Currently only AP configuration is supported.`,
 
 		siteName := args[0]
 		opts := parseApplyOptions(args[1:])
-		force, _ := cmd.Flags().GetBool("force")
+		force := opts.force
 
 		apiLabel, err := ValidateMultiVendorApply(globalContext, siteName, nil)
 		if err != nil {
@@ -351,7 +355,7 @@ for a future release. Currently only AP configuration is supported.`,
 }
 
 var applyAllCmd = &cobra.Command{
-	Use:   "all <site-name> [diff [split]] [no-refresh]",
+	Use:   "all <site-name> [diff [split]] [no-refresh] [force]",
 	Short: "Apply all supported device configurations to a site",
 	Long: `Apply all supported device configurations to a site.
 
@@ -382,7 +386,7 @@ Options:
 
 		siteName := args[0]
 		opts := parseApplyOptions(args[1:])
-		force, _ := cmd.Flags().GetBool("force")
+		force := opts.force
 
 		apiLabel, err := ValidateMultiVendorApply(globalContext, siteName, nil)
 		if err != nil {
@@ -419,8 +423,5 @@ func init() {
 	applyCmd.AddCommand(applyGatewayCmd)
 	applyCmd.AddCommand(applyAllCmd)
 
-	// Add flags to site command and its subcommands
-	for _, cmd := range []*cobra.Command{applySiteCmd, applyApCmd, applySwitchCmd, applyGatewayCmd, applyAllCmd} {
-		cmd.Flags().BoolP("force", "f", false, "Force apply even if no changes detected")
-	}
+	// Note: 'force' is now a positional argument, not a flag
 }

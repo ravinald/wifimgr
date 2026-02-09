@@ -143,18 +143,14 @@ func IsSiteCode(s string) bool {
 	return matched
 }
 
-// FormatOutputWithWarning formats output with warning if cache integrity is compromised
-// This is a helper function to ensure consistent output formatting in commands
+// FormatOutputWithWarning returns the text unchanged.
+// Legacy cache integrity warning system has been removed.
 func FormatOutputWithWarning(text string) string {
-	// Check if cache integrity is compromised
-	if api.IsCacheIntegrityCompromised() {
-		return api.WrapOutputWithWarning(text)
-	}
 	return text
 }
 
-// PrintWithWarning prints a line of text with warning if cache integrity is compromised
-// Section headings are displayed in blue
+// PrintWithWarning prints a line of text formatted as a section heading in blue.
+// Legacy cache integrity warning system has been removed.
 func PrintWithWarning(format string, args ...interface{}) {
 	var text string
 	if len(args) > 0 {
@@ -162,19 +158,12 @@ func PrintWithWarning(format string, args ...interface{}) {
 	} else {
 		text = format
 	}
-
-	// Format the text in blue as a heading
 	blueText := color.New(color.FgBlue, color.Bold).Sprint(text)
-
-	if api.IsCacheIntegrityCompromised() {
-		fmt.Println(api.WrapOutputWithWarning(blueText))
-	} else {
-		fmt.Println(blueText)
-	}
+	fmt.Println(blueText)
 }
 
-// PrintDetailWithWarning prints a detail line (like ID, Name, etc.) without applying blue color
-// Use this for detail lines that should appear in regular text formatting
+// PrintDetailWithWarning prints a detail line (like ID, Name, etc.) without applying blue color.
+// Legacy cache integrity warning system has been removed.
 func PrintDetailWithWarning(format string, args ...interface{}) {
 	var text string
 	if len(args) > 0 {
@@ -182,24 +171,12 @@ func PrintDetailWithWarning(format string, args ...interface{}) {
 	} else {
 		text = format
 	}
-
-	if api.IsCacheIntegrityCompromised() {
-		fmt.Println(api.WrapOutputWithWarning(text))
-	} else {
-		fmt.Println(text)
-	}
+	fmt.Println(text)
 }
 
-// PrintTextWithWarning prints a text string with warning if cache integrity is compromised
-// Use this function when you have a pre-formatted string (not a format string)
-// Section headings are displayed in blue
+// PrintTextWithWarning prints a text string formatted as a section heading in blue.
+// Legacy cache integrity warning system has been removed.
 func PrintTextWithWarning(text string) {
-	// Format the text in blue as a heading
 	blueText := color.New(color.FgBlue, color.Bold).Sprint(text)
-
-	if api.IsCacheIntegrityCompromised() {
-		fmt.Println(api.WrapOutputWithWarning(blueText))
-	} else {
-		fmt.Println(blueText)
-	}
+	fmt.Println(blueText)
 }

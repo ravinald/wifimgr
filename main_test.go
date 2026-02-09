@@ -34,18 +34,11 @@ func createTempConfigFile(t *testing.T) string {
 			Inventory:   "",
 		},
 		API: config.API{
-			Credentials: struct {
-				APIID             string `json:"api_id"`
-				APIToken          string `json:"api_token"`
-				OrgID             string `json:"org_id"`
-				KeyEncryptionSalt string `json:"key_encryption_salt,omitempty"`
-				KeyEncrypted      bool   `json:"key_encrypted,omitempty"`
-			}{
+			Credentials: config.Credentials{
 				APIID:             "test-id",
 				APIToken:          "test-token",
 				OrgID:             "test-org",
 				KeyEncryptionSalt: "",
-				KeyEncrypted:      false,
 			},
 			URL:          "https://api.mist.com/api/v1",
 			RateLimit:    1000,
@@ -259,18 +252,11 @@ func TestInventoryOperations(t *testing.T) {
 			Inventory:   "",
 		},
 		API: config.API{
-			Credentials: struct {
-				APIID             string `json:"api_id"`
-				APIToken          string `json:"api_token"`
-				OrgID             string `json:"org_id"`
-				KeyEncryptionSalt string `json:"key_encryption_salt,omitempty"`
-				KeyEncrypted      bool   `json:"key_encrypted,omitempty"`
-			}{
+			Credentials: config.Credentials{
 				APIID:             "test-id",
 				APIToken:          "test-token",
 				OrgID:             "test-org",
 				KeyEncryptionSalt: "",
-				KeyEncrypted:      false,
 			},
 			URL:          "https://api.mist.com/api/v1",
 			RateLimit:    1000,
