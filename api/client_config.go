@@ -55,12 +55,8 @@ func (c *mistClient) SetDebug(debug bool) {
 	}
 }
 
-// GetCacheAccessor returns the cache accessor (delegates to cmdutils singleton)
-func (c *mistClient) GetCacheAccessor() CacheAccessor {
-	// Import cycle prevention: we can't import cmdutils here
-	// So we'll use a package-level singleton in the api package
-	return GetGlobalCacheAccessor()
-}
+// GetCacheAccessor is deprecated and has been removed.
+// Use vendors.GetGlobalCacheAccessor() instead for cache lookups.
 
 // ValidateAPIToken validates the API token by making a self request
 func (c *mistClient) ValidateAPIToken(ctx context.Context) (*SelfResponse, error) {

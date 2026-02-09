@@ -147,35 +147,76 @@ func (c *mistClient) handleErrorResponse(statusCode int, body []byte) error {
 		logging.Debugf("API Error Response [%d]: %s", statusCode, string(body))
 	}
 
-	// Try to parse the error response
-	var errorResp struct {
-		Detail     string `json:"detail"`
-		Error      string `json:"error"`
-		Message    string `json:"message"`
-		ErrorCode  int    `json:"error_code,omitempty"`
-		StatusCode int    `json:"status_code,omitempty"`
-	}
-
-	if err := json.Unmarshal(body, &errorResp); err != nil {
-		// If we can't parse the error, return a generic error
+	// Try to parse the error response - handle both simple and complex structures
+	// Mist API can return:
+	// - Simple: {"detail": "error message"}
+	// - Array of errors: {"detail": ["error1", "error2"]}
+	// - Nested validation: {"detail": {"field": ["error1"]}}
+	var rawResp map[string]interface{}
+	if err := json.Unmarshal(body, &rawResp); err != nil {
+		// If we can't parse at all, return a generic error
 		return c.statusCodeToError(statusCode)
 	}
 
-	// Use the most specific error message available
-	var errMsg string
-	if errorResp.Detail != "" {
-		errMsg = errorResp.Detail
-	} else if errorResp.Error != "" {
-		errMsg = errorResp.Error
-	} else if errorResp.Message != "" {
-		errMsg = errorResp.Message
-	} else {
-		// If no error message is provided, return a generic error
+	// Extract error message(s) from the response
+	errMsg := extractErrorMessages(rawResp)
+	if errMsg == "" {
 		return c.statusCodeToError(statusCode)
 	}
 
 	// Return a detailed error message
 	return fmt.Errorf("API error [%d]: %s", statusCode, errMsg)
+}
+
+// extractErrorMessages extracts error messages from various API response formats
+func extractErrorMessages(resp map[string]interface{}) string {
+	// Try common error field names in order of specificity
+	for _, field := range []string{"detail", "error", "message", "errors"} {
+		if val, ok := resp[field]; ok {
+			msg := formatErrorValue(val)
+			if msg != "" {
+				return msg
+			}
+		}
+	}
+	return ""
+}
+
+// formatErrorValue formats an error value which can be a string, array, or nested map
+func formatErrorValue(val interface{}) string {
+	switch v := val.(type) {
+	case string:
+		return v
+	case []interface{}:
+		// Array of errors - join them
+		var msgs []string
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				msgs = append(msgs, s)
+			} else if m, ok := item.(map[string]interface{}); ok {
+				// Nested error object
+				if nested := formatErrorValue(m); nested != "" {
+					msgs = append(msgs, nested)
+				}
+			}
+		}
+		if len(msgs) > 0 {
+			return strings.Join(msgs, "; ")
+		}
+	case map[string]interface{}:
+		// Nested validation errors - format as "field: error"
+		var msgs []string
+		for field, fieldVal := range v {
+			fieldMsg := formatErrorValue(fieldVal)
+			if fieldMsg != "" {
+				msgs = append(msgs, fmt.Sprintf("%s: %s", field, fieldMsg))
+			}
+		}
+		if len(msgs) > 0 {
+			return strings.Join(msgs, "; ")
+		}
+	}
+	return ""
 }
 
 // statusCodeToError converts an HTTP status code to a specific error

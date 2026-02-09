@@ -10,6 +10,7 @@ Complete documentation for configuring and using wifimgr.
 
 ## Features & Reference
 
+- **[Templates](templates.md)** - App-level configuration templates that expand into explicit device settings at apply time (not vendor-side profiles)
 - **[Known Issues](known-issues.md)** - Current limitations and workarounds
 - **[Table Formatter](table-formatter.md)** - Output formats (table, CSV, JSON)
 - **[Field Mappings](field-mappings.md)** - Vendor API field mapping reference

@@ -39,25 +39,10 @@ func (c *mistClient) GetSiteName(siteID string) (string, bool) {
 	return "", false
 }
 
-// GetOrgName retrieves an organization name from the cache by ID
+// GetOrgName retrieves an organization name from the cache by ID.
+// Note: This method is deprecated. Use vendors.GetGlobalCacheAccessor() for cache lookups.
 func (c *mistClient) GetOrgName(orgID string) (string, bool) {
-	// Get cache accessor
-	cacheAccessor := c.GetCacheAccessor()
-	if cacheAccessor == nil {
-		return "", false
-	}
-
-	// Try to get org from cache
-	org, err := cacheAccessor.GetOrgByID(orgID)
-	if err != nil {
-		return "", false
-	}
-
-	if org != nil && org.Name != nil {
-		logging.Debugf("Found org name %s for ID %s in cache", *org.Name, orgID)
-		return *org.Name, true
-	}
-
+	// Legacy cache accessor removed - use vendors.GetGlobalCacheAccessor() instead
 	return "", false
 }
 
@@ -65,24 +50,8 @@ func (c *mistClient) GetOrgName(orgID string) (string, bool) {
 
 // GetSites retrieves all sites for the specified organization using raw JSON unmarshaling
 func (c *mistClient) GetSites(ctx context.Context, orgID string) ([]*MistSite, error) {
-	// Try to get from cache first
-	cacheAccessor := c.GetCacheAccessor()
-	if cacheAccessor != nil {
-		sites, err := cacheAccessor.GetAllSites()
-		if err == nil && len(sites) > 0 {
-			c.logDebug("Cache hit for sites from cache accessor")
-			// Filter by org ID if needed
-			filteredSites := make([]*MistSite, 0, len(sites))
-			for _, site := range sites {
-				if site.OrgID != nil && *site.OrgID == orgID {
-					filteredSites = append(filteredSites, site)
-				}
-			}
-			return filteredSites, nil
-		}
-	}
-
-	c.logDebug("Cache miss for sites")
+	// Note: Legacy cache fallback removed. Use vendors.GetGlobalCacheAccessor() for cache lookups.
+	c.logDebug("Fetching sites from API")
 
 	// Determine the results limit to use
 	limit := 100 // Default value

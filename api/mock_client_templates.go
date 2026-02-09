@@ -169,3 +169,73 @@ func (m *MockClient) GetSiteSetting(_ context.Context, siteID string) (*SiteSett
 		},
 	}, nil
 }
+
+// CreateOrgWLAN creates a new org-level WLAN (mock implementation)
+func (m *MockClient) CreateOrgWLAN(_ context.Context, orgID string, wlan *MistWLAN) (*MistWLAN, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Create a mock response with a generated ID
+	mockID := "mock-wlan-" + orgID
+	return &MistWLAN{
+		ID:               &mockID,
+		SSID:             wlan.SSID,
+		OrgID:            &orgID,
+		AdditionalConfig: make(map[string]interface{}),
+	}, nil
+}
+
+// CreateSiteWLAN creates a new site-level WLAN (mock implementation)
+func (m *MockClient) CreateSiteWLAN(_ context.Context, siteID string, wlan *MistWLAN) (*MistWLAN, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Create a mock response with a generated ID
+	mockID := "mock-wlan-" + siteID
+	return &MistWLAN{
+		ID:               &mockID,
+		SSID:             wlan.SSID,
+		SiteID:           &siteID,
+		AdditionalConfig: make(map[string]interface{}),
+	}, nil
+}
+
+// UpdateOrgWLAN updates an existing org-level WLAN (mock implementation)
+func (m *MockClient) UpdateOrgWLAN(_ context.Context, orgID string, wlanID string, wlan *MistWLAN) (*MistWLAN, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Return the updated WLAN with the provided ID
+	wlan.ID = &wlanID
+	wlan.OrgID = &orgID
+	return wlan, nil
+}
+
+// UpdateSiteWLAN updates an existing site-level WLAN (mock implementation)
+func (m *MockClient) UpdateSiteWLAN(_ context.Context, siteID string, wlanID string, wlan *MistWLAN) (*MistWLAN, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Return the updated WLAN with the provided ID
+	wlan.ID = &wlanID
+	wlan.SiteID = &siteID
+	return wlan, nil
+}
+
+// DeleteOrgWLAN deletes an org-level WLAN (mock implementation)
+func (m *MockClient) DeleteOrgWLAN(_ context.Context, orgID string, wlanID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Mock implementation - always succeed
+	return nil
+}
+
+// DeleteSiteWLAN deletes a site-level WLAN (mock implementation)
+func (m *MockClient) DeleteSiteWLAN(_ context.Context, siteID string, wlanID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Mock implementation - always succeed
+	return nil
+}

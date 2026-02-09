@@ -2,6 +2,7 @@ package mist
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/ravinald/wifimgr/api"
@@ -131,21 +132,151 @@ func (s *wlansService) BySSID(ctx context.Context, ssid string) ([]*vendors.WLAN
 }
 
 // Create creates a new WLAN.
-// Note: Not implemented for read-only cache population.
-func (s *wlansService) Create(_ context.Context, _ *vendors.WLAN) (*vendors.WLAN, error) {
-	return nil, fmt.Errorf("WLAN creation not implemented")
+// Routes to org-level or site-level endpoint based on SiteID.
+func (s *wlansService) Create(ctx context.Context, wlan *vendors.WLAN) (*vendors.WLAN, error) {
+	mistWLAN := convertVendorWLANToMist(wlan)
+
+	var created *api.MistWLAN
+	var err error
+
+	if wlan.SiteID == "" {
+		// Create org-level WLAN
+		logging.Debugf("[mist] Creating org-level WLAN: %s", wlan.SSID)
+		created, err = s.client.CreateOrgWLAN(ctx, s.orgID, mistWLAN)
+	} else {
+		// Create site-level WLAN
+		logging.Debugf("[mist] Creating site-level WLAN: %s for site %s", wlan.SSID, wlan.SiteID)
+		created, err = s.client.CreateSiteWLAN(ctx, wlan.SiteID, mistWLAN)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create WLAN: %w", err)
+	}
+
+	return convertMistWLAN(created, s.orgID), nil
 }
 
 // Update modifies an existing WLAN.
-// Note: Not implemented for read-only cache population.
-func (s *wlansService) Update(_ context.Context, _ string, _ *vendors.WLAN) (*vendors.WLAN, error) {
-	return nil, fmt.Errorf("WLAN update not implemented")
+// Routes to org-level or site-level endpoint based on SiteID.
+func (s *wlansService) Update(ctx context.Context, id string, wlan *vendors.WLAN) (*vendors.WLAN, error) {
+	mistWLAN := convertVendorWLANToMist(wlan)
+
+	var updated *api.MistWLAN
+	var err error
+
+	if wlan.SiteID == "" {
+		// Update org-level WLAN
+		logging.Debugf("[mist] Updating org-level WLAN: %s", id)
+		updated, err = s.client.UpdateOrgWLAN(ctx, s.orgID, id, mistWLAN)
+	} else {
+		// Update site-level WLAN
+		logging.Debugf("[mist] Updating site-level WLAN: %s for site %s", id, wlan.SiteID)
+		updated, err = s.client.UpdateSiteWLAN(ctx, wlan.SiteID, id, mistWLAN)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to update WLAN: %w", err)
+	}
+
+	return convertMistWLAN(updated, s.orgID), nil
 }
 
 // Delete removes a WLAN.
-// Note: Not implemented for read-only cache population.
-func (s *wlansService) Delete(_ context.Context, _ string) error {
-	return fmt.Errorf("WLAN deletion not implemented")
+// Must fetch the WLAN first to determine org vs site scope.
+func (s *wlansService) Delete(ctx context.Context, id string) error {
+	// Fetch the WLAN to determine its scope (org or site level)
+	wlan, err := s.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get WLAN for deletion: %w", err)
+	}
+
+	if wlan.SiteID == "" {
+		// Delete org-level WLAN
+		logging.Debugf("[mist] Deleting org-level WLAN: %s", id)
+		if err := s.client.DeleteOrgWLAN(ctx, s.orgID, id); err != nil {
+			return fmt.Errorf("failed to delete org WLAN: %w", err)
+		}
+	} else {
+		// Delete site-level WLAN
+		logging.Debugf("[mist] Deleting site-level WLAN: %s from site %s", id, wlan.SiteID)
+		if err := s.client.DeleteSiteWLAN(ctx, wlan.SiteID, id); err != nil {
+			return fmt.Errorf("failed to delete site WLAN: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// convertVendorWLANToMist converts a vendor-agnostic WLAN to Mist API WLAN type.
+func convertVendorWLANToMist(w *vendors.WLAN) *api.MistWLAN {
+	mist := &api.MistWLAN{
+		AdditionalConfig: make(map[string]interface{}),
+	}
+
+	// Copy explicit struct fields
+	if w.SSID != "" {
+		mist.SSID = &w.SSID
+	}
+	mist.Enabled = &w.Enabled
+	if w.Hidden {
+		mist.Hidden = &w.Hidden
+	}
+	if w.Band != "" {
+		mist.Band = &w.Band
+	}
+	if w.VLANID != 0 {
+		mist.VlanID = &w.VLANID
+	}
+	if w.AuthType != "" {
+		mist.Auth.Type = &w.AuthType
+	}
+	if w.PSK != "" {
+		mist.Auth.PSK = &w.PSK
+	}
+
+	// Copy RADIUS servers for enterprise auth
+	if len(w.RadiusServers) > 0 {
+		rs := w.RadiusServers[0]
+		mist.Auth.Enterprise = &struct {
+			Radius *struct {
+				Host   *string `json:"host,omitempty"`
+				Port   *int    `json:"port,omitempty"`
+				Secret *string `json:"secret,omitempty"`
+			} `json:"radius,omitempty"`
+		}{
+			Radius: &struct {
+				Host   *string `json:"host,omitempty"`
+				Port   *int    `json:"port,omitempty"`
+				Secret *string `json:"secret,omitempty"`
+			}{},
+		}
+		if rs.Host != "" {
+			mist.Auth.Enterprise.Radius.Host = &rs.Host
+		}
+		if rs.Port != 0 {
+			mist.Auth.Enterprise.Radius.Port = &rs.Port
+		}
+		if rs.Secret != "" {
+			mist.Auth.Enterprise.Radius.Secret = &rs.Secret
+		}
+	}
+
+	// Merge any additional config fields from the original vendor response
+	// This preserves fields not explicitly mapped in the struct
+	if w.Config != nil {
+		for key, value := range w.Config {
+			// Skip explicitly mapped keys
+			switch key {
+			case "id", "ssid", "org_id", "site_id", "enabled", "hidden",
+				"band", "vlan_id", "auth", "created_time", "modified_time":
+				continue
+			default:
+				mist.AdditionalConfig[key] = value
+			}
+		}
+	}
+
+	return mist
 }
 
 // convertMistWLAN converts a Mist API WLAN to the vendor-agnostic WLAN type.
@@ -201,8 +332,8 @@ func convertMistWLAN(w *api.MistWLAN, orgID string) *vendors.WLAN {
 		wlan.RadiusServers = []vendors.RadiusServer{server}
 	}
 
-	// Store full config map for round-trip accuracy
-	wlan.Config = w.ToMap()
+	// Store full config map for round-trip accuracy using JSON marshaling
+	wlan.Config = mistWLANToMap(w)
 	// Remove sensitive data from cached config
 	if auth, ok := wlan.Config["auth"].(map[string]interface{}); ok {
 		delete(auth, "psk")
@@ -214,6 +345,19 @@ func convertMistWLAN(w *api.MistWLAN, orgID string) *vendors.WLAN {
 	}
 
 	return wlan
+}
+
+// mistWLANToMap converts a MistWLAN to a map using JSON marshaling.
+func mistWLANToMap(w *api.MistWLAN) map[string]interface{} {
+	data, err := json.Marshal(w)
+	if err != nil {
+		return nil
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil
+	}
+	return result
 }
 
 // Ensure wlansService implements vendors.WLANsService at compile time.

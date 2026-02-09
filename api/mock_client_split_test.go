@@ -24,7 +24,7 @@ func TestMockClientSplitStructure(t *testing.T) {
 	t.Run("SiteOperations", func(t *testing.T) {
 		// Add a mock site
 		testSite := Site{
-			Id:          uuidPtr("site-123"),
+			Id:          UUIDPtr("site-123"),
 			Name:        StringPtr("Test Site"),
 			Address:     StringPtr("123 Test St"),
 			CountryCode: StringPtr("US"),
@@ -76,10 +76,10 @@ func TestMockClientSplitStructure(t *testing.T) {
 	t.Run("DeviceOperations", func(t *testing.T) {
 		// Add mock AP
 		testAP := AP{
-			Id:     uuidPtr("ap-123"),
+			Id:     UUIDPtr("ap-123"),
 			Mac:    StringPtr("aabbccddeeff"),
 			Name:   StringPtr("Test AP Device"),
-			SiteId: uuidPtr("site-123"),
+			SiteId: UUIDPtr("site-123"),
 			Model:  StringPtr("AP41"),
 			Magic:  StringPtr("ap-magic-123"),
 		}
@@ -131,5 +131,3 @@ func TestMockClientSplitStructure(t *testing.T) {
 
 	t.Log("All mock client split structure tests passed")
 }
-
-// uuidPtr function is already defined in cache_migration_test.go

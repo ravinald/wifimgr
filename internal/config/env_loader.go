@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ravinald/wifimgr/internal/logging"
@@ -48,10 +49,8 @@ func LoadEnvFile(filename string) error {
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
 
-		// Remove surrounding quotes if present
-		if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
-			value = value[1 : len(value)-1]
-		}
+		// Parse quoted values with escape sequence support
+		value = unquoteEnvValue(value)
 
 		// Set environment variable - add WIFIMGR_ prefix if not present
 		envKey := key
@@ -74,6 +73,61 @@ func LoadEnvFile(filename string) error {
 	return nil
 }
 
+// unquoteEnvValue removes surrounding quotes (single or double) and processes escape sequences.
+// Supported escape sequences within quoted strings: \\ \" \'
+// Unquoted values are returned as-is.
+func unquoteEnvValue(value string) string {
+	if len(value) < 2 {
+		return value
+	}
+
+	// Check for matching quotes (single or double)
+	firstChar := value[0]
+	lastChar := value[len(value)-1]
+
+	if (firstChar == '"' && lastChar == '"') || (firstChar == '\'' && lastChar == '\'') {
+		// Remove surrounding quotes
+		inner := value[1 : len(value)-1]
+
+		// Process escape sequences
+		var result strings.Builder
+		result.Grow(len(inner))
+
+		for i := 0; i < len(inner); i++ {
+			if inner[i] == '\\' && i+1 < len(inner) {
+				next := inner[i+1]
+				switch next {
+				case '\\':
+					result.WriteByte('\\')
+					i++
+				case '"':
+					result.WriteByte('"')
+					i++
+				case '\'':
+					result.WriteByte('\'')
+					i++
+				case 'n':
+					result.WriteByte('\n')
+					i++
+				case 't':
+					result.WriteByte('\t')
+					i++
+				default:
+					// Unknown escape sequence - keep as-is
+					result.WriteByte(inner[i])
+				}
+			} else {
+				result.WriteByte(inner[i])
+			}
+		}
+
+		return result.String()
+	}
+
+	// Not quoted - return as-is
+	return value
+}
+
 // ClearSensitiveEnvVars removes sensitive environment variables after use
 // This is important for long-running processes to avoid memory inspection attacks
 func ClearSensitiveEnvVars() {
@@ -91,34 +145,44 @@ func ClearSensitiveEnvVars() {
 		}
 	}
 
+	// Clear decryption password
+	if err := os.Unsetenv("WIFIMGR_PASSWORD"); err != nil {
+		logging.Warnf("Failed to unset WIFIMGR_PASSWORD: %v", err)
+	}
+
 	logging.Debug("Cleared sensitive environment variables")
 }
 
-// SecureLoadEnvFile loads the env file and returns a cleanup function.
+// SecureLoadEnvFile loads the env file and returns a cleanup function and the path loaded.
 // If the file is not found at the specified path, it searches using XDG paths.
 // Usage:
 //
-//	cleanup, err := SecureLoadEnvFile(".env.wifimgr")
+//	cleanup, loadedPath, err := SecureLoadEnvFile(".env.wifimgr")
 //	if err != nil { ... }
 //	defer cleanup()
-func SecureLoadEnvFile(filename string) (func(), error) {
+func SecureLoadEnvFile(filename string) (func(), string, error) {
 	// Try the specified filename first
 	if _, err := os.Stat(filename); err == nil {
 		if err := LoadEnvFile(filename); err != nil {
-			return nil, err
+			return nil, "", err
 		}
-		return ClearSensitiveEnvVars, nil
+		// Get absolute path for clear logging
+		absPath, _ := filepath.Abs(filename)
+		if absPath == "" {
+			absPath = filename
+		}
+		return ClearSensitiveEnvVars, absPath, nil
 	}
 
 	// Try to find using XDG paths
 	envPath := xdg.FindEnvFile()
 	if envPath == "" {
-		return nil, fmt.Errorf("env file not found: %s", filename)
+		return nil, "", fmt.Errorf("env file not found: %s (also checked XDG paths)", filename)
 	}
 
 	if err := LoadEnvFile(envPath); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return ClearSensitiveEnvVars, nil
+	return ClearSensitiveEnvVars, envPath, nil
 }

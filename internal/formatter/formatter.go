@@ -7,7 +7,6 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/ravinald/wifimgr/api"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
@@ -21,23 +20,15 @@ func Format(data []interface{}, displayFormat config.DisplayFormat, formatOverri
 		format = formatOverride
 	}
 
-	var result string
 	switch format {
 	case "csv":
-		result = formatAsCSV(data, displayFormat)
+		return formatAsCSV(data, displayFormat)
 	case "table":
-		result = formatAsTable(data, displayFormat)
+		return formatAsTable(data, displayFormat)
 	default:
 		// Default to table if format is not recognized
-		result = formatAsTable(data, displayFormat)
+		return formatAsTable(data, displayFormat)
 	}
-
-	// Check if cache integrity is compromised and wrap output with warnings if needed
-	if api.IsCacheIntegrityCompromised() {
-		result = api.WrapOutputWithWarning(result)
-	}
-
-	return result
 }
 
 // formatAsTable formats the data as a table with proper padding

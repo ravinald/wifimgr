@@ -13,7 +13,6 @@ import (
 type Config interface {
 	GetAPIToken() string
 	SetAPIToken(token string)
-	SetKeyEncrypted(encrypted bool)
 	GetAPIURL() string
 	GetOrgID() string
 	SetOrgID(id string)
@@ -244,8 +243,16 @@ func (tm *TokenManager) handleEncryptedToken(ctx context.Context, encryptedToken
 	return nil
 }
 
-// promptForExistingPassword prompts for the password to decrypt the token
+// promptForExistingPassword returns the password to decrypt the token.
+// First checks WIFIMGR_PASSWORD environment variable, then prompts interactively.
 func (tm *TokenManager) promptForExistingPassword() (string, error) {
+	// First check environment variable
+	if password := GetPasswordFromEnv(); password != "" {
+		logging.Debug("Using decryption password from environment variable")
+		return password, nil
+	}
+
+	// Fall back to interactive prompt
 	return tm.IO.PromptPassword("Enter your password to decrypt the API token (input will not be displayed): ")
 }
 
@@ -322,9 +329,8 @@ func (tm *TokenManager) encryptAndSaveToken(_ context.Context, token string, res
 		return fmt.Errorf("failed to encrypt token: %w", err)
 	}
 
-	// Update config with encrypted token
+	// Update config with encrypted token (enc: prefix indicates encryption)
 	tm.Config.SetAPIToken(encryptedToken)
-	tm.Config.SetKeyEncrypted(true)
 
 	// Set org ID if not already set
 	if tm.Config.GetOrgID() == "" && result.OrgID != "" {

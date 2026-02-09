@@ -28,6 +28,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/ravinald/wifimgr/api"
+	"github.com/ravinald/wifimgr/internal/cmdutils"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/xdg"
@@ -55,8 +56,9 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "wifimgr",
-	Short: "WiFi and network infrastructure management CLI",
+	Use:          "wifimgr",
+	SilenceUsage: true,
+	Short:        "WiFi and network infrastructure management CLI",
 	Long: `WiFi Manager is a comprehensive CLI tool for managing Mist Systems network infrastructure.
 
 It provides commands to:
@@ -67,21 +69,33 @@ It provides commands to:
 
 For detailed usage information, run 'wifimgr help [command]'`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip initialization for commands that don't need API access
+		// Determine initialization tier based on command annotations
+		tier := cmdutils.GetCommandTier(cmd.Annotations)
+
+		// Also check for legacy skip conditions (will be migrated to annotations)
 		if cmd.Name() == "version" || cmd.Name() == "help" || cmd.Name() == "completion" || cmd.Name() == "init" || cmd.Name() == "fields" {
-			return nil
+			tier = cmdutils.TierNoInit
 		}
 		// Skip for "init site" subcommand (check parent is "init")
 		if cmd.Name() == "site" && cmd.Parent() != nil && cmd.Parent().Name() == "init" {
-			return nil
+			tier = cmdutils.TierConfigOnly
 		}
 		// Skip initialization if "help" is in positional args (Junos-style help)
 		for _, arg := range args {
 			if strings.ToLower(arg) == "help" {
-				return nil
+				tier = cmdutils.TierNoInit
 			}
 		}
-		return initializeApplication(cmd)
+
+		// Execute appropriate initialization based on tier
+		switch tier {
+		case cmdutils.TierNoInit:
+			return nil
+		case cmdutils.TierConfigOnly:
+			return initializeConfig(cmd)
+		default:
+			return initializeApplication(cmd)
+		}
 	},
 }
 
@@ -97,64 +111,20 @@ func Execute() {
 	}
 }
 
-// initializeApplication initializes the application with configuration and API client
-func initializeApplication(cmd *cobra.Command) error {
+// initializeConfig initializes Viper configuration and logging only.
+// This is used by Tier 1 commands that need config access but not API credentials.
+func initializeConfig(cmd *cobra.Command) error {
 	// Initialize Viper first
 	if err := config.InitializeViper(cmd); err != nil {
 		return fmt.Errorf("failed to initialize Viper: %w", err)
 	}
-	// Handle cascading debug levels: -ddd implies -dd implies -d
-	if traceDebug {
-		extraDebug = true
-		debug = true
-	}
-	if extraDebug {
-		debug = true
-	}
 
-	// Convert flags and Viper config to CLIOptions struct
-	opts := config.CLIOptions{
-		Debug:      debug,
-		UseEnvFile: useEnvFile,
-		// Other options will be read from Viper/config file
-	}
+	// Handle cascading debug levels
+	opts := buildCLIOptions()
 
-	// Set debug level based on flags
-	switch {
-	case traceDebug:
-		opts.DebugLevelInt = config.DebugTrace
-	case extraDebug:
-		opts.DebugLevelInt = config.DebugDebug
-	case debug:
-		opts.DebugLevelInt = config.DebugInfo
-	default:
-		opts.DebugLevelInt = config.DebugNone
-	}
-
-	// Initialize logging with a basic configuration
-	// Set to warning level to show duplicate config warnings during loading
-	initialLogConfig := logging.LogConfig{
-		Enable:   true,
-		Level:    "warning", // Show warnings during config loading
-		Format:   "text",
-		ToStdout: true,
-		Silent:   false,
-		LogFile:  "", // No file logging yet
-	}
-
-	// If debug flag is used, override log level
-	// -d = info, -dd = debug, -ddd = debug (trace uses debug level)
-	switch opts.DebugLevelInt {
-	case config.DebugTrace, config.DebugDebug:
-		initialLogConfig.Level = "debug"
-	case config.DebugInfo:
-		initialLogConfig.Level = "info"
-	default:
-		// DebugNone or any other value: keep default warning level
-	}
-
-	if err := logging.ConfigureLogging(initialLogConfig); err != nil {
-		return fmt.Errorf("failed to initialize logging: %v", err)
+	// Initialize logging
+	if err := initializeLogging(opts); err != nil {
+		return err
 	}
 
 	// Load configurations using Viper
@@ -163,11 +133,7 @@ func initializeApplication(cmd *cobra.Command) error {
 		configPath = xdg.GetConfigFile()
 	}
 
-	var siteConfigs []*config.SiteConfigFile
-	var err error
-
-	// Load configurations - always load site configs regardless of -e flag
-	siteConfigs, err = config.LoadAllConfigsViper(configPath)
+	siteConfigs, err := config.LoadAllConfigsViper(configPath)
 	if err != nil {
 		return fmt.Errorf("error loading configurations: %v", err)
 	}
@@ -175,36 +141,32 @@ func initializeApplication(cmd *cobra.Command) error {
 	logging.Debugf("Loaded main configuration (version %.1f)", viper.GetFloat64("version"))
 	logging.Debugf("Loaded %d site configurations", len(siteConfigs))
 
-	// Configure final logging
-	var logLevel string
-	switch opts.DebugLevelInt {
-	case config.DebugTrace, config.DebugDebug:
-		logLevel = "debug"
-	case config.DebugInfo:
-		logLevel = "info"
-	default:
-		logLevel = viper.GetString("logging.level")
+	// Configure final logging from config file
+	if err := configureFinalLogging(opts); err != nil {
+		return err
 	}
 
-	finalLogConfig := logging.LogConfig{
-		Enable:   viper.GetBool("logging.enable") || opts.DebugLevelInt > config.DebugNone,
-		Format:   viper.GetString("logging.format"),
-		LogFile:  viper.GetString("files.log_file"),
-		Level:    logLevel,
-		ToStdout: viper.GetBool("logging.stdout"),
+	logging.Info("Starting wifimgr (config-only mode)")
+
+	return nil
+}
+
+// initializeApplication initializes the application with configuration and API client.
+// This is the full initialization path for Tier 2 commands that need API access.
+func initializeApplication(cmd *cobra.Command) error {
+	// First do config initialization
+	if err := initializeConfig(cmd); err != nil {
+		return err
 	}
 
-	// When debug flags are used, always enable stdout logging
-	if opts.DebugLevelInt > config.DebugNone {
-		finalLogConfig.ToStdout = true
-	}
+	// Now initialize API components
+	return initializeAPI()
+}
 
-	if err := logging.ConfigureLogging(finalLogConfig); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "FATAL: Unable to configure log file '%s': %v\n", finalLogConfig.LogFile, err)
-		os.Exit(1)
-	}
-
-	logging.Info("Starting wifimgr")
+// initializeAPI initializes the API client and multi-vendor infrastructure.
+// This is called by initializeApplication for Tier 2 commands.
+func initializeAPI() error {
+	opts := buildCLIOptions()
 
 	// Log terminal properties
 	if term.IsTerminal(int(os.Stdout.Fd())) {
@@ -226,13 +188,13 @@ func initializeApplication(cmd *cobra.Command) error {
 	// so that WIFIMGR_API_<LABEL>_CREDENTIALS_* vars are available
 	var envCleanup func()
 	if opts.UseEnvFile {
-		logging.Info("Loading .env.wifimgr file")
-		cleanup, err := config.SecureLoadEnvFile(".env.wifimgr")
+		logging.Debug("Looking for .env.wifimgr file")
+		cleanup, loadedPath, err := config.SecureLoadEnvFile(".env.wifimgr")
 		if err != nil {
 			logging.Warnf("Failed to load .env.wifimgr file: %v", err)
 		} else {
 			envCleanup = cleanup
-			logging.Info("Successfully loaded .env.wifimgr file")
+			logging.Infof("Loaded env file: %s", loadedPath)
 		}
 	}
 
@@ -242,10 +204,24 @@ func initializeApplication(cmd *cobra.Command) error {
 		logging.Warnf("Multi-vendor initialization: %v", err)
 	}
 
-	// Clean up env vars after multi-vendor init has read them
-	if envCleanup != nil {
-		envCleanup()
+	// Set globalVendorClient from the registry (prefers Mist if available)
+	registry := GetAPIRegistry()
+	if registry != nil {
+		for _, label := range registry.GetAllLabels() {
+			client, err := registry.GetClient(label)
+			if err == nil && client != nil {
+				SetGlobalVendorClient(client)
+				logging.Debugf("Set globalVendorClient from API '%s'", label)
+				break
+			}
+		}
 	}
+
+	// Note: We intentionally don't call envCleanup() here.
+	// WIFIMGR_PASSWORD is needed throughout the session for decrypting
+	// WLAN PSKs and other encrypted values in templates.
+	// The env vars will be cleared when the process exits.
+	_ = envCleanup // Silence unused variable warning
 
 	// Create HTTP client
 	httpClient := &http.Client{
@@ -268,13 +244,13 @@ func initializeApplication(cmd *cobra.Command) error {
 	var apiToken, apiURL, apiOrgID string
 
 	// Get credentials from multi-vendor registry for globalClient
-	registry := GetAPIRegistry()
+	// Note: registry already obtained above for globalVendorClient
 	if registry != nil {
 		// Find the Mist API config
 		for _, label := range registry.GetAllLabels() {
 			apiConfig, err := registry.GetConfig(label)
 			if err == nil && apiConfig != nil && apiConfig.Vendor == "mist" {
-				apiToken = apiConfig.Credentials["api_token"]
+				apiToken = apiConfig.Credentials["api_key"]
 				apiURL = apiConfig.URL
 				apiOrgID = apiConfig.Credentials["org_id"]
 				logging.Debugf("Using credentials from %s API for globalClient (URL: %s, OrgID: %s)",
@@ -335,13 +311,13 @@ func initializeApplication(cmd *cobra.Command) error {
 			ManagedKeys:  getManagedKeysFromViper(),
 		},
 		Files: config.Files{
-			ConfigDir:      viper.GetString("files.config_dir"),
-			SiteConfigs:    viper.GetStringSlice("files.site_configs"),
-			DeviceProfiles: viper.GetStringSlice("files.device_profiles"),
-			Cache:          cachePath,
-			Inventory:      viper.GetString("files.inventory"),
-			LogFile:        viper.GetString("files.log_file"),
-			Schemas:        viper.GetString("files.schemas"),
+			ConfigDir:   viper.GetString("files.config_dir"),
+			SiteConfigs: viper.GetStringSlice("files.site_configs"),
+			Templates:   viper.GetStringSlice("files.templates"),
+			Cache:       cachePath,
+			Inventory:   viper.GetString("files.inventory"),
+			LogFile:     viper.GetString("files.log_file"),
+			Schemas:     viper.GetString("files.schemas"),
 		},
 	}
 
@@ -356,6 +332,96 @@ func initializeApplication(cmd *cobra.Command) error {
 
 	// Cache operations are now handled by the multi-vendor cache manager per-API
 	// Use 'wifimgr refresh cache' to rebuild cache
+
+	return nil
+}
+
+// buildCLIOptions creates CLIOptions from current flag values.
+func buildCLIOptions() config.CLIOptions {
+	// Handle cascading debug levels: -ddd implies -dd implies -d
+	if traceDebug {
+		extraDebug = true
+		debug = true
+	}
+	if extraDebug {
+		debug = true
+	}
+
+	opts := config.CLIOptions{
+		Debug:      debug,
+		UseEnvFile: useEnvFile,
+	}
+
+	// Set debug level based on flags
+	switch {
+	case traceDebug:
+		opts.DebugLevelInt = config.DebugTrace
+	case extraDebug:
+		opts.DebugLevelInt = config.DebugDebug
+	case debug:
+		opts.DebugLevelInt = config.DebugInfo
+	default:
+		opts.DebugLevelInt = config.DebugNone
+	}
+
+	return opts
+}
+
+// initializeLogging sets up initial logging configuration.
+func initializeLogging(opts config.CLIOptions) error {
+	initialLogConfig := logging.LogConfig{
+		Enable:   true,
+		Level:    "warning", // Show warnings during config loading
+		Format:   "text",
+		ToStdout: true,
+		Silent:   false,
+		LogFile:  "", // No file logging yet
+	}
+
+	// If debug flag is used, override log level
+	switch opts.DebugLevelInt {
+	case config.DebugTrace, config.DebugDebug:
+		initialLogConfig.Level = "debug"
+	case config.DebugInfo:
+		initialLogConfig.Level = "info"
+	}
+
+	if err := logging.ConfigureLogging(initialLogConfig); err != nil {
+		return fmt.Errorf("failed to initialize logging: %v", err)
+	}
+
+	return nil
+}
+
+// configureFinalLogging configures logging based on config file settings.
+func configureFinalLogging(opts config.CLIOptions) error {
+	var logLevel string
+	switch opts.DebugLevelInt {
+	case config.DebugTrace, config.DebugDebug:
+		logLevel = "debug"
+	case config.DebugInfo:
+		logLevel = "info"
+	default:
+		logLevel = viper.GetString("logging.level")
+	}
+
+	finalLogConfig := logging.LogConfig{
+		Enable:   viper.GetBool("logging.enable") || opts.DebugLevelInt > config.DebugNone,
+		Format:   viper.GetString("logging.format"),
+		LogFile:  viper.GetString("files.log_file"),
+		Level:    logLevel,
+		ToStdout: viper.GetBool("logging.stdout"),
+	}
+
+	// When debug flags are used, always enable stdout logging
+	if opts.DebugLevelInt > config.DebugNone {
+		finalLogConfig.ToStdout = true
+	}
+
+	if err := logging.ConfigureLogging(finalLogConfig); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "FATAL: Unable to configure log file '%s': %v\n", finalLogConfig.LogFile, err)
+		os.Exit(1)
+	}
 
 	return nil
 }
