@@ -1,4 +1,4 @@
-.PHONY: build test test-coverage clean lint vet fmt all version check
+.PHONY: build test test-coverage clean lint vet fmt all version check security
 .PHONY: test-api test-internal test-cmd test-shell test-client test-mock-client test-ap
 .PHONY: test-vendors test-vendors-registry test-vendors-cache test-vendors-errors test-vendors-mock
 
@@ -145,6 +145,10 @@ vet:
 fmt:
 	$(GOFMT) ./...
 
+security:
+	gosec ./...
+	govulncheck ./...
+
 dependencies:
 	$(GOMOD) tidy
 	$(GOMOD) download
@@ -187,7 +191,7 @@ install-lint:
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
 # Pre-push quality check (mirrors CI pipeline)
-check: vet lint test
+check: vet lint test security
 
 # Build and install the binary
 install: check build

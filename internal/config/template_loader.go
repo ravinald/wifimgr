@@ -68,7 +68,7 @@ func LoadTemplates(paths []string, configDir string) (*TemplateStore, error) {
 
 // loadFromFile loads templates from a single file
 func (s *TemplateStore) loadFromFile(filePath string) error {
-	data, err := os.ReadFile(filePath)
+	data, err := os.ReadFile(filePath) // #nosec G304 -- paths from operator-controlled config file
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
