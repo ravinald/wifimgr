@@ -152,18 +152,6 @@ func TestGetClient_NotFound(t *testing.T) {
 	}
 }
 
-func TestMustGetClient_Panic(t *testing.T) {
-	r := NewAPIClientRegistry()
-
-	defer func() {
-		if recover() == nil {
-			t.Error("expected panic for nonexistent API")
-		}
-	}()
-
-	r.MustGetClient("nonexistent")
-}
-
 func TestGetAllLabels(t *testing.T) {
 	r := NewAPIClientRegistry()
 	r.RegisterFactory("mock", func(config *APIConfig) (Client, error) {

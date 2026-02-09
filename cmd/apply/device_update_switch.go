@@ -108,7 +108,6 @@ func (s *SwitchUpdater) FindDevicesToUpdate(ctx context.Context, client api.Clie
 		expandedConfig, err := expandDeviceConfigWithTemplates(desiredConfig, siteConfig)
 		if err != nil {
 			logging.Warnf("Error expanding templates for Switch %s: %v - using unexpanded config", mac, err)
-			expandedConfig = desiredConfig
 		} else {
 			desiredConfig = expandedConfig
 		}
