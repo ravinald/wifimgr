@@ -8,22 +8,20 @@ import (
 
 // MockConfig implements the Config interface for testing
 type MockConfig struct {
-	apiToken       string
-	orgID          string
-	tokenEncrypted bool
-	currentToken   string
-	saveErr        error
+	apiToken     string
+	orgID        string
+	currentToken string
+	saveErr      error
 }
 
-func (m *MockConfig) GetAPIToken() string            { return m.apiToken }
-func (m *MockConfig) SetAPIToken(token string)       { m.apiToken = token }
-func (m *MockConfig) SetKeyEncrypted(encrypted bool) { m.tokenEncrypted = encrypted }
-func (m *MockConfig) GetAPIURL() string              { return "https://test-api.com" }
-func (m *MockConfig) GetOrgID() string               { return m.orgID }
-func (m *MockConfig) SetOrgID(id string)             { m.orgID = id }
-func (m *MockConfig) Save(configPath string) error   { return m.saveErr }
-func (m *MockConfig) SetCurrentToken(token string)   { m.currentToken = token }
-func (m *MockConfig) GetCurrentToken() string        { return m.currentToken }
+func (m *MockConfig) GetAPIToken() string          { return m.apiToken }
+func (m *MockConfig) SetAPIToken(token string)     { m.apiToken = token }
+func (m *MockConfig) GetAPIURL() string            { return "https://test-api.com" }
+func (m *MockConfig) GetOrgID() string             { return m.orgID }
+func (m *MockConfig) SetOrgID(id string)           { m.orgID = id }
+func (m *MockConfig) Save(configPath string) error { return m.saveErr }
+func (m *MockConfig) SetCurrentToken(token string) { m.currentToken = token }
+func (m *MockConfig) GetCurrentToken() string      { return m.currentToken }
 
 // MockTokenValidator implements the TokenValidator interface for testing
 type MockTokenValidator struct {
@@ -76,13 +74,9 @@ func TestTokenManager_HandleNoToken(t *testing.T) {
 		t.Errorf("handleNoToken() error = %v, want nil", err)
 	}
 
-	// Token should be encrypted and saved
-	if !mockConfig.tokenEncrypted {
-		t.Errorf("handleNoToken() did not set token as encrypted")
-	}
-
-	if mockConfig.apiToken == "test-token" {
-		t.Errorf("handleNoToken() did not encrypt token")
+	// Token should be encrypted (has enc: prefix) and saved
+	if !IsEncrypted(mockConfig.apiToken) {
+		t.Errorf("handleNoToken() did not encrypt token (missing enc: prefix)")
 	}
 
 	if mockConfig.currentToken != "test-token" {
@@ -141,13 +135,9 @@ func TestTokenManager_HandlePlaintextToken(t *testing.T) {
 		t.Errorf("handlePlaintextToken() error = %v, want nil", err)
 	}
 
-	// Token should be encrypted and saved
-	if !mockConfig.tokenEncrypted {
-		t.Errorf("handlePlaintextToken() did not set token as encrypted")
-	}
-
-	if mockConfig.apiToken == "test-token" {
-		t.Errorf("handlePlaintextToken() did not encrypt token")
+	// Token should be encrypted (has enc: prefix) and saved
+	if !IsEncrypted(mockConfig.apiToken) {
+		t.Errorf("handlePlaintextToken() did not encrypt token (missing enc: prefix)")
 	}
 
 	if mockConfig.currentToken != "test-token" {
@@ -209,14 +199,9 @@ func TestTokenManager_InitializeToken(t *testing.T) {
 
 			// If no error and we should encrypt, check token was processed correctly
 			if err == nil && tt.shouldEncrypt && tt.validatorSucceeds {
-				if !mockConfig.tokenEncrypted {
-					t.Errorf("InitializeToken() did not set token as encrypted")
-				}
-
-				if tt.token == "" || tt.token != "test-token" {
-					if mockConfig.apiToken == tt.token {
-						t.Errorf("InitializeToken() did not encrypt token")
-					}
+				// Token should be encrypted (has enc: prefix)
+				if !IsEncrypted(mockConfig.apiToken) {
+					t.Errorf("InitializeToken() did not encrypt token (missing enc: prefix)")
 				}
 
 				// Token should be set

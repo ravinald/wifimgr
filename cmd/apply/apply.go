@@ -31,15 +31,18 @@ func HandleCommand(ctx context.Context, client api.Client, cfg *config.Config, a
 	siteName := args[0]
 	command := args[1]
 
-	// Check if diff and split positional arguments are present
+	// Check if diff, split, and refresh-api positional arguments are present
 	diffMode := false
 	splitDiff := false
+	refreshAPI := false
 	for _, arg := range args[2:] {
 		switch arg {
 		case "diff":
 			diffMode = true
 		case "split":
 			splitDiff = true
+		case "refresh-api":
+			refreshAPI = true
 		}
 	}
 	// Set viper values for use in diff display functions
@@ -76,7 +79,7 @@ func HandleCommand(ctx context.Context, client api.Client, cfg *config.Config, a
 	// Handle the "all" case - currently only AP is supported
 	if deviceType == "all" {
 		// Apply AP configuration (only supported device type)
-		if err := applyDeviceToSite(ctx, client, cfg, siteName, "ap", apiLabel, force, diffMode); err != nil {
+		if err := applyDeviceToSite(ctx, client, cfg, siteName, "ap", apiLabel, force, diffMode, refreshAPI); err != nil {
 			logging.Errorf("Error applying AP configuration to site %s: %v", siteName, err)
 			return fmt.Errorf("AP apply error: %w", err)
 		}
@@ -88,13 +91,13 @@ func HandleCommand(ctx context.Context, client api.Client, cfg *config.Config, a
 	}
 
 	// Apply specific device type
-	return applyDeviceToSite(ctx, client, cfg, siteName, deviceType, apiLabel, force, diffMode)
+	return applyDeviceToSite(ctx, client, cfg, siteName, deviceType, apiLabel, force, diffMode, refreshAPI)
 }
 
 // applyDeviceToSite applies a specific device type configuration to a site
-func applyDeviceToSite(ctx context.Context, client api.Client, cfg *config.Config, siteName string, deviceType string, apiLabel string, force bool, diffMode bool) error {
+func applyDeviceToSite(ctx context.Context, client api.Client, cfg *config.Config, siteName string, deviceType string, apiLabel string, force bool, diffMode bool, refreshAPI bool) error {
 	// Use the new generic framework
-	return applySiteGeneric(ctx, client, cfg, siteName, deviceType, apiLabel, force, diffMode)
+	return applySiteGeneric(ctx, client, cfg, siteName, deviceType, apiLabel, force, diffMode, refreshAPI)
 }
 
 // Helper functions
@@ -102,7 +105,13 @@ func applyDeviceToSite(ctx context.Context, client api.Client, cfg *config.Confi
 // SiteConfig represents a site configuration in the config file
 type SiteConfig struct {
 	SiteConfig map[string]any `json:"site_config"`
-	Devices    struct {
+	Profiles   struct {
+		WLAN   []string `json:"wlan,omitempty"`   // WLAN template labels to CREATE at site
+		Radio  []string `json:"radio,omitempty"`  // Radio template labels
+		Device []string `json:"device,omitempty"` // Device template labels
+	} `json:"profiles,omitempty"`
+	WLAN    []string `json:"wlan,omitempty"` // WLANs to APPLY to all APs (site-wide default)
+	Devices struct {
 		APs      map[string]map[string]any `json:"ap"`      // AP is a map of MAC -> config
 		Switches map[string]map[string]any `json:"switch"`  // Switch is a map of MAC -> config
 		WanEdge  map[string]map[string]any `json:"gateway"` // Gateway is a map of MAC -> config

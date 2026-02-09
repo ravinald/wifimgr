@@ -17,15 +17,21 @@ import (
 
 var lintConfigCmd = &cobra.Command{
 	Use:   "config <site-name>",
-	Short: "Lint a site configuration file",
-	Long: `Validate a site configuration file for common issues and errors.
+	Short: "Lint a site configuration",
+	Annotations: map[string]string{
+		cmdutils.AnnotationNeedsConfig: "true",
+	},
+	Long: `Validate a site configuration for common issues and errors.
 
 This command performs comprehensive validation including:
 - Syntax validation (required fields, data types)
 - Schema validation (field types match expected schema)
 - Vendor block validation (correct vendor-specific fields)
 - Reference validation (profiles and templates exist)
+- Deprecated field detection
 - Range validation (numeric values within acceptable ranges)
+- Radio configuration validation
+- WLAN assignment validation (profile declarations and template existence)
 
 Examples:
   wifimgr lint config US-LAB-01
@@ -60,6 +66,18 @@ func runLintConfig(cmd *cobra.Command, args []string) error {
 	// Create linter
 	linter := validation.NewConfigLinter(cacheAccessor)
 
+	// Load templates for WLAN reference validation
+	templatePaths := viper.GetStringSlice("files.templates")
+	configDir := viper.GetString("files.config_dir")
+	if len(templatePaths) > 0 && configDir != "" {
+		templates, templateErr := config.LoadTemplates(templatePaths, configDir)
+		if templateErr != nil {
+			logging.Warnf("Failed to load templates: %v", templateErr)
+		} else {
+			linter.SetTemplateStore(templates)
+		}
+	}
+
 	// Perform linting
 	result, err := linter.LintSite(siteName, siteConfig)
 	if err != nil {
@@ -84,8 +102,8 @@ func loadSiteConfiguration(siteName string) (*config.SiteConfigObj, error) {
 		return nil, fmt.Errorf("config directory not set")
 	}
 
-	// Get config file path using Viper
-	fullPath, exists := config.GetSiteConfigFullPath(siteName)
+	// Get relative config file path
+	relativePath, exists := config.GetSiteConfigPath(siteName)
 	if !exists {
 		return nil, fmt.Errorf("site '%s' not found in configuration", siteName)
 	}
@@ -97,7 +115,7 @@ func loadSiteConfiguration(siteName string) (*config.SiteConfigObj, error) {
 	}
 
 	// Load the config file
-	siteConfigFile, err := config.LoadSiteConfig(configDir, fullPath)
+	siteConfigFile, err := config.LoadSiteConfig(configDir, relativePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config file: %w", err)
 	}

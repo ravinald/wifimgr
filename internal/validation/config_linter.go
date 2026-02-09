@@ -31,6 +31,7 @@ type LintIssue struct {
 // ConfigLinter validates site configuration files for common issues.
 type ConfigLinter struct {
 	cacheAccessor *vendors.CacheAccessor
+	templateStore *config.TemplateStore
 }
 
 // NewConfigLinter creates a new configuration linter.
@@ -38,6 +39,11 @@ func NewConfigLinter(accessor *vendors.CacheAccessor) *ConfigLinter {
 	return &ConfigLinter{
 		cacheAccessor: accessor,
 	}
+}
+
+// SetTemplateStore provides template definitions for WLAN reference validation.
+func (l *ConfigLinter) SetTemplateStore(store *config.TemplateStore) {
+	l.templateStore = store
 }
 
 // LintSite performs comprehensive validation on a site configuration.
@@ -76,12 +82,27 @@ func (l *ConfigLinter) LintSite(siteName string, siteConfig *config.SiteConfigOb
 		issues = l.validateVendorBlocks(configMap, targetVendor)
 		result.addIssues(mac, deviceName, issues)
 
+		// Validate deprecated fields
+		issues = l.validateDeprecatedFields(apConfig)
+		result.addIssues(mac, deviceName, issues)
+
 		// Validate references (profiles, templates)
 		issues = l.validateReferences(configMap)
 		result.addIssues(mac, deviceName, issues)
 
 		// Validate value ranges
 		issues = l.validateRanges(configMap, "ap")
+		result.addIssues(mac, deviceName, issues)
+
+		// Validate radio configuration
+		deviceModel := ""
+		if apConfig.APDeviceConfig != nil {
+			// Try to get device model from API cache or config
+			if vars, ok := apConfig.APDeviceConfig.Vars["model"].(string); ok {
+				deviceModel = vars
+			}
+		}
+		issues = l.validateRadioConfig(configMap, targetVendor, deviceModel)
 		result.addIssues(mac, deviceName, issues)
 	}
 
@@ -115,6 +136,9 @@ func (l *ConfigLinter) LintSite(siteName string, siteConfig *config.SiteConfigOb
 		issues = l.validateVendorBlocks(configMap, targetVendor)
 		result.addIssues(mac, gwConfig.Name, issues)
 	}
+
+	// Validate WLAN assignment references
+	l.validateWLANReferences(siteConfig, result)
 
 	return result, nil
 }
@@ -278,6 +302,94 @@ func (l *ConfigLinter) validateRanges(configMap map[string]any, deviceType strin
 	return issues
 }
 
+// validateRadioConfig validates radio configuration using the RadioValidator.
+func (l *ConfigLinter) validateRadioConfig(configMap map[string]any, targetVendor, deviceModel string) []LintIssue {
+	radioConfig, ok := configMap["radio_config"].(map[string]any)
+	if !ok || radioConfig == nil {
+		return nil
+	}
+
+	validator := NewRadioValidator(targetVendor, deviceModel)
+	return validator.ValidateRadioConfig(radioConfig)
+}
+
+// validateDeprecatedFields checks for deprecated AP configuration fields.
+func (l *ConfigLinter) validateDeprecatedFields(apConfig config.APConfig) []LintIssue {
+	var issues []LintIssue
+
+	if apConfig.Config.LEDEnabled || apConfig.Config.ScanningEnabled || apConfig.Config.IndoorUse { //nolint:staticcheck // intentional: detecting deprecated field usage
+		issues = append(issues, LintIssue{
+			Field:      "config",
+			Message:    "Legacy 'config' field is deprecated",
+			Suggestion: "Migrate to radio_config structure",
+		})
+	}
+
+	if apConfig.VlanID != 0 { //nolint:staticcheck // intentional: detecting deprecated field usage
+		issues = append(issues, LintIssue{
+			Field:      "vlan_id",
+			Message:    "Top-level 'vlan_id' field is deprecated",
+			Suggestion: "Use ip_config.vlan_id instead",
+		})
+	}
+
+	return issues
+}
+
+// validateWLANReferences checks WLAN assignment consistency:
+// 1. Site-level WLANs must be declared in profiles.wlan
+// 2. Device-level WLANs must be declared in profiles.wlan
+// 3. profiles.wlan entries must have a corresponding WLAN template
+func (l *ConfigLinter) validateWLANReferences(siteConfig *config.SiteConfigObj, result *LintResult) {
+	profileSet := make(map[string]bool, len(siteConfig.Profiles.WLAN))
+	for _, label := range siteConfig.Profiles.WLAN {
+		profileSet[label] = true
+	}
+
+	// Check site-level WLAN assignments reference declared profiles
+	for _, label := range siteConfig.WLAN {
+		if !profileSet[label] {
+			result.Errors = append(result.Errors, LintIssue{
+				Field:      "wlan",
+				Message:    fmt.Sprintf("Site-level WLAN '%s' is not declared in profiles.wlan", label),
+				Suggestion: fmt.Sprintf("Add '%s' to profiles.wlan or remove it from site-level wlan", label),
+			})
+		}
+	}
+
+	// Check device-level WLAN assignments reference declared profiles
+	for mac, apConfig := range siteConfig.Devices.APs {
+		deviceName := ""
+		if apConfig.APDeviceConfig != nil && apConfig.APDeviceConfig.Name != "" {
+			deviceName = apConfig.APDeviceConfig.Name
+		}
+		for _, label := range apConfig.WLANs {
+			if !profileSet[label] {
+				result.Errors = append(result.Errors, LintIssue{
+					DeviceMAC:  mac,
+					DeviceName: deviceName,
+					Field:      "wlan",
+					Message:    fmt.Sprintf("Device WLAN '%s' is not declared in profiles.wlan", label),
+					Suggestion: fmt.Sprintf("Add '%s' to profiles.wlan or remove it from device config", label),
+				})
+			}
+		}
+	}
+
+	// Check profile WLAN entries have corresponding templates
+	if l.templateStore != nil {
+		for _, label := range siteConfig.Profiles.WLAN {
+			if _, ok := l.templateStore.GetWLANTemplate(label); !ok {
+				result.Errors = append(result.Errors, LintIssue{
+					Field:      "profiles.wlan",
+					Message:    fmt.Sprintf("No WLAN template found for profile '%s'", label),
+					Suggestion: fmt.Sprintf("Define a WLAN template named '%s' in your template files", label),
+				})
+			}
+		}
+	}
+}
+
 // addIssues adds issues to the result, categorizing them as warnings or errors.
 func (r *LintResult) addIssues(mac, deviceName string, issues []LintIssue) {
 	for _, issue := range issues {
@@ -312,7 +424,11 @@ func convertAPConfigToMap(apConfig config.APConfig) map[string]any {
 	if apConfig.APDeviceConfig != nil {
 		result["name"] = apConfig.APDeviceConfig.Name
 		result["notes"] = apConfig.APDeviceConfig.Notes
-		// Add other fields as needed
+
+		// Include radio_config for validation
+		if apConfig.APDeviceConfig.RadioConfig != nil {
+			result["radio_config"] = apConfig.APDeviceConfig.RadioConfig.ToMap()
+		}
 	}
 
 	result["mac"] = apConfig.MAC

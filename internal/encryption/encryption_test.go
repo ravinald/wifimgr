@@ -1,6 +1,7 @@
 package encryption
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -117,5 +118,29 @@ func TestDecryptInvalidData(t *testing.T) {
 	_, err := Decrypt(token, password)
 	if err == nil || !strings.Contains(err.Error(), ErrInvalidEncryptedData.Error()) {
 		t.Errorf("Expected error containing %q, got: %v", ErrInvalidEncryptedData, err)
+	}
+}
+
+func TestGetPasswordFromEnv(t *testing.T) {
+	// Save original value and restore after test
+	original := os.Getenv(PasswordEnvVar)
+	defer func() {
+		if original != "" {
+			os.Setenv(PasswordEnvVar, original)
+		} else {
+			os.Unsetenv(PasswordEnvVar)
+		}
+	}()
+
+	// Test when env var is not set
+	os.Unsetenv(PasswordEnvVar)
+	if got := GetPasswordFromEnv(); got != "" {
+		t.Errorf("GetPasswordFromEnv() = %q, want empty string", got)
+	}
+
+	// Test when env var is set
+	os.Setenv(PasswordEnvVar, "test-password")
+	if got := GetPasswordFromEnv(); got != "test-password" {
+		t.Errorf("GetPasswordFromEnv() = %q, want %q", got, "test-password")
 	}
 }

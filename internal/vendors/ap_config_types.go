@@ -70,10 +70,49 @@ type RadioConfig struct {
 	Band5          *RadioBandConfig `json:"band_5,omitempty"`
 	Band5On24Radio *RadioBandConfig `json:"band_5_on_24_radio,omitempty"`
 	Band6          *RadioBandConfig `json:"band_6,omitempty"`
+	BandDual       *DualBandConfig  `json:"band_dual,omitempty"` // For dual-band/flex radios
 
 	// Vendor extensions
 	Mist   map[string]any `json:"mist,omitempty"`
 	Meraki map[string]any `json:"meraki,omitempty"`
+}
+
+// DualBandConfig contains configuration for dual-band or flex radios.
+// For Mist: Dual-band radios that can convert 2.4GHz to 5GHz (radio_mode: 24 or 5).
+// For Meraki: Flex radios that toggle between 5GHz and 6GHz (radio_mode: 5 or 6).
+type DualBandConfig struct {
+	Disabled  *bool `json:"disabled,omitempty"`
+	RadioMode *int  `json:"radio_mode,omitempty"` // 24, 5, or 6 (vendor-specific)
+	Channel   *int  `json:"channel,omitempty"`
+	Power     *int  `json:"power,omitempty"`     // dBm (1-30)
+	Bandwidth *int  `json:"bandwidth,omitempty"` // 20, 40, 80, 160, or 320
+}
+
+// ToMap converts DualBandConfig to a map.
+func (c *DualBandConfig) ToMap() map[string]any {
+	if c == nil {
+		return nil
+	}
+
+	result := make(map[string]any)
+
+	if c.Disabled != nil {
+		result["disabled"] = *c.Disabled
+	}
+	if c.RadioMode != nil {
+		result["radio_mode"] = *c.RadioMode
+	}
+	if c.Channel != nil {
+		result["channel"] = *c.Channel
+	}
+	if c.Power != nil {
+		result["power"] = *c.Power
+	}
+	if c.Bandwidth != nil {
+		result["bandwidth"] = *c.Bandwidth
+	}
+
+	return result
 }
 
 // RadioBandConfig contains per-band radio settings.
@@ -527,6 +566,9 @@ func (c *RadioConfig) ToMap() map[string]any {
 	}
 	if c.Band6 != nil {
 		result["band_6"] = c.Band6.ToMap()
+	}
+	if c.BandDual != nil {
+		result["band_dual"] = c.BandDual.ToMap()
 	}
 
 	// Merge Mist extensions at top level

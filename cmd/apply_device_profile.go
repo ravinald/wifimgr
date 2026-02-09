@@ -26,7 +26,7 @@ import (
 
 // applyDeviceProfileCmd represents the "apply device-profile" command
 var applyDeviceProfileCmd = &cobra.Command{
-	Use:   "device-profile <site-name> [all | <device>] [diff]",
+	Use:   "device-profile <site-name> [all | <device>] [diff] [force]",
 	Short: "Apply device profile configurations to devices",
 	Long: `Apply device profile configurations to access points in a site.
 
@@ -69,17 +69,19 @@ Examples:
 		siteName := args[0]
 		deviceFilter := "all"
 		diffMode := false
+		force := false
 
 		// Parse remaining arguments
 		for i := 1; i < len(args); i++ {
-			if args[i] == "diff" {
+			switch strings.ToLower(args[i]) {
+			case "diff":
 				diffMode = true
-			} else {
+			case "force":
+				force = true
+			default:
 				deviceFilter = args[i]
 			}
 		}
-
-		force, _ := cmd.Flags().GetBool("force")
 
 		// Create args for the handler
 		legacyArgs := []string{siteName, "device-profile", deviceFilter}
@@ -95,6 +97,5 @@ func init() {
 	// Add subcommand to apply
 	applyCmd.AddCommand(applyDeviceProfileCmd)
 
-	// Add flags
-	applyDeviceProfileCmd.Flags().BoolP("force", "f", false, "Force apply even if no changes detected")
+	// Note: 'force' is now a positional argument, not a flag
 }

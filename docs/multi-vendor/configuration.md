@@ -18,7 +18,7 @@ API connections are defined with user-chosen labels in the main config file:
       "url": "https://api.mist.com",
       "credentials": {
         "org_id": "abc-123-def",
-        "api_token": "..."
+        "api_key": "..."
       },
       "rate_limit": 5000,
       "results_limit": 100,
@@ -29,7 +29,7 @@ API connections are defined with user-chosen labels in the main config file:
       "url": "https://api.mist.com",
       "credentials": {
         "org_id": "xyz-789-uvw",
-        "api_token": "..."
+        "api_key": "..."
       },
       "cache_ttl": 0
     },
@@ -75,23 +75,101 @@ Each API can have its own `cache_ttl` setting to control when cached data is con
 - `"cache_ttl": 3600` - Cache expires after 1 hour
 - `"cache_ttl": 0` - Cache never expires, only refreshed via `refresh cache` command
 
-### Vendor-Specific Credentials
+### Credentials
 
-**Mist:**
+All vendors use the same credential field names:
+
 ```json
 {
-  "org_id": "uuid-format",
-  "api_token": "bearer-token"
+  "org_id": "your-organization-id",
+  "api_key": "your-api-key"
 }
 ```
 
-**Meraki:**
+**Mist example:** `org_id` is a UUID, `api_key` is a bearer token from the Mist dashboard.
+
+**Meraki example:** `org_id` is the organization ID (e.g., `L_123456789`), `api_key` is from the Meraki dashboard.
+
+### Encrypted Credentials
+
+Credentials can be encrypted using the `wifimgr encrypt` command. Encrypted values have an `enc:` prefix:
+
 ```json
 {
-  "org_id": "L_XXXXXXXXX",
-  "api_key": "meraki-api-key"
+  "api": {
+    "mist-prod": {
+      "vendor": "mist",
+      "credentials": {
+        "org_id": "abc-123-def",
+        "api_key": "enc:U2FsdGVkX1+abc123..."
+      }
+    }
+  }
 }
 ```
+
+To decrypt encrypted credentials, set the `WIFIMGR_PASSWORD` environment variable:
+
+```bash
+export WIFIMGR_PASSWORD="your-decryption-password"
+wifimgr -e show api sites
+```
+
+Or include it in `.env.wifimgr`:
+```bash
+WIFIMGR_PASSWORD=your-decryption-password
+```
+
+### Environment Variable Overrides
+
+Credentials can be provided via environment variables, which take precedence over config file values. The naming convention follows the config path structure:
+
+```
+WIFIMGR_API_<LABEL>_CREDENTIALS_<FIELD>
+```
+
+Where:
+- `<LABEL>` is the API label in uppercase with dashes converted to underscores
+- `<FIELD>` is the credential field name in uppercase
+
+**Examples:**
+
+| Config Path | Environment Variable |
+|-------------|---------------------|
+| `api.mist-prod.credentials.api_key` | `WIFIMGR_API_MIST_PROD_CREDENTIALS_API_KEY` |
+| `api.mist-prod.credentials.org_id` | `WIFIMGR_API_MIST_PROD_CREDENTIALS_ORG_ID` |
+
+**Shorthand Variables:**
+
+For convenience, the following shorthand variables are also supported:
+
+| Shorthand | Maps To |
+|-----------|---------|
+| `WIFIMGR_API_<LABEL>_CREDENTIALS_KEY` | `api_key` |
+| `WIFIMGR_API_<LABEL>_CREDENTIALS_ORG` | `org_id` |
+
+**Example `.env.wifimgr`:**
+
+```bash
+# Option 1: Provide credentials directly (overrides config)
+WIFIMGR_API_MIST_PROD_CREDENTIALS_KEY=your-api-token
+WIFIMGR_API_MIST_PROD_CREDENTIALS_ORG=your-org-id
+
+# Option 2: Just provide password to decrypt config file values
+WIFIMGR_PASSWORD=your-decryption-password
+
+# Option 3: Mix - some direct values, password for others
+WIFIMGR_API_MERAKI_CORP_CREDENTIALS_KEY=meraki-api-key
+WIFIMGR_PASSWORD=password-for-encrypted-mist-token
+```
+
+### Credential Resolution Order
+
+When resolving credentials, wifimgr follows this precedence:
+
+1. **Environment variable** (when `-e` flag used) - highest priority
+2. **Config file value** - if encrypted, requires `WIFIMGR_PASSWORD`
+3. **Error** - if neither is available
 
 ## Site Configuration with API Binding
 

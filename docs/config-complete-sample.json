@@ -9,14 +9,16 @@
       "sites/us-office.json",
       "sites/eu-datacenter.json"
     ],
+    "templates": [
+      "templates/radio-templates.json",
+      "templates/wlan-templates.json",
+      "templates/device-templates.json"
+    ],
     "cache": "./cache.json",
     "cache_ttl": 86400,
     "inventory": "./config/inventory.json",
     "log_file": "./wifimgr.log",
     "schemas": "./config/schemas",
-    "device_profiles": [
-      "device-profiles.json"
-    ],
     "config_backups": 5
   },
 
@@ -29,7 +31,7 @@
       "url": "https://api.mist.com/api/v1",
       "credentials": {
         "org_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-        "api_token": "your-mist-api-token-here"
+        "api_key": "your-mist-api-token-here"
       },
       "rate_limit": 5000,
       "results_limit": 100,
@@ -47,7 +49,7 @@
       "url": "https://api.mist.com/api/v1",
       "credentials": {
         "org_id": "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
-        "api_token": "your-mist-lab-token-here"
+        "api_key": "your-mist-lab-token-here"
       },
       "rate_limit": 5000,
       "results_limit": 100
@@ -68,17 +70,19 @@
   "defaults": {
     "_comment_defaults": "Default values applied to devices when not specified in config",
     "ap": {
-      "band_24": {
-        "bandwidth": 20,
-        "disabled": false
-      },
-      "band_5": {
-        "bandwidth": 40,
-        "disabled": false
-      },
-      "band_6": {
-        "bandwidth": 160,
-        "disabled": false
+      "radio_config": {
+        "band_24": {
+          "disabled": false,
+          "bandwidth": 20
+        },
+        "band_5": {
+          "disabled": false,
+          "bandwidth": 40
+        },
+        "band_6": {
+          "disabled": false,
+          "bandwidth": 160
+        }
       }
     }
   },
@@ -187,5 +191,10 @@
     "level": "info",
     "format": "text",
     "stdout": false
+  },
+
+  "backup": {
+    "_comment_backup": "Backup retention settings for apply rollback feature",
+    "retention_days": 30
   }
 }

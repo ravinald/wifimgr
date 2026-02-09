@@ -16,7 +16,7 @@ api:
     url: https://api.mist.com
     credentials:
       org_id: "your-mist-org-uuid"
-      api_token: "your-mist-api-token"
+      api_key: "your-mist-api-token"
 
   # Meraki production environment
   meraki-prod:
@@ -74,7 +74,7 @@ api:
     url: https://api.mist.com           # or https://api.eu.mist.com for EU
     credentials:
       org_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-      api_token: "your-api-token"
+      api_key: "your-api-token"
     rate_limit: 5000                     # optional, requests per hour
     results_limit: 100                   # optional, results per page
 ```
@@ -411,7 +411,7 @@ api:
     url: https://api.mist.com
     credentials:
       org_id: "abc-123"
-      api_token: "${MIST_TOKEN}"
+      api_key: "${MIST_TOKEN}"
 
   meraki-branches:
     vendor: meraki

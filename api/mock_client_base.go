@@ -35,7 +35,6 @@ type MockClient struct {
 	profilesByName map[string]*DeviceProfile   // name -> profile
 	profilesByID   map[string]*DeviceProfile   // id -> profile
 	profilesByType map[string][]*DeviceProfile // type -> profiles
-	cache          Cacher                      // unified cache interface
 
 	mu sync.RWMutex
 }
@@ -55,22 +54,6 @@ func NewMockClient(config Config) Client {
 		limiter = newMockRateLimiter(config.RateLimit, rateDuration)
 	}
 
-	// Initialize unified cache if path is provided
-	var unifiedCache Cacher
-	if config.LocalCache != "" {
-		var err error
-		// Use default org ID for mock client
-		orgID := config.OrgID
-		if orgID == "" {
-			orgID = "mock-org-id"
-		}
-		unifiedCache, err = NewCache(config.LocalCache, orgID)
-		if err != nil {
-			// Just log the error and continue without cache
-			fmt.Printf("Failed to initialize cache: %v\n", err)
-		}
-	}
-
 	return &MockClient{
 		config:             config,
 		httpClient:         &http.Client{Timeout: config.Timeout},
@@ -81,7 +64,6 @@ func NewMockClient(config Config) Client {
 		deviceProfileCache: newMockCache[[]DeviceProfile](5 * time.Minute),
 		deviceCache:        nil, // Mock client doesn't need real device cache
 		debug:              config.Debug,
-		cache:              unifiedCache,
 
 		// Initialize mock data stores
 		sites:          make(map[string]*MistSite),

@@ -6,36 +6,6 @@ import (
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
 
-// ToMistAPConfig converts a vendor-agnostic APDeviceConfig to Mist API format.
-// It applies Mist-specific field mappings and merges any Mist extension block.
-func ToMistAPConfig(cfg *vendors.APDeviceConfig) map[string]any {
-	if cfg == nil {
-		return nil
-	}
-
-	result := cfg.ToMap()
-
-	// Mist-specific transformations
-	// Most fields map 1:1 since we use Mist nomenclature as standard
-
-	// Handle radio_config -> radio field naming for Mist API
-	if radioConfig, ok := result["radio_config"].(map[string]any); ok {
-		// Mist uses "radio" at the top level for radio configuration
-		// Keep the structure as-is since it follows Mist naming
-		result["radio_config"] = radioConfig
-	}
-
-	// Handle LED config - Mist uses "led" as a nested object
-	if ledConfig, ok := result["led"].(map[string]any); ok {
-		if enabled, ok := ledConfig["enabled"]; ok {
-			// Mist API accepts led.enabled
-			result["led"] = map[string]any{"enabled": enabled}
-		}
-	}
-
-	return result
-}
-
 // FromMistAPConfig converts Mist API response to vendor-agnostic APDeviceConfig.
 // Returns the configuration and a slice of warnings (type assertion failures, unexpected fields, etc.).
 func FromMistAPConfig(data map[string]any, mac string) (*vendors.APDeviceConfig, []error) {
@@ -299,100 +269,15 @@ func FromMistAPConfig(data map[string]any, mac string) (*vendors.APDeviceConfig,
 	return cfg, warnings
 }
 
-// parseRadioConfig parses radio configuration from Mist API format
+// parseRadioConfig parses radio configuration from Mist API format.
+// Uses RadioTranslator to handle band_24_usage and band_5_on_24_radio -> band_dual conversion.
 func parseRadioConfig(data map[string]any) *vendors.RadioConfig {
 	if data == nil {
 		return nil
 	}
 
-	cfg := &vendors.RadioConfig{}
-
-	if allowRRM, ok := data["allow_rrm_disable"].(bool); ok {
-		cfg.AllowRRMDisable = &allowRRM
-	}
-	if scanning, ok := data["scanning_enabled"].(bool); ok {
-		cfg.ScanningEnabled = &scanning
-	}
-	if indoor, ok := data["indoor_use"].(bool); ok {
-		cfg.IndoorUse = &indoor
-	}
-	if antGain24, ok := data["ant_gain_24"].(float64); ok {
-		cfg.AntGain24 = &antGain24
-	}
-	if antGain5, ok := data["ant_gain_5"].(float64); ok {
-		cfg.AntGain5 = &antGain5
-	}
-	if antGain6, ok := data["ant_gain_6"].(float64); ok {
-		cfg.AntGain6 = &antGain6
-	}
-	if antennaMode, ok := data["antenna_mode"].(string); ok {
-		cfg.AntennaMode = &antennaMode
-	}
-	if band24Usage, ok := data["band_24_usage"].(string); ok {
-		cfg.Band24Usage = &band24Usage
-	}
-
-	if band24, ok := data["band_24"].(map[string]any); ok {
-		cfg.Band24 = parseRadioBandConfig(band24)
-	}
-	if band5, ok := data["band_5"].(map[string]any); ok {
-		cfg.Band5 = parseRadioBandConfig(band5)
-	}
-	if band5On24, ok := data["band_5_on_24_radio"].(map[string]any); ok {
-		cfg.Band5On24Radio = parseRadioBandConfig(band5On24)
-	}
-	if band6, ok := data["band_6"].(map[string]any); ok {
-		cfg.Band6 = parseRadioBandConfig(band6)
-	}
-
-	return cfg
-}
-
-// parseRadioBandConfig parses per-band radio configuration
-func parseRadioBandConfig(data map[string]any) *vendors.RadioBandConfig {
-	if data == nil {
-		return nil
-	}
-
-	cfg := &vendors.RadioBandConfig{}
-
-	if disabled, ok := data["disabled"].(bool); ok {
-		cfg.Disabled = &disabled
-	}
-	if channel, ok := data["channel"].(float64); ok {
-		c := int(channel)
-		cfg.Channel = &c
-	}
-	if channels, ok := data["channels"].([]any); ok {
-		cfg.Channels = interfaceSliceToIntSlice(channels)
-	}
-	if power, ok := data["power"].(float64); ok {
-		p := int(power)
-		cfg.Power = &p
-	}
-	if powerMin, ok := data["power_min"].(float64); ok {
-		p := int(powerMin)
-		cfg.PowerMin = &p
-	}
-	if powerMax, ok := data["power_max"].(float64); ok {
-		p := int(powerMax)
-		cfg.PowerMax = &p
-	}
-	if bandwidth, ok := data["bandwidth"].(float64); ok {
-		b := int(bandwidth)
-		cfg.Bandwidth = &b
-	}
-	if antennaMode, ok := data["antenna_mode"].(string); ok {
-		cfg.AntennaMode = &antennaMode
-	}
-	if antGain, ok := data["ant_gain"].(float64); ok {
-		cfg.AntGain = &antGain
-	}
-	if preamble, ok := data["preamble"].(string); ok {
-		cfg.Preamble = &preamble
-	}
-
-	return cfg
+	translator := vendors.NewRadioTranslator()
+	return translator.FromMist(data)
 }
 
 // parseIPConfig parses IP configuration

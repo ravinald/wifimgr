@@ -104,6 +104,15 @@ func (s *SwitchUpdater) FindDevicesToUpdate(ctx context.Context, client api.Clie
 			continue
 		}
 
+		// Expand template references (device_template)
+		expandedConfig, err := expandDeviceConfigWithTemplates(desiredConfig, siteConfig)
+		if err != nil {
+			logging.Warnf("Error expanding templates for Switch %s: %v - using unexpanded config", mac, err)
+			expandedConfig = desiredConfig
+		} else {
+			desiredConfig = expandedConfig
+		}
+
 		// Get current device state
 		device, err := batchLoader.GetDeviceByMAC(mac)
 		if err != nil {
@@ -210,6 +219,14 @@ func (s *SwitchUpdater) UpdateDeviceConfigurations(ctx context.Context, client a
 		if !found {
 			logging.Warnf("Switch %s is in the list to update but not found in site configuration", mac)
 			continue
+		}
+
+		// Expand template references (device_template)
+		expandedConfig, err := expandDeviceConfigWithTemplates(switchConfig, siteConfig)
+		if err != nil {
+			logging.Warnf("Error expanding templates for Switch %s: %v - using unexpanded config", mac, err)
+		} else {
+			switchConfig = expandedConfig
 		}
 
 		device, err := batchLoader.GetDeviceByMAC(mac)
@@ -324,6 +341,13 @@ func showSwitchConfigDiffWithManagedKeys(mac string, currentConfig, desiredConfi
 	// Remove MAC from desired config for comparison
 	delete(filteredDesired, "mac")
 
+	// Pre-filter configs to only include managed keys BEFORE diffing
+	// This ensures only managed fields appear in the diff output
+	if len(managedKeys) > 0 {
+		filteredCurrent = filterConfigByManagedKeys(filteredCurrent, managedKeys)
+		filteredDesired = filterConfigByManagedKeys(filteredDesired, managedKeys)
+	}
+
 	// Debug logging
 	logging.Debugf("Switch %s - Filtered current fields: %v", mac, getMapKeys(filteredCurrent))
 	logging.Debugf("Switch %s - Filtered desired fields: %v", mac, getMapKeys(filteredDesired))
@@ -337,11 +361,10 @@ func showSwitchConfigDiffWithManagedKeys(mac string, currentConfig, desiredConfi
 		return
 	}
 
-	// Create diff with managed keys as include fields
+	// Create diff options - no need for IncludeFields since we pre-filtered
 	opts := jsondiff.DiffOptions{
-		ContextLines:  3,
-		SortJSON:      true,
-		IncludeFields: managedKeys,
+		ContextLines: 3,
+		SortJSON:     true,
 	}
 
 	diffs, err := jsondiff.Diff(currentJSON, desiredJSON, opts)

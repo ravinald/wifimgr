@@ -16,11 +16,6 @@ func (ca *ConfigAdapter) SetAPIToken(token string) {
 	ca.Config.API.Credentials.APIToken = token
 }
 
-// SetKeyEncrypted sets whether the API key is encrypted
-func (ca *ConfigAdapter) SetKeyEncrypted(encrypted bool) {
-	ca.Config.API.Credentials.KeyEncrypted = encrypted
-}
-
 // GetAPIURL returns the API URL
 func (ca *ConfigAdapter) GetAPIURL() string {
 	return ca.Config.API.URL
