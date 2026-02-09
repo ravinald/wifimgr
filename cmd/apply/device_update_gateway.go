@@ -108,7 +108,6 @@ func (g *GatewayUpdater) FindDevicesToUpdate(ctx context.Context, client api.Cli
 		expandedConfig, err := expandDeviceConfigWithTemplates(desiredConfig, siteConfig)
 		if err != nil {
 			logging.Warnf("Error expanding templates for Gateway %s: %v - using unexpanded config", mac, err)
-			expandedConfig = desiredConfig
 		} else {
 			desiredConfig = expandedConfig
 		}

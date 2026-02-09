@@ -112,7 +112,6 @@ func (a *APUpdater) FindDevicesToUpdate(ctx context.Context, client api.Client, 
 		expandedConfig, err := expandDeviceConfigWithTemplates(desiredConfig, siteConfig)
 		if err != nil {
 			logging.Warnf("Error expanding templates for AP %s: %v - using unexpanded config", mac, err)
-			expandedConfig = desiredConfig
 		} else {
 			desiredConfig = expandedConfig
 		}

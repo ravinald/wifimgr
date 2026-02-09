@@ -1627,11 +1627,7 @@ func merakiWLANNeedsUpdate(existing *vendors.WLAN, desired *vendors.WLAN) bool {
 	// Compare availableOnAllAps
 	existingAllAPs := getBoolFromConfig(existing.Config, "availableOnAllAps")
 	desiredAllAPs := getBoolFromConfig(desired.Config, "availableOnAllAps")
-	if existingAllAPs != desiredAllAPs {
-		return true
-	}
-
-	return false
+	return existingAllAPs != desiredAllAPs
 }
 
 func extractStringSliceFromConfig(config map[string]interface{}, key string) []string {
