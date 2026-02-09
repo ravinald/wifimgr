@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/ravinald/wifimgr/internal/cmdutils"
 	"github.com/ravinald/wifimgr/internal/config"
 )
 
@@ -43,6 +44,9 @@ Use 'wifimgr init <subcommand> --help' for more information about a subcommand.`
 var initSiteCmd = &cobra.Command{
 	Use:   "site <site-name> api <api-name> [file <filepath>]",
 	Short: "Create a new site configuration file",
+	Annotations: map[string]string{
+		cmdutils.AnnotationNeedsConfig: "true",
+	},
 	Long: `Create a new site configuration file with a skeleton structure.
 
 Basic Usage:

@@ -20,7 +20,8 @@ const (
 	// SaltSize is the size of the salt in bytes
 	SaltSize = 16
 	// Iterations is the number of iterations for PBKDF2
-	Iterations = 10000
+	// 100,000 iterations provides strong brute-force resistance per OWASP guidelines
+	Iterations = 100000
 	// Prefix is used to identify encrypted tokens
 	Prefix = "enc:"
 )

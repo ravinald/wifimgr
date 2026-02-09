@@ -6,113 +6,6 @@ import (
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
 
-// ToMerakiAPConfig converts a vendor-agnostic APDeviceConfig to Meraki API format.
-// It applies Meraki-specific field mappings and extracts the Meraki extension block.
-func ToMerakiAPConfig(cfg *vendors.APDeviceConfig) map[string]any {
-	if cfg == nil {
-		return nil
-	}
-
-	result := make(map[string]any)
-
-	// Identity
-	if cfg.Name != "" {
-		result["name"] = cfg.Name
-	}
-	if len(cfg.Tags) > 0 {
-		// Meraki uses space-separated tags in a single string
-		result["tags"] = tagsToMerakiFormat(cfg.Tags)
-	}
-	if cfg.Notes != "" {
-		result["notes"] = cfg.Notes
-	}
-
-	// Location - Meraki uses lat/lng directly
-	if len(cfg.Location) >= 2 {
-		result["lat"] = cfg.Location[0]
-		result["lng"] = cfg.Location[1]
-	}
-
-	// Radio config
-	if cfg.RadioConfig != nil {
-		result["radioSettings"] = convertRadioConfigToMeraki(cfg.RadioConfig)
-	}
-
-	// LED config - Meraki uses "ledLightsOn" boolean
-	if cfg.LEDConfig != nil && cfg.LEDConfig.Enabled != nil {
-		result["ledLightsOn"] = *cfg.LEDConfig.Enabled
-	}
-
-	// Merge Meraki extension block
-	if cfg.Meraki != nil {
-		for k, v := range cfg.Meraki {
-			result[k] = v
-		}
-	}
-
-	return result
-}
-
-// convertRadioConfigToMeraki converts radio configuration to Meraki format
-func convertRadioConfigToMeraki(cfg *vendors.RadioConfig) map[string]any {
-	if cfg == nil {
-		return nil
-	}
-
-	result := make(map[string]any)
-
-	// Per-band settings use different structure in Meraki
-	if cfg.Band24 != nil {
-		result["twoFourGhzSettings"] = convertBandConfigToMeraki(cfg.Band24)
-	}
-	if cfg.Band5 != nil {
-		result["fiveGhzSettings"] = convertBandConfigToMeraki(cfg.Band5)
-	}
-	if cfg.Band6 != nil {
-		result["sixGhzSettings"] = convertBandConfigToMeraki(cfg.Band6)
-	}
-
-	// Handle RF profile from Meraki extension
-	if cfg.Meraki != nil {
-		if rfProfileID, ok := cfg.Meraki["rf_profile_id"]; ok {
-			result["rfProfileId"] = rfProfileID
-		}
-	}
-
-	return result
-}
-
-// convertBandConfigToMeraki converts per-band settings to Meraki format
-func convertBandConfigToMeraki(cfg *vendors.RadioBandConfig) map[string]any {
-	if cfg == nil {
-		return nil
-	}
-
-	result := make(map[string]any)
-
-	if cfg.Channel != nil {
-		result["channel"] = *cfg.Channel
-	}
-	if cfg.Power != nil {
-		result["targetPower"] = *cfg.Power // Meraki uses "targetPower"
-	}
-	if cfg.Bandwidth != nil {
-		result["channelWidth"] = *cfg.Bandwidth // Meraki uses "channelWidth"
-	}
-
-	// Meraki-specific fields from extension
-	if cfg.Meraki != nil {
-		if minBitrate, ok := cfg.Meraki["min_bitrate"]; ok {
-			result["minBitrate"] = minBitrate
-		}
-		if rxsop, ok := cfg.Meraki["rxsop"]; ok {
-			result["rxsop"] = rxsop
-		}
-	}
-
-	return result
-}
-
 // FromMerakiAPConfig converts Meraki API response to vendor-agnostic APDeviceConfig.
 // Returns the configuration and a slice of warnings (type assertion failures, unexpected fields, etc.).
 func FromMerakiAPConfig(data map[string]any, mac string) (*vendors.APDeviceConfig, []error) {
@@ -204,71 +97,15 @@ func FromMerakiAPConfig(data map[string]any, mac string) (*vendors.APDeviceConfi
 	return cfg, warnings
 }
 
-// parseRadioSettingsFromMeraki parses Meraki radio settings to vendor-agnostic format
+// parseRadioSettingsFromMeraki parses Meraki radio settings to vendor-agnostic format.
+// Uses RadioTranslator to handle flexRadios -> band_dual conversion.
 func parseRadioSettingsFromMeraki(data map[string]any) *vendors.RadioConfig {
 	if data == nil {
 		return nil
 	}
 
-	cfg := &vendors.RadioConfig{}
-
-	if twoFourGhz, ok := data["twoFourGhzSettings"].(map[string]any); ok {
-		cfg.Band24 = parseBandSettingsFromMeraki(twoFourGhz)
-	}
-	if fiveGhz, ok := data["fiveGhzSettings"].(map[string]any); ok {
-		cfg.Band5 = parseBandSettingsFromMeraki(fiveGhz)
-	}
-	if sixGhz, ok := data["sixGhzSettings"].(map[string]any); ok {
-		cfg.Band6 = parseBandSettingsFromMeraki(sixGhz)
-	}
-
-	// RF profile ID
-	if rfProfileID, ok := data["rfProfileId"].(string); ok {
-		if cfg.Meraki == nil {
-			cfg.Meraki = make(map[string]any)
-		}
-		cfg.Meraki["rf_profile_id"] = rfProfileID
-	}
-
-	return cfg
-}
-
-// parseBandSettingsFromMeraki parses per-band settings from Meraki format
-func parseBandSettingsFromMeraki(data map[string]any) *vendors.RadioBandConfig {
-	if data == nil {
-		return nil
-	}
-
-	cfg := &vendors.RadioBandConfig{}
-
-	if channel, ok := data["channel"].(float64); ok {
-		c := int(channel)
-		cfg.Channel = &c
-	}
-	if targetPower, ok := data["targetPower"].(float64); ok {
-		p := int(targetPower)
-		cfg.Power = &p // Map back to vendor-agnostic "power"
-	}
-	if channelWidth, ok := data["channelWidth"].(float64); ok {
-		b := int(channelWidth)
-		cfg.Bandwidth = &b // Map back to vendor-agnostic "bandwidth"
-	}
-
-	// Store Meraki-specific fields in extension
-	cfg.Meraki = make(map[string]any)
-	if minBitrate, ok := data["minBitrate"]; ok {
-		cfg.Meraki["min_bitrate"] = minBitrate
-	}
-	if rxsop, ok := data["rxsop"]; ok {
-		cfg.Meraki["rxsop"] = rxsop
-	}
-
-	// Remove empty extension block
-	if len(cfg.Meraki) == 0 {
-		cfg.Meraki = nil
-	}
-
-	return cfg
+	translator := vendors.NewRadioTranslator()
+	return translator.FromMeraki(data)
 }
 
 // extractMerakiExtensions extracts Meraki-specific fields that don't map to common schema
@@ -297,21 +134,6 @@ func extractMerakiExtensions(data map[string]any) map[string]any {
 }
 
 // Helper functions
-
-// tagsToMerakiFormat converts a slice of tags to Meraki's space-separated format
-func tagsToMerakiFormat(tags []string) string {
-	if len(tags) == 0 {
-		return ""
-	}
-	result := ""
-	for i, tag := range tags {
-		if i > 0 {
-			result += " "
-		}
-		result += tag
-	}
-	return result
-}
 
 // merakiTagsToSlice converts Meraki's space-separated tags to a slice
 func merakiTagsToSlice(tags string) []string {

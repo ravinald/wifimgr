@@ -19,7 +19,6 @@ type Config struct {
 	URL            string        `json:"url"`
 	APIKey         string        `json:"api_key"`
 	SSLVerify      bool          `json:"ssl_verify"`
-	KeyEncrypted   bool          `json:"key_encrypted,omitempty"`
 	SettingsSource string        `json:"settings_source,omitempty"` // "api" (default) or "netbox"
 	Mappings       MappingConfig `json:"mappings"`
 
@@ -110,8 +109,8 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 
-	// Handle encrypted key
-	if cfg.KeyEncrypted && cfg.APIKey != "" {
+	// Handle encrypted key (detected by enc: prefix)
+	if encryption.IsEncrypted(cfg.APIKey) {
 		decrypted, err := decryptAPIKey(cfg.APIKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt NetBox API key: %w", err)
@@ -161,7 +160,6 @@ func loadFromViper(cfg *Config) {
 	}
 	if apiKey := viper.GetString("netbox.credentials.api_key"); apiKey != "" {
 		cfg.APIKey = apiKey
-		cfg.KeyEncrypted = viper.GetBool("netbox.credentials.key_encrypted")
 	}
 	if viper.IsSet("netbox.ssl_verify") {
 		cfg.SSLVerify = viper.GetBool("netbox.ssl_verify")
@@ -352,8 +350,8 @@ func decryptAPIKey(encryptedKey string) (string, error) {
 		return encryptedKey, nil
 	}
 
-	// Prompt for password and decrypt
-	password, err := encryption.PromptForPassword("Enter password to decrypt NetBox API key: ")
+	// Get password from environment or prompt interactively
+	password, err := encryption.GetPasswordOrPrompt("Enter password to decrypt NetBox API key: ")
 	if err != nil {
 		return "", fmt.Errorf("failed to read password: %w", err)
 	}

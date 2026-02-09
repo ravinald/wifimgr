@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Mist CLI Site Configuration Schema",
-  "description": "Schema for the site configuration files used by Mist CLI to define sites and devices",
+  "title": "wifimgr Site Configuration Schema",
+  "description": "Schema for site configuration files used by wifimgr to define sites and devices",
   "type": "object",
   "required": ["version", "config"],
   "properties": {
@@ -23,94 +23,80 @@
             "required": ["site_config"],
             "properties": {
               "site_config": {
-            "type": "object",
-            "required": ["name"],
-            "properties": {
-              "name": {
-                "type": "string",
-                "description": "Site name (used in API calls)"
-              },
-              "address": {
-                "type": "string",
-                "description": "Site physical address"
-              },
-              "country_code": {
-                "type": "string",
-                "description": "Two-letter country code"
-              },
-              "timezone": {
-                "type": "string",
-                "description": "Timezone of the site"
-              },
-              "notes": {
-                "type": "string",
-                "description": "Additional notes about the site"
-              },
-              "latlng": {
                 "type": "object",
+                "required": ["name"],
                 "properties": {
-                  "lat": {
-                    "type": "number",
-                    "description": "Latitude coordinate"
+                  "name": {
+                    "type": "string",
+                    "description": "Site name (used in API calls)"
                   },
-                  "lng": {
-                    "type": "number",
-                    "description": "Longitude coordinate"
-                  }
-                },
-                "required": ["lat", "lng"],
-                "description": "Geographical coordinates of the site"
-              }
-            }
-          },
-          "devices": {
-            "type": "object",
-            "description": "Devices configured for this site",
-            "properties": {
-              "ap": {
-                "type": "object",
-                "description": "Access points indexed by normalized MAC address",
-                "additionalProperties": {
-                  "$ref": "#/definitions/apConfig"
-                },
-                "example": {
-                  "a83a79608101": {
-                    "name": "ap-name",
-                    "magic": "claim-code",
-                    "mac": "a8:3a:79:60:81:01",
-                    "location": [37.786494, -122.40526],
-                    "orientation": 0
-                  }
-                }
-              },
-              "switch": {
-                "type": "object",
-                "description": "Switches indexed by normalized MAC address",
-                "additionalProperties": {
-                  "$ref": "#/definitions/switchConfig"
-                },
-                "example": {
-                  "0011aabbccdd": {
-                    "name": "switch-name",
-                    "magic": "claim-code",
-                    "mac": "00:11:aa:bb:cc:dd",
-                    "role": "access",
-                    "hostname": "switch-hostname"
+                  "api": {
+                    "type": "string",
+                    "description": "API label to use for this site (e.g., mist-prod, meraki-corp)"
+                  },
+                  "address": {
+                    "type": "string",
+                    "description": "Site physical address"
+                  },
+                  "country_code": {
+                    "type": "string",
+                    "description": "Two-letter country code"
+                  },
+                  "timezone": {
+                    "type": "string",
+                    "description": "Timezone of the site"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Additional notes about the site"
+                  },
+                  "latlng": {
+                    "type": "object",
+                    "properties": {
+                      "lat": { "type": "number", "description": "Latitude coordinate" },
+                      "lng": { "type": "number", "description": "Longitude coordinate" }
+                    },
+                    "required": ["lat", "lng"]
                   }
                 }
               },
-              "gateway": {
+              "profiles": {
                 "type": "object",
-                "description": "Gateways indexed by normalized MAC address",
-                "additionalProperties": {
-                  "$ref": "#/definitions/gatewayConfig"
-                },
-                "example": {
-                  "0022aabbccdd": {
-                    "name": "gateway-name",
-                    "magic": "claim-code",
-                    "mac": "00:22:aa:bb:cc:dd",
-                    "hostname": "gateway-hostname"
+                "description": "Site-level profile defaults applied to all devices",
+                "properties": {
+                  "wlan": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "WLAN template labels applied to all APs (device-level wlans override)"
+                  },
+                  "radio": {
+                    "type": "string",
+                    "description": "Default radio profile for all APs"
+                  },
+                  "device": {
+                    "type": "string",
+                    "description": "Default device template for all devices"
+                  }
+                }
+              },
+              "devices": {
+                "type": "object",
+                "description": "Devices configured for this site",
+                "properties": {
+                  "ap": {
+                    "type": "object",
+                    "description": "Access points indexed by normalized MAC address",
+                    "additionalProperties": { "$ref": "#/definitions/apConfig" }
+                  },
+                  "switch": {
+                    "type": "object",
+                    "description": "Switches indexed by normalized MAC address",
+                    "additionalProperties": { "$ref": "#/definitions/switchConfig" }
+                  },
+                  "gateway": {
+                    "type": "object",
+                    "description": "Gateways indexed by normalized MAC address",
+                    "additionalProperties": { "$ref": "#/definitions/gatewayConfig" }
                   }
                 }
               }
@@ -119,52 +105,20 @@
         }
       }
     }
-  }
   },
   "definitions": {
     "baseDeviceConfig": {
       "type": "object",
       "required": ["name"],
       "properties": {
-        "name": {
-          "type": "string",
-          "description": "Device name"
-        },
-        "magic": {
-          "type": "string",
-          "description": "Device magic/claim code"
-        },
-        "tags": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Tags assigned to the device"
-        },
-        "notes": {
-          "type": "string",
-          "description": "Additional notes about the device"
-        },
-        "mac": {
-          "type": "string",
-          "description": "MAC address"
-        },
-        "serial": {
-          "type": "string",
-          "description": "Device serial number"
-        },
-        "model": {
-          "type": "string",
-          "description": "Device model"
-        },
-        "id": {
-          "type": "string",
-          "description": "Device UUID"
-        },
-        "connected": {
-          "type": "boolean",
-          "description": "Whether the device is currently connected"
-        }
+        "name": { "type": "string", "description": "Device name" },
+        "magic": { "type": "string", "description": "Device magic/claim code" },
+        "tags": { "type": "array", "items": { "type": "string" }, "description": "Tags assigned to the device" },
+        "notes": { "type": "string", "description": "Additional notes about the device" },
+        "mac": { "type": "string", "description": "MAC address" },
+        "serial": { "type": "string", "description": "Device serial number" },
+        "model": { "type": "string", "description": "Device model" },
+        "id": { "type": "string", "description": "Device UUID" }
       }
     },
     "apConfig": {
@@ -172,101 +126,33 @@
         { "$ref": "#/definitions/baseDeviceConfig" },
         {
           "properties": {
+            "radio_profile": { "type": "string", "description": "Reference to radio template name" },
+            "device_template": { "type": "string", "description": "Reference to device template name" },
+            "wlan": { "type": "array", "items": { "type": "string" }, "description": "WLAN template labels" },
             "location": {
               "type": "array",
               "description": "Location coordinates [lat, lng]",
-              "items": {
-                "type": "number"
-              },
+              "items": { "type": "number" },
               "minItems": 2,
               "maxItems": 2
             },
-            "orientation": {
-              "type": "number",
-              "description": "AP orientation in degrees"
-            },
-            "config": {
+            "orientation": { "type": "number", "description": "AP orientation in degrees (0-359)" },
+            "radio_config": { "$ref": "#/definitions/radioConfig" },
+            "led": {
               "type": "object",
-              "description": "AP-specific configuration",
               "properties": {
-                "led_enabled": {
-                  "type": "boolean",
-                  "description": "Whether the LED is enabled"
-                },
-                "band_24": {
-                  "type": "object",
-                  "description": "2.4GHz radio settings",
-                  "properties": {
-                    "disabled": {
-                      "type": "boolean",
-                      "description": "Whether the 2.4GHz radio is disabled"
-                    },
-                    "channel": {
-                      "type": "integer",
-                      "description": "Channel number"
-                    },
-                    "tx_power": {
-                      "type": "integer",
-                      "description": "Transmit power in dBm"
-                    },
-                    "bandwidth": {
-                      "type": "integer",
-                      "description": "Channel bandwidth in MHz",
-                      "enum": [20, 40]
-                    },
-                    "antenna_mode": {
-                      "type": "string",
-                      "description": "Antenna mode",
-                      "enum": ["1x1", "2x2", "3x3", "4x4"]
-                    }
-                  }
-                },
-                "band_5": {
-                  "type": "object",
-                  "description": "5GHz radio settings",
-                  "properties": {
-                    "disabled": {
-                      "type": "boolean",
-                      "description": "Whether the 5GHz radio is disabled"
-                    },
-                    "channel": {
-                      "type": "integer",
-                      "description": "Channel number"
-                    },
-                    "tx_power": {
-                      "type": "integer",
-                      "description": "Transmit power in dBm"
-                    },
-                    "bandwidth": {
-                      "type": "integer",
-                      "description": "Channel bandwidth in MHz",
-                      "enum": [20, 40, 80, 160]
-                    }
-                  }
-                },
-                "band_6": {
-                  "type": "object",
-                  "description": "6GHz radio settings",
-                  "properties": {
-                    "disabled": {
-                      "type": "boolean",
-                      "description": "Whether the 6GHz radio is disabled"
-                    },
-                    "channel": {
-                      "type": "integer",
-                      "description": "Channel number"
-                    },
-                    "tx_power": {
-                      "type": "integer",
-                      "description": "Transmit power in dBm"
-                    },
-                    "bandwidth": {
-                      "type": "integer",
-                      "description": "Channel bandwidth in MHz",
-                      "enum": [20, 40, 80, 160]
-                    }
-                  }
-                }
+                "enabled": { "type": "boolean", "description": "Whether the LED is enabled" }
+              }
+            },
+            "ip_config": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string", "enum": ["dhcp", "static"] },
+                "ip": { "type": "string" },
+                "netmask": { "type": "string" },
+                "gateway": { "type": "string" },
+                "vlan_id": { "type": "integer" },
+                "mtu": { "type": "integer", "description": "MTU size (0 = default)" }
               }
             }
           }
@@ -278,43 +164,19 @@
         { "$ref": "#/definitions/baseDeviceConfig" },
         {
           "properties": {
-            "role": {
-              "type": "string",
-              "description": "Switch role",
-              "enum": ["access", "aggregation", "core"]
-            },
+            "role": { "type": "string", "enum": ["access", "aggregation", "core"] },
+            "hostname": { "type": "string", "description": "Switch hostname" },
             "port_config": {
               "type": "object",
-              "description": "Configuration for switch ports",
               "additionalProperties": {
                 "type": "object",
                 "properties": {
-                  "mode": {
-                    "type": "string",
-                    "description": "Port mode",
-                    "enum": ["access", "trunk", "disabled"]
-                  },
-                  "vlans": {
-                    "type": "array",
-                    "items": {
-                      "type": "integer"
-                    },
-                    "description": "VLANs assigned to the port"
-                  },
-                  "poe_disabled": {
-                    "type": "boolean",
-                    "description": "Whether PoE is disabled on the port"
-                  },
-                  "description": {
-                    "type": "string",
-                    "description": "Port description"
-                  }
+                  "mode": { "type": "string", "enum": ["access", "trunk", "disabled"] },
+                  "vlans": { "type": "array", "items": { "type": "integer" } },
+                  "poe_disabled": { "type": "boolean" },
+                  "description": { "type": "string" }
                 }
               }
-            },
-            "hostname": {
-              "type": "string",
-              "description": "Switch hostname"
             }
           }
         }
@@ -325,36 +187,65 @@
         { "$ref": "#/definitions/baseDeviceConfig" },
         {
           "properties": {
-            "hostname": {
-              "type": "string",
-              "description": "Gateway hostname"
-            },
-            "route_config": {
-              "type": "object",
-              "description": "Routing configuration",
-              "properties": {
-                "static_routes": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "destination": {
-                        "type": "string",
-                        "description": "Destination network CIDR"
-                      },
-                      "next_hop": {
-                        "type": "string",
-                        "description": "Next hop IP address"
-                      }
-                    },
-                    "required": ["destination", "next_hop"]
-                  }
-                }
-              }
-            }
+            "hostname": { "type": "string", "description": "Gateway hostname" }
           }
         }
       ]
+    },
+    "radioConfig": {
+      "type": "object",
+      "description": "Radio/RF configuration for access points",
+      "properties": {
+        "band_24": { "$ref": "#/definitions/radioBandConfig", "description": "2.4GHz radio settings" },
+        "band_5": { "$ref": "#/definitions/radioBandConfig", "description": "5GHz radio settings" },
+        "band_6": { "$ref": "#/definitions/radioBand6Config", "description": "6GHz radio settings" },
+        "band_dual": { "$ref": "#/definitions/dualBandConfig", "description": "Dual-band/flex radio settings" },
+        "band_24_usage": { "type": "string", "enum": ["24", "5"], "description": "Mist: dual-band radio operating mode" },
+        "allow_rrm_disable": { "type": "boolean" },
+        "scanning_enabled": { "type": "boolean" },
+        "indoor_use": { "type": "boolean" },
+        "ant_gain_24": { "type": "number" },
+        "ant_gain_5": { "type": "number" },
+        "ant_gain_6": { "type": "number" },
+        "antenna_mode": { "type": "string" }
+      }
+    },
+    "radioBandConfig": {
+      "type": "object",
+      "description": "Per-band radio settings (2.4GHz/5GHz)",
+      "properties": {
+        "disabled": { "type": "boolean", "description": "Whether the radio is disabled" },
+        "channel": { "type": "integer", "description": "Channel number (0 = auto)", "minimum": 0 },
+        "power": { "type": "integer", "description": "Transmit power in dBm", "minimum": 1, "maximum": 30 },
+        "bandwidth": { "type": "integer", "description": "Channel bandwidth in MHz", "enum": [20, 40, 80, 160] },
+        "channels": { "type": "array", "items": { "type": "integer" }, "description": "Allowed channel list" },
+        "power_min": { "type": "integer", "description": "Minimum power (Mist only)" },
+        "power_max": { "type": "integer", "description": "Maximum power (Mist only)" },
+        "antenna_mode": { "type": "string" },
+        "ant_gain": { "type": "number" },
+        "preamble": { "type": "string", "enum": ["short", "long", "auto"] }
+      }
+    },
+    "radioBand6Config": {
+      "type": "object",
+      "description": "6GHz radio settings",
+      "properties": {
+        "disabled": { "type": "boolean", "description": "Whether the 6GHz radio is disabled" },
+        "channel": { "type": "integer", "description": "6GHz channel (1-233, step 4)", "minimum": 1, "maximum": 233 },
+        "power": { "type": "integer", "description": "Transmit power in dBm", "minimum": 1, "maximum": 30 },
+        "bandwidth": { "type": "integer", "description": "Channel bandwidth (up to 320 for Wi-Fi 7)", "enum": [20, 40, 80, 160, 320] }
+      }
+    },
+    "dualBandConfig": {
+      "type": "object",
+      "description": "Dual-band/flex radio settings. Mist: radio_mode 24/5 (2.4GHz↔5GHz). Meraki: radio_mode 5/6 (5GHz↔6GHz).",
+      "properties": {
+        "disabled": { "type": "boolean", "description": "Whether the dual-band/flex radio is disabled" },
+        "radio_mode": { "type": "integer", "description": "Operating band: 24, 5, or 6", "enum": [24, 5, 6] },
+        "channel": { "type": "integer", "description": "Channel number (validated against radio_mode)", "minimum": 1 },
+        "power": { "type": "integer", "description": "Transmit power in dBm", "minimum": 1, "maximum": 30 },
+        "bandwidth": { "type": "integer", "description": "Channel bandwidth in MHz", "enum": [20, 40, 80, 160, 320] }
+      }
     }
   }
 }

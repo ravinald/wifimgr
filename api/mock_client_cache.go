@@ -7,11 +7,8 @@ import (
 // Local Cache
 // ============================================================================
 
-// GetCacheAccessor returns a mock cache accessor
-func (m *MockClient) GetCacheAccessor() CacheAccessor {
-	// Return a mock cache accessor for testing
-	return NewCacheAccessor("./test_cache.json")
-}
+// GetCacheAccessor is deprecated and has been removed.
+// Use vendors.GetGlobalCacheAccessor() instead for cache lookups.
 
 // ForceRebuildCache forces a rebuild of the cache
 func (m *MockClient) ForceRebuildCache(_ context.Context) error {

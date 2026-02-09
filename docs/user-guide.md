@@ -117,7 +117,7 @@ Add directly to credentials (not recommended for shared configs):
 ```json
 "credentials": {
   "org_id": "...",
-  "api_token": "your-token-here"
+  "api_key": "your-api-key-here"
 }
 ```
 
@@ -330,17 +330,39 @@ wifimgr apply site US-LAB-01
 
 Apply creates automatic backups before making changes.
 
+**Backup Location:**
+
+Backups are stored in `~/.local/state/wifimgr/backups/` (following XDG State directory).
+
+**Backup Naming:**
+
+Backups use a rotation scheme with serial numbers:
+- `<config-filename>.json.0` — most recent backup
+- `<config-filename>.json.1` — second most recent
+- Higher numbers are older backups
+
+When a new backup is created, existing backups rotate (0→1, 1→2, etc.) up to the configured limit.
+
+**Configuration:**
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `files.config_backups` | 5 | Maximum number of backup copies to retain |
+| `backup.retention_days` | 30 | Age limit for `cleanup-backups` command |
+
+**Commands:**
+
 ```bash
 # List available backups
 wifimgr apply list-backups US-LAB-01
 
-# Rollback to previous state
+# Rollback to previous state (uses most recent backup)
 wifimgr apply rollback US-LAB-01
 
 # Rollback to specific backup
-wifimgr apply rollback US-LAB-01 backup-2024-01-15.json
+wifimgr apply rollback US-LAB-01 us-lab-01.json.2
 
-# Cleanup old backups
+# Cleanup old backups (removes backups older than N days)
 wifimgr apply cleanup-backups --days 30
 ```
 
@@ -543,6 +565,55 @@ Interactive commands for device management.
 # Assign APs to site interactively
 wifimgr set ap site US-LAB-01
 ```
+
+## encrypt
+
+Interactively encrypt secrets for use in configuration files. All input is hidden (terminal echo disabled) to prevent secrets from appearing on screen or in shell history.
+
+> **Note:** This command works without any configuration file or API credentials. You can run it immediately after installing wifimgr.
+
+```bash
+# Encrypt a generic secret (API token, RADIUS secret, etc.)
+wifimgr encrypt
+
+# Encrypt a WiFi PSK with validation (8-63 printable ASCII chars)
+wifimgr encrypt psk
+```
+
+**Workflow:**
+1. Prompts for the secret value (hidden input)
+2. Prompts to confirm the secret (hidden input)
+3. Prompts for encryption password (min 8 chars, hidden input)
+4. Prompts to confirm password (hidden input)
+5. Outputs the encrypted value with `enc:` prefix
+
+**Example output:**
+```
+enc:U2FsdGVkX1+abc123def456...
+```
+
+The encrypted value can be pasted directly into configuration files for:
+- WLAN PSK passwords
+- RADIUS shared secrets
+- API tokens
+- Any other sensitive values
+
+When the application reads encrypted values, it will prompt for the decryption password unless `WIFIMGR_PASSWORD` is set.
+
+**Non-interactive decryption:**
+
+For CI/CD or scripts, set the password via environment variable or `.env.wifimgr`:
+```bash
+export WIFIMGR_PASSWORD="your-password"
+# or add to .env.wifimgr:
+# WIFIMGR_PASSWORD=your-password
+```
+
+**PSK Validation:**
+
+When using `encrypt psk`, the secret is validated against IEEE 802.11i requirements:
+- Length: 8-63 characters
+- Characters: Printable ASCII only (codes 32-126)
 
 ---
 

@@ -73,6 +73,12 @@ type Client interface {
 	GetNetworks(ctx context.Context, orgID string) ([]MistNetwork, error)
 	GetWLANs(ctx context.Context, orgID string) ([]MistWLAN, error)
 	GetSiteWLANs(ctx context.Context, siteID string) ([]MistWLAN, error)
+	CreateOrgWLAN(ctx context.Context, orgID string, wlan *MistWLAN) (*MistWLAN, error)
+	CreateSiteWLAN(ctx context.Context, siteID string, wlan *MistWLAN) (*MistWLAN, error)
+	UpdateOrgWLAN(ctx context.Context, orgID string, wlanID string, wlan *MistWLAN) (*MistWLAN, error)
+	UpdateSiteWLAN(ctx context.Context, siteID string, wlanID string, wlan *MistWLAN) (*MistWLAN, error)
+	DeleteOrgWLAN(ctx context.Context, orgID string, wlanID string) error
+	DeleteSiteWLAN(ctx context.Context, siteID string, wlanID string) error
 
 	// Configuration
 	SetRateLimit(limit int, duration time.Duration)
@@ -92,7 +98,7 @@ type Client interface {
 	GetSchemaDirectory() string
 
 	// Cache operations
-	GetCacheAccessor() CacheAccessor
+	// Note: GetCacheAccessor() removed. Use vendors.GetGlobalCacheAccessor() instead.
 	GetDeviceCache() *DeviceCache
 
 	// Raw data operations for detail view

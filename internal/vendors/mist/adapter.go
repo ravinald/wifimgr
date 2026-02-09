@@ -81,9 +81,13 @@ func (a *Adapter) WLANs() vendors.WLANsService {
 
 // LegacyClient returns the underlying api.Client for advanced operations.
 // This should only be used when vendor-specific functionality is required.
-func (a *Adapter) LegacyClient() api.Client {
+// Implements vendors.LegacyClientAccessor.
+func (a *Adapter) LegacyClient() any {
 	return a.legacy
 }
 
 // Ensure Adapter implements vendors.Client at compile time.
 var _ vendors.Client = (*Adapter)(nil)
+
+// Ensure Adapter implements vendors.LegacyClientAccessor at compile time.
+var _ vendors.LegacyClientAccessor = (*Adapter)(nil)

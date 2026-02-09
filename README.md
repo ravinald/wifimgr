@@ -28,7 +28,7 @@ wifimgr show api sites
 
 - **Show** - View sites, devices, WLANs, and inventory from API or local config
 - **Search** - Find connected clients (wireless and wired) by hostname, MAC, or partial match on Mist and Meraki networks
-- **Apply** - Push device configurations to the API with dry-run support (currently AP configuration; Switch and Gateway planned for v0.2+)
+- **Apply** - Push device configurations to the API with dry-run support. Expands app-level templates into explicit configs at apply time (currently AP configuration; Switch and Gateway planned for v0.2+)
 - **Import** - Bootstrap config files from current API state
 - **Refresh** - Sync local cache with API data and manage cache age/staleness
 
@@ -72,11 +72,11 @@ wifimgr -e show api sites
 wifimgr show api sites                    # List all sites
 wifimgr show api ap site US-LAB-01        # List APs at a site
 wifimgr show inventory ap                 # Show AP inventory
-wifimgr show intent ap site US-LAB-01     # Show intended AP config
+wifimgr show intent ap site US-LAB-01     # Show intended AP config (after template expansion)
 
 # Apply
-wifimgr apply ap US-LAB-01 --dry-run      # Preview changes
-wifimgr apply ap US-LAB-01                # Apply AP config to site
+wifimgr apply ap US-LAB-01 --dry-run      # Preview changes (shows expanded configs)
+wifimgr apply ap US-LAB-01                # Apply AP config to site (templates expanded)
 
 # Import from API
 wifimgr import api site US-LAB-01         # Preview config from API
@@ -92,6 +92,17 @@ wifimgr search wireless desktop force     # Bypass confirmation for expensive se
 wifimgr show api status                   # Check cache age and freshness
 wifimgr refresh cache                     # Sync cache with API
 ```
+
+## Templates
+
+wifimgr includes an app-level templating system for reusable device configurations:
+
+```bash
+# Templates expand at apply time into explicit device configs
+# Example: radio_profile: "high-density" expands into full radio_config settings
+```
+
+This is a local convenience system, NOT vendor-side profile management. Templates are expanded into explicit configurations before being pushed to the API. See [Templates Documentation](docs/templates.md) for complete details.
 
 ## CLI Flags
 

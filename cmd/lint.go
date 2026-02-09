@@ -18,8 +18,8 @@ The lint command performs static analysis on configuration files to detect:
 - Vendor-specific incompatibilities
 
 Use 'wifimgr lint <subcommand> help' for detailed information.`,
-	Example: `  # Lint a site configuration file
-  wifimgr lint config ./config/us-lab-01.json`,
+	Example: `  # Lint a site configuration
+  wifimgr lint config US-LAB-01`,
 }
 
 func init() {

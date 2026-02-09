@@ -27,14 +27,14 @@ type Config struct {
 
 // Files represents configuration for file paths
 type Files struct {
-	ConfigDir      string   `json:"config_dir"`
-	SiteConfigs    []string `json:"site_configs"`
-	DeviceProfiles []string `json:"device_profiles"`
-	Cache          string   `json:"cache"`
-	Inventory      string   `json:"inventory"`
-	LogFile        string   `json:"log_file"`
-	Schemas        string   `json:"schemas"`
-	ConfigBackups  int      `json:"config_backups"` // Number of backups to keep per site
+	ConfigDir     string   `json:"config_dir"`
+	SiteConfigs   []string `json:"site_configs"`
+	Templates     []string `json:"templates,omitempty"` // Template files (radio, wlan, device)
+	Cache         string   `json:"cache"`
+	Inventory     string   `json:"inventory"`
+	LogFile       string   `json:"log_file"`
+	Schemas       string   `json:"schemas"`
+	ConfigBackups int      `json:"config_backups"` // Number of backups to keep per site
 }
 
 // Logging represents logging configuration settings
@@ -53,7 +53,6 @@ type Credentials struct {
 
 	// Encryption related fields
 	KeyEncryptionSalt string `json:"key_encryption_salt,omitempty"`
-	KeyEncrypted      bool   `json:"key_encrypted,omitempty"`
 }
 
 // ManagedKeys represents which configuration keys are managed for each device type
@@ -74,11 +73,81 @@ type API struct {
 	currentToken string // Runtime-only: decrypted token for current session
 }
 
+// WLANProfile represents a reusable WLAN template
+type WLANProfile struct {
+	SSID            string        `json:"ssid"`
+	Enabled         bool          `json:"enabled"`
+	Hidden          bool          `json:"hidden,omitempty"`
+	Band            string        `json:"band,omitempty"` // "2.4", "5", "6", "dual", "all"
+	VLANID          int           `json:"vlan_id,omitempty"`
+	Auth            WLANAuth      `json:"auth"`
+	RoamMode        string        `json:"roam_mode,omitempty"`       // "none", "11r", "OKC"
+	ClientLimitUp   int           `json:"client_limit_up,omitempty"` // Per-client upload limit (Kbps)
+	ClientLimitDown int           `json:"client_limit_down,omitempty"`
+	Portal          *PortalConfig `json:"portal,omitempty"`
+}
+
+// WLANAuth represents WLAN authentication configuration
+type WLANAuth struct {
+	Type          string         `json:"type"`                     // "open", "psk", "eap"
+	PSK           string         `json:"psk,omitempty"`            // Pre-shared key (may be encrypted)
+	Pairwise      []string       `json:"pairwise,omitempty"`       // ["wpa2-ccmp", "wpa3"]
+	RADIUSServers []RADIUSServer `json:"radius_servers,omitempty"` // RADIUS servers for 802.1X
+}
+
+// PortalConfig represents captive portal settings
+type PortalConfig struct {
+	Enabled bool   `json:"enabled"`
+	Auth    string `json:"auth,omitempty"` // "sponsor", "passphrase", "sso", etc.
+}
+
+// RadioProfile represents reusable radio settings
+type RadioProfile struct {
+	Name      string           `json:"name"`
+	Band24    *RadioBandConfig `json:"band_24,omitempty"`
+	Band5     *RadioBandConfig `json:"band_5,omitempty"`
+	Band6     *RadioBandConfig `json:"band_6,omitempty"`
+	AntGain24 int              `json:"ant_gain_24,omitempty"` // External antenna gain (dBi)
+	AntGain5  int              `json:"ant_gain_5,omitempty"`
+	AntGain6  int              `json:"ant_gain_6,omitempty"`
+}
+
+// RadioBandConfig represents radio band settings for a profile
+type RadioBandConfig struct {
+	Disabled  bool  `json:"disabled,omitempty"`
+	Power     int   `json:"power,omitempty"`     // Fixed TX power (dBm)
+	PowerMin  int   `json:"power_min,omitempty"` // Min power for auto (dBm)
+	PowerMax  int   `json:"power_max,omitempty"` // Max power for auto (dBm)
+	Bandwidth int   `json:"bandwidth,omitempty"` // Channel width (20/40/80/160)
+	Channels  []int `json:"channels,omitempty"`  // Allowed channel list
+}
+
+// WLANProfileFile represents a WLAN profile file schema
+type WLANProfileFile struct {
+	Version      int                     `json:"version"`
+	WLANProfiles map[string]*WLANProfile `json:"wlan_profiles"`
+}
+
+// RadioProfileFile represents a radio profile file schema
+type RadioProfileFile struct {
+	Version       int                      `json:"version"`
+	RadioProfiles map[string]*RadioProfile `json:"radio_profiles"`
+}
+
+// SiteConfigObjProfiles declares which templates a site uses
+type SiteConfigObjProfiles struct {
+	WLAN   []string `json:"wlan,omitempty"`   // WLAN template labels to create at site
+	Radio  []string `json:"radio,omitempty"`  // Radio template labels
+	Device []string `json:"device,omitempty"` // Device template labels
+}
+
 // SiteConfigObj represents a site configuration object
 type SiteConfigObj struct {
-	API        string     `json:"api,omitempty"` // API label for multi-vendor support (at site level)
-	SiteConfig SiteConfig `json:"site_config"`
-	Devices    Devices    `json:"devices"`
+	API        string                `json:"api,omitempty"` // API label for multi-vendor support
+	SiteConfig SiteConfig            `json:"site_config"`
+	Profiles   SiteConfigObjProfiles `json:"profiles,omitempty"`
+	WLAN       []string              `json:"wlan,omitempty"` // WLANs to apply to all APs (site-wide default)
+	Devices    Devices               `json:"devices"`
 }
 
 // SiteConfigFile represents a site configuration file
@@ -141,6 +210,10 @@ type APConfig struct {
 	MAC   string `json:"mac"`             // MAC address (key in map)
 	Magic string `json:"magic,omitempty"` // Device identification field
 	API   string `json:"api,omitempty"`   // API label override (inherits from site if empty)
+
+	// Profile references
+	RadioProfile string   `json:"radio_profile,omitempty"` // Reference to RadioProfile name
+	WLANs        []string `json:"wlan,omitempty"`          // List of WLAN labels (profile or site wlan)
 
 	// Embed the vendor-agnostic AP device configuration
 	// All configuration fields are defined in APDeviceConfig

@@ -117,21 +117,351 @@ func (s *wlansService) BySSID(ctx context.Context, ssidName string) ([]*vendors.
 }
 
 // Create creates/enables a new SSID.
-// Note: Not implemented for read-only cache population.
-func (s *wlansService) Create(_ context.Context, _ *vendors.WLAN) (*vendors.WLAN, error) {
-	return nil, fmt.Errorf("SSID creation not implemented")
+// Meraki has no create endpoint - we find an available slot (0-14) and configure it via Update.
+func (s *wlansService) Create(ctx context.Context, wlan *vendors.WLAN) (*vendors.WLAN, error) {
+	if wlan.SiteID == "" {
+		return nil, fmt.Errorf("SiteID (network ID) is required for Meraki SSID creation")
+	}
+
+	// Find an available SSID slot
+	slotNumber, err := s.findAvailableSSIDSlot(ctx, wlan.SiteID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find available SSID slot: %w", err)
+	}
+
+	logging.Debugf("[meraki] Creating SSID in network %s, slot %s: %s", wlan.SiteID, slotNumber, wlan.SSID)
+
+	// Build the update request
+	request := convertVendorWLANToMerakiRequest(wlan)
+
+	// Use the SDK to update the SSID slot
+	retryState := NewRetryState(s.retryConfig)
+	var updated *meraki.ResponseWirelessUpdateNetworkWirelessSSID
+
+	for {
+		if s.rateLimiter != nil {
+			if err := s.rateLimiter.Acquire(ctx); err != nil {
+				return nil, fmt.Errorf("rate limit acquire failed: %w", err)
+			}
+		}
+
+		var updateErr error
+		if s.suppressOutput {
+			restore := suppressStdout()
+			updated, _, updateErr = s.dashboard.Wireless.UpdateNetworkWirelessSSID(wlan.SiteID, slotNumber, request)
+			restore()
+		} else {
+			updated, _, updateErr = s.dashboard.Wireless.UpdateNetworkWirelessSSID(wlan.SiteID, slotNumber, request)
+		}
+
+		if updateErr == nil {
+			break
+		}
+
+		if !retryState.ShouldRetry(updateErr) {
+			return nil, fmt.Errorf("failed to create SSID: %w", updateErr)
+		}
+
+		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {
+			return nil, fmt.Errorf("retry wait failed: %w", waitErr)
+		}
+	}
+
+	return convertMerakiUpdateResponseToWLAN(updated, wlan.SiteID, slotNumber, s.orgID), nil
 }
 
 // Update modifies an existing SSID.
-// Note: Not implemented for read-only cache population.
-func (s *wlansService) Update(_ context.Context, _ string, _ *vendors.WLAN) (*vendors.WLAN, error) {
-	return nil, fmt.Errorf("SSID update not implemented")
+func (s *wlansService) Update(ctx context.Context, id string, wlan *vendors.WLAN) (*vendors.WLAN, error) {
+	// Parse the composite ID to get network ID and slot number
+	networkID, slotNumber, err := parseSSIDID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	logging.Debugf("[meraki] Updating SSID %s in network %s", slotNumber, networkID)
+
+	// Build the update request
+	request := convertVendorWLANToMerakiRequest(wlan)
+
+	// Use the SDK to update the SSID
+	retryState := NewRetryState(s.retryConfig)
+	var updated *meraki.ResponseWirelessUpdateNetworkWirelessSSID
+
+	for {
+		if s.rateLimiter != nil {
+			if err := s.rateLimiter.Acquire(ctx); err != nil {
+				return nil, fmt.Errorf("rate limit acquire failed: %w", err)
+			}
+		}
+
+		var updateErr error
+		if s.suppressOutput {
+			restore := suppressStdout()
+			updated, _, updateErr = s.dashboard.Wireless.UpdateNetworkWirelessSSID(networkID, slotNumber, request)
+			restore()
+		} else {
+			updated, _, updateErr = s.dashboard.Wireless.UpdateNetworkWirelessSSID(networkID, slotNumber, request)
+		}
+
+		if updateErr == nil {
+			break
+		}
+
+		if !retryState.ShouldRetry(updateErr) {
+			return nil, fmt.Errorf("failed to update SSID: %w", updateErr)
+		}
+
+		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {
+			return nil, fmt.Errorf("retry wait failed: %w", waitErr)
+		}
+	}
+
+	return convertMerakiUpdateResponseToWLAN(updated, networkID, slotNumber, s.orgID), nil
 }
 
 // Delete disables/removes an SSID.
-// Note: Not implemented for read-only cache population.
-func (s *wlansService) Delete(_ context.Context, _ string) error {
-	return fmt.Errorf("SSID deletion not implemented")
+// Meraki has no delete endpoint - we reset the slot to factory defaults.
+func (s *wlansService) Delete(ctx context.Context, id string) error {
+	// Parse the composite ID to get network ID and slot number
+	networkID, slotNumber, err := parseSSIDID(id)
+	if err != nil {
+		return err
+	}
+
+	logging.Debugf("[meraki] Deleting (resetting) SSID %s in network %s", slotNumber, networkID)
+
+	// Build a reset request (disabled, default name, open auth)
+	slotNum, _ := strconv.Atoi(slotNumber)
+	defaultName := fmt.Sprintf("Unconfigured SSID %d", slotNum+1)
+	enabled := false
+	authMode := "open"
+
+	request := &meraki.RequestWirelessUpdateNetworkWirelessSSID{
+		Name:     defaultName,
+		Enabled:  &enabled,
+		AuthMode: authMode,
+	}
+
+	// Use the SDK to reset the SSID
+	retryState := NewRetryState(s.retryConfig)
+
+	for {
+		if s.rateLimiter != nil {
+			if err := s.rateLimiter.Acquire(ctx); err != nil {
+				return fmt.Errorf("rate limit acquire failed: %w", err)
+			}
+		}
+
+		var updateErr error
+		if s.suppressOutput {
+			restore := suppressStdout()
+			_, _, updateErr = s.dashboard.Wireless.UpdateNetworkWirelessSSID(networkID, slotNumber, request)
+			restore()
+		} else {
+			_, _, updateErr = s.dashboard.Wireless.UpdateNetworkWirelessSSID(networkID, slotNumber, request)
+		}
+
+		if updateErr == nil {
+			break
+		}
+
+		if !retryState.ShouldRetry(updateErr) {
+			return fmt.Errorf("failed to delete SSID: %w", updateErr)
+		}
+
+		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {
+			return fmt.Errorf("retry wait failed: %w", waitErr)
+		}
+	}
+
+	return nil
+}
+
+// findAvailableSSIDSlot finds an unused SSID slot (0-14) in a network.
+func (s *wlansService) findAvailableSSIDSlot(ctx context.Context, networkID string) (string, error) {
+	retryState := NewRetryState(s.retryConfig)
+	var ssids *meraki.ResponseWirelessGetNetworkWirelessSSIDs
+
+	for {
+		if s.rateLimiter != nil {
+			if err := s.rateLimiter.Acquire(ctx); err != nil {
+				return "", fmt.Errorf("rate limit acquire failed: %w", err)
+			}
+		}
+
+		var fetchErr error
+		if s.suppressOutput {
+			restore := suppressStdout()
+			ssids, _, fetchErr = s.dashboard.Wireless.GetNetworkWirelessSSIDs(networkID)
+			restore()
+		} else {
+			ssids, _, fetchErr = s.dashboard.Wireless.GetNetworkWirelessSSIDs(networkID)
+		}
+
+		if fetchErr == nil {
+			break
+		}
+
+		if !retryState.ShouldRetry(fetchErr) {
+			return "", fmt.Errorf("failed to get SSIDs: %w", fetchErr)
+		}
+
+		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {
+			return "", fmt.Errorf("retry wait failed: %w", waitErr)
+		}
+	}
+
+	if ssids == nil {
+		return "0", nil // If no SSIDs, slot 0 is available
+	}
+
+	// Find an available slot (disabled and has default/empty name)
+	for _, ssid := range *ssids {
+		if ssid.Number == nil {
+			continue
+		}
+		// Check if slot is available (disabled and has default name pattern)
+		if ssid.Enabled != nil && !*ssid.Enabled {
+			defaultName := fmt.Sprintf("Unconfigured SSID %d", *ssid.Number+1)
+			if ssid.Name == "" || ssid.Name == defaultName {
+				return strconv.Itoa(*ssid.Number), nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no available SSID slots in network %s (all 15 slots are in use)", networkID)
+}
+
+// convertVendorWLANToMerakiRequest converts a vendor-agnostic WLAN to Meraki update request.
+func convertVendorWLANToMerakiRequest(w *vendors.WLAN) *meraki.RequestWirelessUpdateNetworkWirelessSSID {
+	request := &meraki.RequestWirelessUpdateNetworkWirelessSSID{}
+
+	// Basic settings
+	if w.SSID != "" {
+		request.Name = w.SSID
+	}
+	request.Enabled = &w.Enabled
+
+	// Visible is the inverse of Hidden
+	visible := !w.Hidden
+	request.Visible = &visible
+
+	// Auth mode
+	if w.AuthType != "" {
+		request.AuthMode = w.AuthType
+	}
+
+	// PSK for psk auth mode
+	if w.PSK != "" {
+		request.Psk = w.PSK
+	}
+
+	// Encryption mode
+	if w.EncryptionMode != "" {
+		request.EncryptionMode = w.EncryptionMode
+	}
+
+	// Band selection
+	if w.Band != "" {
+		request.BandSelection = w.Band
+	}
+
+	// Default VLAN ID
+	if w.VLANID != 0 {
+		request.DefaultVLANID = &w.VLANID
+	}
+
+	// RADIUS servers for 802.1X
+	if len(w.RadiusServers) > 0 {
+		var radiusServers []meraki.RequestWirelessUpdateNetworkWirelessSSIDRadiusServers
+		for _, rs := range w.RadiusServers {
+			server := meraki.RequestWirelessUpdateNetworkWirelessSSIDRadiusServers{
+				Host: rs.Host,
+			}
+			if rs.Port != 0 {
+				server.Port = &rs.Port
+			}
+			if rs.Secret != "" {
+				server.Secret = rs.Secret
+			}
+			radiusServers = append(radiusServers, server)
+		}
+		request.RadiusServers = &radiusServers
+	}
+
+	// Availability tags for per-AP WLAN assignment
+	if w.Config != nil {
+		if tags := extractStringSlice(w.Config["availabilityTags"]); len(tags) > 0 {
+			request.AvailabilityTags = tags
+			allAPs := false
+			request.AvailableOnAllAps = &allAPs
+		}
+		if allAPs, ok := w.Config["availableOnAllAps"].(*bool); ok && allAPs != nil {
+			request.AvailableOnAllAps = allAPs
+		} else if allAPs, ok := w.Config["availableOnAllAps"].(bool); ok {
+			request.AvailableOnAllAps = &allAPs
+		}
+	}
+
+	return request
+}
+
+// convertMerakiUpdateResponseToWLAN converts a Meraki update response to vendor-agnostic WLAN.
+func convertMerakiUpdateResponseToWLAN(resp *meraki.ResponseWirelessUpdateNetworkWirelessSSID, networkID, slotNumber, orgID string) *vendors.WLAN {
+	slotNum, _ := strconv.Atoi(slotNumber)
+
+	wlan := &vendors.WLAN{
+		ID:           fmt.Sprintf("%s:%s", networkID, slotNumber),
+		OrgID:        orgID,
+		SiteID:       networkID,
+		SourceVendor: "meraki",
+	}
+
+	if resp == nil {
+		return wlan
+	}
+
+	wlan.SSID = resp.Name
+
+	if resp.Enabled != nil {
+		wlan.Enabled = *resp.Enabled
+	}
+
+	if resp.Visible != nil {
+		wlan.Hidden = !*resp.Visible
+	}
+
+	wlan.AuthType = resp.AuthMode
+	wlan.EncryptionMode = resp.EncryptionMode
+	wlan.Band = resp.BandSelection
+
+	// Convert RADIUS servers
+	if resp.RadiusServers != nil {
+		for _, rs := range *resp.RadiusServers {
+			server := vendors.RadiusServer{
+				Host: rs.Host,
+			}
+			if rs.Port != nil {
+				server.Port = *rs.Port
+			}
+			wlan.RadiusServers = append(wlan.RadiusServers, server)
+		}
+	}
+
+	// Store config map
+	wlan.Config = map[string]interface{}{
+		"number":            slotNum,
+		"name":              resp.Name,
+		"enabled":           resp.Enabled,
+		"visible":           resp.Visible,
+		"authMode":          resp.AuthMode,
+		"encryptionMode":    resp.EncryptionMode,
+		"bandSelection":     resp.BandSelection,
+		"availabilityTags":  resp.AvailabilityTags,
+		"availableOnAllAps": resp.AvailableOnAllAps,
+	}
+
+	return wlan
 }
 
 // getNetworksWithWireless returns networks that have wireless product type.
@@ -386,6 +716,25 @@ func parseSSIDID(id string) (networkID, number string, err error) {
 		}
 	}
 	return "", "", fmt.Errorf("invalid SSID ID format: %s (expected networkId:ssidNumber)", id)
+}
+
+// extractStringSlice converts an interface{} to []string, handling both
+// []string (from Go code) and []any (from JSON unmarshal).
+func extractStringSlice(v interface{}) []string {
+	switch val := v.(type) {
+	case []string:
+		return val
+	case []any:
+		result := make([]string, 0, len(val))
+		for _, item := range val {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	default:
+		return nil
+	}
 }
 
 // Ensure wlansService implements vendors.WLANsService at compile time.

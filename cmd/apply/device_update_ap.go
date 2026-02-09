@@ -108,6 +108,15 @@ func (a *APUpdater) FindDevicesToUpdate(ctx context.Context, client api.Client, 
 			continue
 		}
 
+		// Expand template references (radio_profile, device_template, wlans)
+		expandedConfig, err := expandDeviceConfigWithTemplates(desiredConfig, siteConfig)
+		if err != nil {
+			logging.Warnf("Error expanding templates for AP %s: %v - using unexpanded config", mac, err)
+			expandedConfig = desiredConfig
+		} else {
+			desiredConfig = expandedConfig
+		}
+
 		// Get current device state
 		device, err := batchLoader.GetDeviceByMAC(mac)
 		if err != nil {
@@ -220,6 +229,14 @@ func (a *APUpdater) UpdateDeviceConfigurations(ctx context.Context, client api.C
 			continue
 		}
 
+		// Expand template references (radio_profile, device_template, wlans)
+		expandedConfig, err := expandDeviceConfigWithTemplates(apConfig, siteConfig)
+		if err != nil {
+			logging.Warnf("Error expanding templates for AP %s: %v - using unexpanded config", mac, err)
+		} else {
+			apConfig = expandedConfig
+		}
+
 		device, err := batchLoader.GetDeviceByMAC(mac)
 		if err != nil {
 			logging.Warnf("Error getting device by MAC %s: %v", mac, err)
@@ -231,6 +248,11 @@ func (a *APUpdater) UpdateDeviceConfigurations(ctx context.Context, client api.C
 			continue
 		}
 
+		// For Meraki: merge wifimgr-managed WLAN availability tags into AP tags
+		if config.GetVendorFromAPILabel(apiLabel) == "meraki" {
+			apConfig = mergeWifimgrTagsForAP(mac, apConfig, device.ToConfigMap())
+		}
+
 		deviceID := *device.ID
 		deviceName := "<unnamed>"
 		if device.Name != nil {
@@ -240,9 +262,10 @@ func (a *APUpdater) UpdateDeviceConfigurations(ctx context.Context, client api.C
 		logging.Debugf("Updating configuration for AP %s (ID: %s, Name: %s)", mac, deviceID, deviceName)
 
 		// Validate configuration before applying
-		// TODO: Derive vendor name from client or API label instead of hardcoding
-		// For now, we assume Mist since that's the current implementation
-		vendorName := "mist"
+		vendorName := config.GetVendorFromAPILabel(apiLabel)
+		if vendorName == "" {
+			vendorName = "mist"
+		}
 		if validationErrors := validateAPConfig(apConfig, mac, vendorName); validationErrors != nil {
 			if DisplayConfigValidationErrors(validationErrors, mac, vendorName) {
 				logging.Errorf("Configuration validation failed for AP %s, skipping update", mac)
@@ -408,6 +431,13 @@ func showDeviceConfigDiffWithManagedKeys(mac string, currentConfig, desiredConfi
 	// The MAC is already known (it's what we're using to look up the device)
 	delete(filteredDesired, "mac")
 
+	// Pre-filter configs to only include managed keys BEFORE diffing
+	// This ensures only managed fields appear in the diff output
+	if len(managedKeys) > 0 {
+		filteredCurrent = filterConfigByManagedKeys(filteredCurrent, managedKeys)
+		filteredDesired = filterConfigByManagedKeys(filteredDesired, managedKeys)
+	}
+
 	// Debug: Log what fields we have before diff
 	logging.Debugf("Device %s - Filtered current fields: %v", mac, getMapKeys(filteredCurrent))
 	logging.Debugf("Device %s - Filtered desired fields: %v", mac, getMapKeys(filteredDesired))
@@ -421,11 +451,10 @@ func showDeviceConfigDiffWithManagedKeys(mac string, currentConfig, desiredConfi
 		return
 	}
 
-	// Create diff with managed keys as include fields
+	// Create diff options - no need for IncludeFields since we pre-filtered
 	opts := jsondiff.DiffOptions{
-		ContextLines:  3,
-		SortJSON:      true,
-		IncludeFields: managedKeys, // Use managed keys as include filter
+		ContextLines: 3,
+		SortJSON:     true,
 	}
 
 	diffs, err := jsondiff.Diff(currentJSON, desiredJSON, opts)
