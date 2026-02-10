@@ -279,7 +279,6 @@ For issues or contributions:
 ## Related Documents
 
 ### In This Directory
-- CLAUDE.md - Project-specific guidelines
 - CONTRIBUTING.md - Development guidelines
 - CODE_OF_CONDUCT.md - Community standards
 - LICENSE - Apache 2.0
