@@ -29,8 +29,8 @@ var wirelessCmd = &cobra.Command{
 	Long: `Search for wireless devices by name, MAC address, or other criteria.
 
 When multiple APIs are configured:
-  - Without --api: Searches across all APIs that support wireless search
-  - With --api: Searches only the specified API
+  - Without target: Searches across all APIs that support wireless search
+  - With target: Searches only the specified API
 
 Arguments:
   search-text   Required. Text to search for
@@ -45,7 +45,7 @@ Examples:
   wifimgr search wireless laptop force             # Skip confirmation for expensive search
   wifimgr search wireless aa:bb:cc:dd:ee:ff        # Search by MAC address
   wifimgr search wireless john json                # Search and show as JSON
-  wifimgr search wireless --api mist-prod laptop   # Search only in mist-prod`,
+  wifimgr search wireless laptop target mist-prod   # Search only in mist-prod`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		// Allow "help" as a special keyword
 		for _, arg := range args {

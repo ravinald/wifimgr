@@ -81,7 +81,7 @@ Examples:
 // showAPsMultiVendor shows APs from one or more APIs in multi-vendor mode.
 // APs that are in the inventory.json file are highlighted in green.
 func showAPsMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) error {
-	// Validate --api flag if provided
+	// Validate target API if provided
 	if err := ValidateAPIFlag(); err != nil {
 		return err
 	}

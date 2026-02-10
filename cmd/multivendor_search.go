@@ -15,7 +15,7 @@ import (
 
 // searchWirelessMultiVendor searches for wireless clients across multiple APIs.
 func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format string, force, _ bool) error {
-	// Validate --api flag if provided
+	// Validate target API if provided
 	if err := ValidateAPIFlag(); err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 
 // searchWiredMultiVendor searches for wired clients across multiple APIs.
 func searchWiredMultiVendor(ctx context.Context, searchText, siteID, format string, force, _ bool) error {
-	// Validate --api flag if provided
+	// Validate target API if provided
 	if err := ValidateAPIFlag(); err != nil {
 		return err
 	}

@@ -29,13 +29,12 @@ var refreshCacheCmd = &cobra.Command{
 	Long: `Refresh the local cache by fetching data from configured API(s).
 
 When multiple APIs are configured:
-  - Without api-name or --api: Refreshes all APIs in parallel
-  - With api-name or --api: Refreshes only the specified API
+  - Without api-name: Refreshes all APIs in parallel
+  - With api-name: Refreshes only the specified API
 
 Examples:
   wifimgr refresh cache                    # Refresh all APIs
   wifimgr refresh cache mist-prod          # Refresh mist-prod only
-  wifimgr refresh cache --api mist-prod    # Refresh mist-prod only (alternative)
   wifimgr refresh cache meraki-corp        # Refresh meraki-corp only`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		// Allow "help" as a special keyword
@@ -83,7 +82,7 @@ func runMultiVendorRefresh() error {
 		return fmt.Errorf("API registry not initialized")
 	}
 
-	// Validate --api flag if provided
+	// Validate target API if provided
 	if err := ValidateAPIFlag(); err != nil {
 		return err
 	}
