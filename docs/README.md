@@ -11,6 +11,7 @@
 - **[Multi-Vendor Support](multi-vendor/user-guide.md)** - Managing Mist and Meraki from a single config
   - [Configuration](multi-vendor/configuration.md) - Multi-API config model
   - [Commands](multi-vendor/commands.md) - How commands behave with `target`
+- **[NetBox Integration](netbox.md)** - Syncing inventory and site data with NetBox
 - **[Import from PDF](import-pdf.md)** - Importing device profiles from PDFs
 
 ## Reference
