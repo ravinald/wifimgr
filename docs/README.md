@@ -1,36 +1,25 @@
-# wifimgr v0.1.0 - User Documentation
-
-Complete documentation for configuring and using wifimgr.
+# wifimgr Documentation (v0.1.1)
 
 ## Getting Started
 
-1. **[README.md](../README.md)** - Quick start and feature overview (start here)
-2. **[Configuration](configuration.md)** - Set up API credentials and configuration files
-3. **[User Guide](user-guide.md)** - Complete command reference with practical examples
+- **[Configuration Guide](configuration.md)** - API setup, tokens, file structure, and encryption
+- **[User Guide](user-guide.md)** - Complete command reference with examples
 
-## Features & Reference
+## Features
 
 - **[Templates](templates.md)** - App-level configuration templates that expand into explicit device settings at apply time (not vendor-side profiles)
-- **[Known Issues](known-issues.md)** - Current limitations and workarounds
-- **[Table Formatter](table-formatter.md)** - Output formats (table, CSV, JSON)
+- **[Multi-Vendor Support](multi-vendor/user-guide.md)** - Managing Mist and Meraki from a single config
+  - [Configuration](multi-vendor/configuration.md) - Multi-API config model
+  - [Commands](multi-vendor/commands.md) - How commands behave with `target`
+- **[Import from PDF](import-pdf.md)** - Importing device profiles from PDFs
+
+## Reference
+
 - **[Field Mappings](field-mappings.md)** - Vendor API field mapping reference
-- **[Device Configuration](device-configuration.md)** - Device configuration format
-- **[Utilities](utilities.md)** - Utility functions reference
-
-## Multi-Vendor Support
-
-For managing multiple vendors (Mist and Meraki):
-
-- **[Multi-Vendor User Guide](multi-vendor/user-guide.md)** - Getting started with multiple APIs
-- **[Multi-Vendor Configuration](multi-vendor/configuration.md)** - Setting up multiple vendors
-- **[Multi-Vendor Commands](multi-vendor/commands.md)** - How commands behave with the `--api` flag
+- **[Table Formatter](table-formatter.md)** - Output formats (table, CSV, JSON) and column customization
+- **[Utilities](utilities.md)** - MAC address handling, symbols, sorting, and site management
+- **[Known Issues](known-issues.md)** - Current limitations and workarounds
 
 ## Release Information
 
-- **[v0.1.0 Release Notes](../CHANGELOG.md)** - Features, known limitations, and roadmap
-
----
-
-**Version:** v0.1.0
-**Last Updated:** 2026-02-02
-
+- **[CHANGELOG](../CHANGELOG.md)** - v0.1.1 release notes and roadmap

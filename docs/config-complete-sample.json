@@ -23,7 +23,7 @@
   },
 
   "api": {
-    "_comment_api": "Multiple API connections can be defined. Each key is a label used with --api flag",
+    "_comment_api": "Multiple API connections can be defined. Each key is a label used with 'target' positional keyword",
 
     "mist-prod": {
       "_comment": "Primary Mist production environment",

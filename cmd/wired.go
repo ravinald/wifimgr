@@ -29,8 +29,8 @@ var wiredCmd = &cobra.Command{
 	Long: `Search for wired devices by name, MAC address, or other criteria.
 
 When multiple APIs are configured:
-  - Without --api: Searches across all APIs that support wired search
-  - With --api: Searches only the specified API
+  - Without target: Searches across all APIs that support wired search
+  - With target: Searches only the specified API
 
 Arguments:
   search-text   Required. Text to search for
@@ -45,7 +45,7 @@ Examples:
   wifimgr search wired laptop force             # Skip confirmation for expensive search
   wifimgr search wired aa:bb:cc:dd:ee:ff        # Search by MAC address
   wifimgr search wired john json                # Search and show as JSON
-  wifimgr search wired --api mist-prod laptop   # Search only in mist-prod`,
+  wifimgr search wired laptop target mist-prod   # Search only in mist-prod`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		// Allow "help" as a special keyword
 		for _, arg := range args {

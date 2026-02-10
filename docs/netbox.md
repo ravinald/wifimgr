@@ -1149,6 +1149,6 @@ If storing NetBox credentials in config files:
 ## See Also
 
 - [Configuration Documentation](configuration.md) - wifimgr configuration system
-- [Device Configuration](device-configuration.md) - Managing device settings
+- [Device Configuration](../docs-internal/device-configuration.md) - Managing device settings
 - [Utilities](utilities.md) - MAC address and device utilities
 - [Multi-Vendor Support](multi-vendor/) - Working with multiple APIs
