@@ -21,7 +21,7 @@ import (
 // deviceType should be "ap", "switch", or "gateway".
 // Devices that are in the inventory.json file are highlighted in green.
 func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmdutils.ParsedShowArgs) error {
-	// Validate --api flag if provided
+	// Validate target API if provided
 	if err := ValidateAPIFlag(); err != nil {
 		return err
 	}
@@ -250,7 +250,7 @@ func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmduti
 
 // showSitesMultiVendor shows sites from one or more APIs.
 func showSitesMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) error {
-	// Validate --api flag if provided
+	// Validate target API if provided
 	if err := ValidateAPIFlag(); err != nil {
 		return err
 	}
@@ -607,7 +607,7 @@ func showSiteDetailMultiVendor(matches []siteMatch, parsed *cmdutils.ParsedShowA
 	// Show hint for duplicate sites
 	if len(matches) > 1 {
 		fmt.Println()
-		fmt.Println("Tip: Use --api <label> to target a specific API when performing operations")
+		fmt.Println("Tip: Use 'target <label>' to target a specific API when performing operations")
 	}
 
 	// Show cache timestamp
@@ -625,7 +625,7 @@ func showSiteDetailMultiVendor(matches []siteMatch, parsed *cmdutils.ParsedShowA
 // deviceType can be "ap", "switch", "gateway", or "" for all.
 // If an inventory.json file is configured, only devices listed there are shown.
 func showInventoryMultiVendor(_ context.Context, deviceType string, parsed *cmdutils.ParsedShowArgs) error {
-	// Validate --api flag if provided
+	// Validate target API if provided
 	if err := ValidateAPIFlag(); err != nil {
 		return err
 	}

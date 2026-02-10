@@ -47,7 +47,7 @@ wifimgr show api sites
 wifimgr show api ap
 
 # Filter to a specific vendor
-wifimgr show api ap --api mist-prod
+wifimgr show api ap target mist-prod
 ```
 
 ## Configuration Reference
@@ -56,12 +56,12 @@ wifimgr show api ap --api mist-prod
 
 API labels are user-defined identifiers for your API connections. Choose meaningful names:
 
-| Example Label | Use Case |
-|---------------|----------|
-| `mist-prod` | Mist production organization |
-| `mist-lab` | Mist lab/test organization |
-| `meraki-corp` | Meraki corporate networks |
-| `meraki-retail` | Meraki retail locations |
+| Example Label   | Use Case                     |
+|-----------------|------------------------------|
+| `mist-prod`     | Mist production organization |
+| `mist-lab`      | Mist lab/test organization   |
+| `meraki-corp`   | Meraki corporate networks    |
+| `meraki-retail` | Meraki retail locations      |
 
 ### Vendor Configuration
 
@@ -81,7 +81,7 @@ api:
 
 **Getting Mist Credentials:**
 1. Log into Mist dashboard
-2. Go to Organization → Settings → API Token
+2. Go to Organization -> Settings -> API Token
 3. Create a new token with appropriate permissions
 4. Copy the Organization ID from the URL or Settings page
 
@@ -100,7 +100,7 @@ api:
 
 **Getting Meraki Credentials:**
 1. Log into Meraki dashboard
-2. Go to Organization → Settings → Dashboard API access
+2. Go to Organization -> Settings -> Dashboard API access
 3. Enable API access and generate a key
 4. Note your Organization ID from the URL
 
@@ -111,7 +111,7 @@ Credentials can be provided via environment variables using the pattern:
 - `WIFIMGR_API_<LABEL>_CREDENTIALS_ORG` - Organization ID
 - `WIFIMGR_API_<LABEL>_CREDENTIALS_URL` - API base URL (optional override)
 
-**Note:** Label dashes are converted to underscores (e.g., `mist-prod` → `MIST_PROD`)
+**Note:** Label dashes are converted to underscores (e.g., `mist-prod` -> `MIST_PROD`)
 
 ```bash
 # For API labeled "mist-prod"
@@ -136,13 +136,13 @@ WIFIMGR_API_MERAKI_CORP_CREDENTIALS_ORG=your-meraki-org-id
 
 **Legacy support:** Single-API configs still support `WIFIMGR_API_TOKEN` and `WIFIMGR_ORG_ID`
 
-## Using the --api Flag
+## Targeting a Specific API
 
-The `--api` flag filters commands to a specific API connection.
+The `target` keyword filters commands to a specific API connection. It is a positional keyword placed after other arguments.
 
 ### Read Commands
 
-Without `--api`, commands aggregate results from all APIs:
+Without `target`, commands aggregate results from all APIs:
 
 ```bash
 # Show APs from ALL configured APIs
@@ -154,14 +154,14 @@ wifimgr show api ap
 # AP-Lobby      11:22:33:44:55:66  MR46    US-LAB-01    online      meraki-prod
 ```
 
-With `--api`, results are filtered:
+With `target`, results are filtered:
 
 ```bash
 # Show APs from Mist only
-wifimgr show api ap --api mist-prod
+wifimgr show api ap target mist-prod
 
 # Show sites from Meraki only
-wifimgr show api sites --api meraki-prod
+wifimgr show api sites target meraki-prod
 ```
 
 ### Write Commands
@@ -181,8 +181,8 @@ site_config:
 wifimgr apply site US-LAB-01
 
 # Override with warning
-wifimgr apply site US-LAB-01 --api meraki-prod
-# WARNING: Overriding site API 'mist-prod' with --api 'meraki-prod'
+wifimgr apply site US-LAB-01 target meraki-prod
+# WARNING: Overriding site API 'mist-prod' with target 'meraki-prod'
 ```
 
 ### Cache Refresh
@@ -192,7 +192,7 @@ wifimgr apply site US-LAB-01 --api meraki-prod
 wifimgr refresh cache
 
 # Refresh only one API
-wifimgr refresh cache --api mist-prod
+wifimgr refresh cache target mist-prod
 ```
 
 ## Handling Duplicate Site Names
@@ -208,32 +208,32 @@ $ wifimgr show api ap site US-CAMPUS-01
 # AP-02      11:22:33:44:55:66  MR46    online      meraki-prod
 #
 # Found site "US-CAMPUS-01" in 2 APIs
-# Tip: Use --api to filter to a specific API
+# Tip: Use target <label> to filter to a specific API
 ```
 
 To target a specific API:
 
 ```bash
-wifimgr show api ap site US-CAMPUS-01 --api mist-prod
+wifimgr show api ap site US-CAMPUS-01 target mist-prod
 ```
 
 ## Capability Differences
 
 Most features are available across both vendors. Some advanced features are vendor-specific:
 
-| Feature | Mist | Meraki |
-|---------|------|--------|
-| Sites/Networks | ✓ | ✓ |
-| Inventory | ✓ | ✓ |
-| Devices | ✓ | ✓ |
-| Device Configs | ✓ | ✓ |
-| Wireless Client Search | ✓ | ✓ |
-| Wired Client Search | ✓ | ✓ |
-| Device Profiles | ✓ | - |
-| RF Templates | ✓ | - |
-| Gateway Templates | ✓ | - |
-| WLAN Templates | ✓ | - |
-| Gateway/Switch Apply | - | - |
+| Feature                | Mist   | Meraki   |
+|------------------------|--------|----------|
+| Sites/Networks         | ✓      | ✓        |
+| Inventory              | ✓      | ✓        |
+| Devices                | ✓      | ✓        |
+| Device Configs         | ✓      | ✓        |
+| Wireless Client Search | ✓      | ✓        |
+| Wired Client Search    | ✓      | ✓        |
+| Device Profiles        | ✓      | -        |
+| RF Templates           | ✓      | -        |
+| Gateway Templates      | ✓      | -        |
+| WLAN Templates         | ✓      | -        |
+| Gateway/Switch Apply   | -      | -        |
 
 **Note:** Gateway and Switch apply functionality is planned for future releases. Currently, apply operations support APs on both vendors.
 
@@ -243,10 +243,10 @@ Both Mist and Meraki support client search:
 
 ```bash
 # Search on Mist
-wifimgr search wireless laptop --api mist-prod
+wifimgr search wireless laptop target mist-prod
 
 # Search on Meraki
-wifimgr search wireless laptop --api meraki-corp
+wifimgr search wireless laptop target meraki-corp
 
 # Search across all APIs (tries each one)
 wifimgr search wireless john
@@ -303,8 +303,8 @@ wifimgr search wireless laptop-john
 wifimgr search wired desktop-jane
 
 # Search specific API
-wifimgr search wireless john --api mist-prod
-wifimgr search wireless john --api meraki-corp
+wifimgr search wireless john target mist-prod
+wifimgr search wireless john target meraki-corp
 
 # Scope to specific site (faster - single API call)
 wifimgr search wireless john site US-LAB-01
@@ -330,8 +330,8 @@ wifimgr apply site US-LAB-01
 # Apply just APs
 wifimgr apply ap US-LAB-01
 
-# Dry run first
-wifimgr apply site US-LAB-01 --dry-run
+# Preview changes first
+wifimgr apply site US-LAB-01 diff
 ```
 
 ## Troubleshooting
@@ -371,7 +371,7 @@ Searched APIs: mist-prod, meraki-prod
 Try:
   - Refresh the cache: wifimgr refresh cache
   - Check site name spelling
-  - Use --api to target a specific API
+  - Use target <label> to filter to a specific API
 ```
 
 **Solution:**
@@ -388,7 +388,7 @@ If data seems outdated:
 wifimgr refresh cache
 
 # Or refresh a specific API
-wifimgr refresh cache --api mist-prod
+wifimgr refresh cache target mist-prod
 ```
 
 ### Rate Limiting

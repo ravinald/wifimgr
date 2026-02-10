@@ -27,7 +27,7 @@ func RefreshAPICacheForApply(ctx context.Context, apiLabel string) error {
 }
 
 // ResolveAPIForSite determines which API to use for a site based on:
-// 1. --api flag override (with warning if different from config)
+// 1. target keyword override (with warning if different from config)
 // 2. Site config's api field
 // 3. Cache lookup to find which API has this site
 // 4. Default to first available API if only one is configured
@@ -67,11 +67,11 @@ func ResolveAPIForSite(siteName string, siteConfig *config.SiteConfig) (string, 
 		}
 	}
 
-	// Handle --api flag override
+	// Handle target keyword override
 	if apiFlag != "" {
 		if expectedAPI != "" && apiFlag != expectedAPI {
-			logging.Warnf("--api flag (%s) overrides site's configured API (%s)", apiFlag, expectedAPI)
-			fmt.Printf("WARN: Using --api %s instead of site's configured API %s\n", apiFlag, expectedAPI)
+			logging.Warnf("target (%s) overrides site's configured API (%s)", apiFlag, expectedAPI)
+			fmt.Printf("WARN: Using target %s instead of site's configured API %s\n", apiFlag, expectedAPI)
 		}
 		return apiFlag, nil
 	}
@@ -87,7 +87,7 @@ func ResolveAPIForSite(siteName string, siteConfig *config.SiteConfig) (string, 
 	}
 
 	// Multiple APIs but couldn't determine which one
-	return "", fmt.Errorf("could not determine which API to use for site '%s'\nSpecify with --api flag or add 'api' field to site config\nAvailable APIs: %v", siteName, allLabels)
+	return "", fmt.Errorf("could not determine which API to use for site '%s'\nSpecify with 'target <label>' or add 'api' field to site config\nAvailable APIs: %v", siteName, allLabels)
 }
 
 // ValidateMultiVendorApply checks if an apply operation is valid.

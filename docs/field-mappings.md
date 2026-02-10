@@ -303,11 +303,11 @@ When applying configuration:
 Use the built-in validation to catch common errors:
 
 ```bash
-# Dry-run shows validation errors
-wifimgr apply ap US-LAB-01 --dry-run
+# diff shows validation errors
+wifimgr apply ap US-LAB-01 diff
 
 # Debug mode shows field mappings
-wifimgr -ddd apply ap US-LAB-01 --dry-run
+wifimgr -ddd apply ap US-LAB-01 diff
 ```
 
 Common validation errors:
@@ -424,7 +424,7 @@ Common validation errors:
 
 1. **Enable debug logging** to see field transformations:
    ```bash
-   wifimgr -ddd apply ap US-LAB-01 --dry-run
+   wifimgr -ddd apply ap US-LAB-01 diff
    ```
 
 2. **Check vendor API documentation** for recent changes to field names or types
@@ -434,9 +434,9 @@ Common validation errors:
    wifimgr import api site US-LAB-01
    ```
 
-4. **Compare configurations** using JSON diff in dry-run mode to see exact differences
+4. **Compare configurations** using `diff` to see exact differences
 
-5. **Validate before applying** using the built-in validation and dry-run features
+5. **Validate before applying** using the built-in validation and `diff` features
 
 ## Related Documentation
 

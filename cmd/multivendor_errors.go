@@ -17,6 +17,6 @@ func FormatAPINotFoundError(requestedAPI string) error {
 		return fmt.Errorf("API '%s' not found - no APIs are configured", requestedAPI)
 	}
 
-	return fmt.Errorf("API '%s' not found\n\nAvailable APIs:\n  %s\n\nUse --api <label> to specify which API to use",
+	return fmt.Errorf("API '%s' not found\n\nAvailable APIs:\n  %s\n\nUse 'target <label>' to specify which API to use",
 		requestedAPI, strings.Join(availableAPIs, "\n  "))
 }

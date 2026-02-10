@@ -35,7 +35,7 @@ Use 'wifimgr refresh <subcommand> --help' for detailed information about each re
   wifimgr refresh sites
 
   # Refresh sites from specific API
-  wifimgr refresh sites --api mist-prod`,
+  wifimgr refresh sites target mist-prod`,
 }
 
 // refreshSitesCmd represents the refresh sites command
@@ -45,8 +45,8 @@ var refreshSitesCmd = &cobra.Command{
 	Long: `Refresh both sites information and site settings from the API(s).
 
 When multiple APIs are configured:
-  - Without --api: Refreshes sites from all APIs
-  - With --api: Refreshes only the specified API
+  - Without target: Refreshes sites from all APIs
+  - With target: Refreshes only the specified API
 
 This command will:
 1. Refresh all sites information (basic site data)
@@ -68,7 +68,7 @@ func runMultiVendorSitesRefresh() error {
 		return fmt.Errorf("API registry not initialized")
 	}
 
-	// Validate --api flag if provided
+	// Validate target API if provided
 	if err := ValidateAPIFlag(); err != nil {
 		return err
 	}

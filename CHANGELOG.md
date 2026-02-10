@@ -2,6 +2,22 @@
 
 All notable changes to wifimgr are documented in this file.
 
+## [0.1.1] - 2026-02-09
+
+### WLAN Support
+- **WLAN apply** - Push WLAN configurations from site config to the API with diff preview
+- WLAN template expansion at apply time
+- WLAN validation during `apply` and `lint config`
+
+### Documentation Overhaul
+- Corrected all documentation to use `target <label>` positional keyword (not `--api`)
+- Corrected all documentation to use `diff` positional keyword (not `--dry-run`)
+- Added Positional Arguments reference to User Guide
+- Slimmed README.md and consolidated documentation index
+- Removed redundant navigation files (GETTING_STARTED.md, DOCUMENTATION_INDEX.md)
+
+---
+
 ## [0.1.0] - 2026-02-02
 
 This is the initial public release of wifimgr, providing comprehensive network infrastructure management for Mist and Meraki platforms.
@@ -22,7 +38,7 @@ This is the initial public release of wifimgr, providing comprehensive network i
   - MAC address searches optimized to single API call
   - Site-scoped searches for faster results
   - `force` argument to bypass expensive search confirmations
-- Example: `wifimgr search wireless laptop` or `wifimgr search wired john --api meraki-corp`
+- Example: `wifimgr search wireless laptop` or `wifimgr search wired john target meraki-corp`
 
 #### Cache Architecture Refactoring
 - Monolithic 3,479-line cache module refactored into ~25 focused, testable modules
@@ -46,7 +62,7 @@ This is the initial public release of wifimgr, providing comprehensive network i
 #### Access Point (AP) Configuration
 - Full AP configuration support via `apply` command
 - Configuration as code with JSON site configs
-- Dry-run support with `--dry-run` flag
+- Diff preview with `diff` positional keyword
 - Automatic backups before changes
 - Rollback capability with `apply rollback` command
 
@@ -94,7 +110,7 @@ This is the initial public release of wifimgr, providing comprehensive network i
 
 **Advanced Features:**
 - Multi-site operations with site filtering
-- Per-API filtering with `--api` flag
+- Per-API filtering with `target` positional keyword
 - Debug logging with `-d`, `-dd`, `-ddd` flags
 - Environment variable support for credentials
 

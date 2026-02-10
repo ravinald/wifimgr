@@ -90,7 +90,7 @@ import (
 
 // Multi-vendor global state
 var (
-	// apiFlag is the --api flag value for targeting specific APIs
+	// apiFlag holds the target API label set via the 'target' positional keyword
 	apiFlag string
 
 	// apiRegistry manages multiple API client instances
@@ -206,7 +206,7 @@ func GetCacheManager() *vendors.CacheManager {
 	return cacheManager
 }
 
-// ValidateAPIFlag validates the --api flag value against registered APIs.
+// ValidateAPIFlag validates the target API value against registered APIs.
 func ValidateAPIFlag() error {
 	if apiFlag == "" {
 		return nil
@@ -223,8 +223,8 @@ func ValidateAPIFlag() error {
 	return nil
 }
 
-// GetTargetAPIs returns the API labels to target based on target positional arg or --api flag.
-// If target/--api is set, returns only that API. Otherwise returns all APIs.
+// GetTargetAPIs returns the API labels to target based on the target positional keyword.
+// If target is set, returns only that API. Otherwise returns all APIs.
 func GetTargetAPIs() []string {
 	if apiFlag != "" {
 		return []string{apiFlag}
