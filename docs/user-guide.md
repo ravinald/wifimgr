@@ -6,10 +6,7 @@ Complete reference for configuring and using wifimgr.
 
 ## Table of Contents
 
-- [Configuration](#configuration)
-  - [API Setup](#api-setup)
-  - [File Paths](#file-paths)
-  - [Managed Keys](#managed-keys)
+- [Positional Arguments](#positional-arguments)
 - [Commands](#commands)
   - [show](#show)
   - [apply](#apply)
@@ -18,6 +15,7 @@ Complete reference for configuring and using wifimgr.
   - [refresh](#refresh)
   - [init](#init)
   - [set](#set)
+  - [encrypt](#encrypt)
 - [Site Configuration](#site-configuration)
   - [Structure](#structure)
   - [AP Configuration](#ap-configuration)
@@ -28,208 +26,28 @@ Complete reference for configuring and using wifimgr.
 - [Display Settings](#display-settings)
 - [Troubleshooting](#troubleshooting)
 
+For API setup, tokens, file paths, managed keys, and other configuration topics, see the **[Configuration Guide](configuration.md)**.
+
 ---
 
-# Configuration
+# Positional Arguments
 
-The main config file controls API connections, file locations, and display preferences. Default location: `~/.config/wifimgr/wifimgr-config.json`
+wifimgr uses Junos-style positional keywords instead of flags for most options. These are placed after the primary command arguments:
 
-wifimgr uses XDG Base Directory Specification for file organization. See [File Paths](#file-paths) for more details.
+| Keyword          | Description                      | Example                                   |
+|------------------|----------------------------------|-------------------------------------------|
+| `target <label>` | Scope to a specific API          | `wifimgr show api sites target mist-prod` |
+| `diff`           | Preview changes without applying | `wifimgr apply ap US-LAB-01 diff`         |
+| `site <name>`    | Filter by site                   | `wifimgr show api ap site US-LAB-01`      |
+| `json` / `csv`   | Output format                    | `wifimgr show api ap json`                |
+| `all`            | Show all fields (JSON only)      | `wifimgr show api ap json all`            |
+| `no-resolve`     | Show raw IDs instead of names    | `wifimgr show api ap no-resolve`          |
+| `force`          | Bypass confirmation prompts      | `wifimgr search wireless laptop force`    |
+| `save`           | Write output to file             | `wifimgr import api site US-LAB-01 save`  |
+| `split`          | Split output into separate files | `wifimgr import api site US-LAB-01 split` |
+| `refresh-api`    | Refresh cache before operation   | `wifimgr apply ap US-LAB-01 refresh-api`  |
 
-## API Setup
-
-Each API entry defines a connection to a vendor platform. The key (e.g., `mist-prod`) becomes the API label used in commands and site configs.
-
-### Mist Configuration
-
-```json
-{
-  "api": {
-    "mist-prod": {
-      "vendor": "mist",
-      "url": "https://api.mist.com/api/v1",
-      "credentials": {
-        "org_id": "a6da8767-f5f0-4d92-aff6-d91803d01ef4"
-      },
-      "rate_limit": 5000,
-      "results_limit": 100,
-      "cache_ttl": 86400
-    }
-  }
-}
-```
-
-| Field                | Required   | Default                       | Description                               |
-|----------------------|------------|-------------------------------|-------------------------------------------|
-| `vendor`             | Yes        | -                             | `mist` or `meraki`                        |
-| `url`                | No         | `https://api.mist.com/api/v1` | API endpoint                              |
-| `credentials.org_id` | Yes        | -                             | Organization UUID                         |
-| `rate_limit`         | No         | `5000`                        | Max requests per minute                   |
-| `results_limit`      | No         | `100`                         | Max results per API call                  |
-| `cache_ttl`          | No         | `86400`                       | Cache lifetime in seconds (0 = no expiry) |
-
-**Regional Endpoints:**
-
-| Region   | URL                               |
-|----------|-----------------------------------|
-| Global   | `https://api.mist.com/api/v1`     |
-| EU       | `https://api.eu.mist.com/api/v1`  |
-| APAC     | `https://api.ac2.mist.com/api/v1` |
-
-### Meraki Configuration
-
-```json
-{
-  "api": {
-    "meraki-corp": {
-      "vendor": "meraki",
-      "url": "https://api.meraki.com",
-      "credentials": {
-        "org_id": "669910444571361831"
-      },
-      "rate_limit": 10
-    }
-  }
-}
-```
-
-Meraki has stricter rate limits (10 requests/second by default). Adjust `rate_limit` accordingly.
-
-### API Token
-
-Store the token outside the config file for security.
-
-**Option 1: Environment file (recommended)**
-
-Create `.env.wifimgr` in the working directory:
-```
-WIFIMGR_API_TOKEN=your-token-here
-```
-
-Run with `-e`:
-```bash
-wifimgr -e show api sites
-```
-
-**Option 2: Config file**
-
-Add directly to credentials (not recommended for shared configs):
-```json
-"credentials": {
-  "org_id": "...",
-  "api_key": "your-api-key-here"
-}
-```
-
-### Multiple APIs
-
-Define multiple APIs to manage different organizations or vendors:
-
-```json
-{
-  "api": {
-    "mist-prod": {
-      "vendor": "mist",
-      "credentials": { "org_id": "prod-uuid" }
-    },
-    "mist-lab": {
-      "vendor": "mist",
-      "credentials": { "org_id": "lab-uuid" },
-      "cache_ttl": 0
-    },
-    "meraki-corp": {
-      "vendor": "meraki",
-      "credentials": { "org_id": "123456" }
-    }
-  }
-}
-```
-
-Filter commands to a specific API:
-```bash
-wifimgr show api sites --api mist-prod
-```
-
-## File Paths
-
-wifimgr follows the XDG Base Directory Specification for storing configuration, cache, state, and data files:
-
-| Category | XDG Variable | Default Path | Contents |
-|----------|--------------|--------------|----------|
-| Config | `$XDG_CONFIG_HOME` | `~/.config/wifimgr/` | `wifimgr-config.json`, site configs, inventory, `.env.wifimgr` |
-| Cache | `$XDG_CACHE_HOME` | `~/.cache/wifimgr/` | `cache.json`, vendor API caches |
-| State | `$XDG_STATE_HOME` | `~/.local/state/wifimgr/` | `wifimgr.log`, backups |
-| Data | `$XDG_DATA_HOME` | `~/.local/share/wifimgr/` | JSON schemas |
-
-The XDG defaults can be overridden by setting the corresponding environment variables.
-
-### Configuration File Structure
-
-```json
-{
-  "files": {
-    "config_dir": "~/.config/wifimgr",
-    "site_configs": [
-      "sites/us-lab.json",
-      "sites/eu-office.json"
-    ],
-    "cache_dir": "~/.cache/wifimgr",
-    "inventory": "~/.config/wifimgr/inventory.json",
-    "log_file": "~/.local/state/wifimgr/wifimgr.log",
-    "device_profiles": ["device-profiles.json"]
-  }
-}
-```
-
-| Field             | Description                                                 |
-|-------------------|-------------------------------------------------------------|
-| `config_dir`      | Base directory for config files (`$XDG_CONFIG_HOME/wifimgr`)   |
-| `site_configs`    | List of site configuration files (relative to `config_dir`) |
-| `cache_dir`       | Directory for API cache files (`$XDG_CACHE_HOME/wifimgr`)      |
-| `inventory`       | Local inventory file for offline use                        |
-| `log_file`        | Log output location (`$XDG_STATE_HOME/wifimgr/wifimgr.log`)    |
-| `device_profiles` | Device profile definition files                             |
-
-### Path Expansion
-
-All file paths support:
-- `~` - Expands to user's home directory
-- `$XDG_CONFIG_HOME`, `$XDG_CACHE_HOME`, `$XDG_STATE_HOME`, `$XDG_DATA_HOME` - Environment variables
-- Relative paths - Resolved relative to current working directory
-
-## Managed Keys
-
-Controls which device fields wifimgr manages during apply operations. Fields not listed are left unchanged on the device.
-
-```json
-{
-  "api": {
-    "mist-prod": {
-      "managed_keys": {
-        "ap": ["name", "radio_config", "ip_config"],
-        "switch": ["name", "notes", "port_config"],
-        "gateway": ["name", "notes", "tags"]
-      }
-    }
-  }
-}
-```
-
-Supports dot-notation for nested fields:
-```json
-{
-  "managed_keys": {
-    "ap": [
-      "name",
-      "radio_config.band_24.channel",
-      "radio_config.band_24.power",
-      "radio_config.band_5"
-    ]
-  }
-}
-```
-
-This manages only `channel` and `power` under `band_24`, but manages the entire `band_5` block.
+Positional keywords do NOT use `--` prefix. Hyphens within keywords (e.g., `no-resolve`, `refresh-api`) are fine.
 
 ---
 
@@ -268,8 +86,8 @@ wifimgr show api ap json                  # JSON array
 wifimgr show api ap csv                   # CSV for spreadsheets
 wifimgr show api ap Lobby-AP json all     # Full JSON with all fields
 
-# Filter by API (multi-vendor)
-wifimgr show api sites --api mist-prod
+# Target a specific API (multi-vendor)
+wifimgr show api sites target mist-prod
 
 # Show WLANs
 wifimgr show api wlans
@@ -298,11 +116,11 @@ Push configuration from site config files to the API.
 ### Standard Usage
 
 ```bash
-wifimgr apply ap US-LAB-01 --dry-run      # Preview changes
+wifimgr apply ap US-LAB-01 diff      # Preview changes
 wifimgr apply ap US-LAB-01                # Apply AP config
 ```
 
-Always run with `--dry-run` first to preview what will change.
+Always run with `diff` first to preview what will change.
 
 ### Device Types
 
@@ -317,7 +135,7 @@ wifimgr apply all <site-name>             # All device types
 
 ```bash
 # Preview changes (always do this first)
-wifimgr apply ap US-LAB-01 --dry-run
+wifimgr apply ap US-LAB-01 diff
 
 # Apply with verbose logging
 wifimgr -dd apply ap US-LAB-01
@@ -345,10 +163,10 @@ When a new backup is created, existing backups rotate (0→1, 1→2, etc.) up to
 
 **Configuration:**
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `files.config_backups` | 5 | Maximum number of backup copies to retain |
-| `backup.retention_days` | 30 | Age limit for `cleanup-backups` command |
+| Setting                 | Default   | Description                               |
+|-------------------------|-----------|-------------------------------------------|
+| `files.config_backups`  | 5         | Maximum number of backup copies to retain |
+| `backup.retention_days` | 30        | Age limit for `cleanup-backups` command   |
 
 **Commands:**
 
@@ -403,7 +221,7 @@ wifimgr import api site US-LAB-01 compare
 wifimgr import api site US-LAB-01 secrets save
 
 # Import from specific API
-wifimgr import api site US-LAB-01 --api mist-prod save
+wifimgr import api site US-LAB-01 target mist-prod save
 ```
 
 ### Import from PDF
@@ -471,11 +289,11 @@ wifimgr search wireless laptop force      # Bypass expensive search warning
 
 ### Multi-Vendor Search
 
-When using `--api` with multi-vendor setups:
+Use `target <label>` to scope searches to a specific API:
 
 ```bash
-wifimgr search wireless john --api mist-prod
-wifimgr search wired laptop --api meraki-corp
+wifimgr search wireless john target mist-prod
+wifimgr search wired laptop target meraki-corp
 ```
 
 ## refresh
@@ -1147,11 +965,11 @@ Vendor blocks can be placed at multiple levels for granular control:
 
 **Check configuration before applying:**
 ```bash
-# Dry-run shows what will be sent to the API
-wifimgr apply ap US-LAB-01 --dry-run
+# diff shows what will be sent to the API
+wifimgr apply ap US-LAB-01 diff
 
 # Debug mode shows field transformations
-wifimgr -ddd apply ap US-LAB-01 --dry-run
+wifimgr -ddd apply ap US-LAB-01 diff
 ```
 
 **Common validation errors:**
@@ -1166,7 +984,7 @@ wifimgr -ddd apply ap US-LAB-01 --dry-run
 **Solutions:**
 1. Check field is in correct vendor block: [Field Mappings](docs/field-mappings.md)
 2. Verify vendor block matches device API (check `api` field)
-3. Use debug mode to see transformations: `wifimgr -ddd apply ap SITE --dry-run`
+3. Use debug mode to see transformations: `wifimgr -ddd apply ap SITE diff`
 4. Check logs for validation warnings
 
 **Problem**: Field not recognized by API
@@ -1265,7 +1083,7 @@ Use `-d`, `-dd`, or `-ddd` for increasing verbosity:
 | `-ddd` | trace   | Full API response bodies |
 
 ```bash
-wifimgr -ddd apply ap US-LAB-01 --dry-run
+wifimgr -ddd apply ap US-LAB-01 diff
 ```
 
 Logs go to `~/.local/state/wifimgr/wifimgr.log` by default. Enable stdout:

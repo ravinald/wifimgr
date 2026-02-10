@@ -14,11 +14,11 @@ Template file → Expand at apply → Push explicit config to each device
 
 ## Template Types
 
-| Type | Purpose | Reference Field |
-|------|---------|-----------------|
-| `radio` | Radio/RF settings (power, channels, bandwidth) | `radio_profile` |
-| `wlan` | WLAN settings (SSID, auth, VLAN) | `wlan` (list) |
-| `device` | Device settings (LED, PoE, ports) | `device_template` |
+| Type     | Purpose                                        | Reference Field   |
+|----------|------------------------------------------------|-------------------|
+| `radio`  | Radio/RF settings (power, channels, bandwidth) | `radio_profile`   |
+| `wlan`   | WLAN settings (SSID, auth, VLAN)               | `wlan` (list)     |
+| `device` | Device settings (LED, PoE, ports)              | `device_template` |
 
 ## Configuration
 
@@ -143,13 +143,13 @@ For APs with dual-band radios (Mist) or flex radios (Meraki), use `band_dual`. C
 
 **`band_dual` fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `disabled` | bool | Radio enabled/disabled |
-| `radio_mode` | int | Operating mode: 24, 5, or 6 (vendor-specific) |
-| `channel` | int | Channel number (validated against radio_mode) |
-| `power` | int | Transmit power in dBm (1-30) |
-| `bandwidth` | int | Channel width: 20, 40, 80, 160, or 320 MHz |
+| Field        | Type   | Description                                   |
+|--------------|--------|-----------------------------------------------|
+| `disabled`   | bool   | Radio enabled/disabled                        |
+| `radio_mode` | int    | Operating mode: 24, 5, or 6 (vendor-specific) |
+| `channel`    | int    | Channel number (validated against radio_mode) |
+| `power`      | int    | Transmit power in dBm (1-30)                  |
+| `bandwidth`  | int    | Channel width: 20, 40, 80, 160, or 320 MHz    |
 
 **Vendor-specific `radio_mode` values:**
 - **Mist**: 24 or 5 (dual-band radios convert 2.4GHz → 5GHz)
@@ -195,15 +195,15 @@ WLAN templates define wireless network settings:
 
 The `auth.type` field specifies the security mode. Available types depend on the vendor and band configuration:
 
-| Auth Type | Description | 6GHz / Wi-Fi 7 |
-|-----------|-------------|----------------|
-| `open` | No security (open network) | No |
-| `psk` | WPA2-Personal (PSK) | No |
-| `sae` | WPA3-Personal (SAE) | **Yes** |
-| `psk-wpa2-wpa3` | WPA2/WPA3 Transition Mode | Partial |
-| `wpa2-enterprise` | WPA2-Enterprise (802.1X) | No |
-| `eap-192` | WPA3-Enterprise 192-bit | **Yes** |
-| `owe` | Opportunistic Wireless Encryption | **Yes** |
+| Auth Type         | Description                       | 6GHz / Wi-Fi 7   |
+|-------------------|-----------------------------------|------------------|
+| `open`            | No security (open network)        | No               |
+| `psk`             | WPA2-Personal (PSK)               | No               |
+| `sae`             | WPA3-Personal (SAE)               | **Yes**          |
+| `psk-wpa2-wpa3`   | WPA2/WPA3 Transition Mode         | Partial          |
+| `wpa2-enterprise` | WPA2-Enterprise (802.1X)          | No               |
+| `eap-192`         | WPA3-Enterprise 192-bit           | **Yes**          |
+| `owe`             | Opportunistic Wireless Encryption | **Yes**          |
 
 **Important:** 6GHz and Wi-Fi 7 bands require WPA3 security. If you're configuring WLANs for APs with 6GHz radios, use `sae`, `eap-192`, or `owe` as the auth type.
 
@@ -329,10 +329,10 @@ Reference templates in your device configurations:
 
 WLANs can be configured at three levels:
 
-| Level | Key | Purpose |
-|-------|-----|---------|
-| `profiles.wlan` | List of template labels | WLANs to **create** at the site (make available) |
-| `wlan` (site-level) | List of template labels | WLANs to **apply** to all APs by default |
+| Level                  | Key                     | Purpose                                                     |
+|------------------------|-------------------------|-------------------------------------------------------------|
+| `profiles.wlan`        | List of template labels | WLANs to **create** at the site (make available)            |
+| `wlan` (site-level)    | List of template labels | WLANs to **apply** to all APs by default                    |
 | `devices.ap[mac].wlan` | List of template labels | WLANs to **apply** to specific APs (overrides site default) |
 
 ```json
@@ -392,11 +392,11 @@ In this example:
 
 ### WLAN Override Rules
 
-| Scenario | Result |
-|----------|--------|
-| Site has WLANs, device has none | Device gets site WLANs |
+| Scenario                         | Result                         |
+|----------------------------------|--------------------------------|
+| Site has WLANs, device has none  | Device gets site WLANs         |
 | Site has WLANs, device has WLANs | Device gets only its own WLANs |
-| Site has none, device has WLANs | Device gets its own WLANs |
+| Site has none, device has WLANs  | Device gets its own WLANs      |
 
 ### WLAN Validation
 
@@ -412,9 +412,9 @@ wifimgr validates WLAN assignments at multiple points to catch configuration err
 
 **When validation runs:**
 
-| Command | Validation |
-|---------|-----------|
-| `wifimgr apply site ...` | All 3 rules checked before applying changes |
+| Command                      | Validation                                                      |
+|------------------------------|-----------------------------------------------------------------|
+| `wifimgr apply site ...`     | All 3 rules checked before applying changes                     |
 | `wifimgr lint config <site>` | All 3 rules checked (rule 3 requires template files configured) |
 
 **Example error messages:**

@@ -6,31 +6,25 @@ With multiple APIs configured, commands that target remote resources need clear 
 
 **Principle:** Read operations aggregate by default; write operations use explicit API from config.
 
-| Operation Type | Default Behavior | With `--api` Flag |
-|----------------|------------------|-------------------|
+| Operation Type | Default Behavior | With `target` |
+|----------------|------------------|---------------|
 | Read (show, search) | Aggregate from all APIs | Filter to specific API |
 | Write (apply, set) | Use site/device config API | Override (with warning) |
 
-## The `--api` Flag
+## Targeting a Specific API
 
-A global persistent flag for targeting specific APIs:
+Use the `target` positional keyword to direct a command at a specific API:
 
-```go
-// cmd/root.go
-var apiFlag string
-
-func init() {
-    rootCmd.PersistentFlags().StringVar(&apiFlag, "api", "",
-        "Target specific API by label (e.g., --api mist-prod)")
-}
+```
+wifimgr show api ap target mist-prod
 ```
 
 ## Command Behavior Matrix
 
 ### Read Commands
 
-| Command | Default Behavior | With `--api` Flag |
-|---------|------------------|-------------------|
+| Command | Default Behavior | With `target` |
+|---------|------------------|---------------|
 | `show api ap` | Aggregate from all APIs | Filter to specific API |
 | `show api sites` | Aggregate from all APIs | Filter to specific API |
 | `show api switch` | Aggregate from all APIs | Filter to specific API |
@@ -45,8 +39,8 @@ func init() {
 
 ### Write Commands
 
-| Command | Default Behavior | With `--api` Flag |
-|---------|------------------|-------------------|
+| Command | Default Behavior | With `target` |
+|---------|------------------|---------------|
 | `apply site <name>` | Use site config's API | Override (warns) |
 | `apply ap <site>` | Use site config's API | Override (warns) |
 | `set ap site` | Use device's resolved API | Override (warns) |
@@ -79,7 +73,7 @@ Showing 4 devices from 2 APIs
 ### Example: Show Filtered to Single API
 
 ```
-$ wifimgr show api ap --api mist-prod
+$ wifimgr show api ap target mist-prod
 
 NAME         MAC               MODEL    SITE           STATUS
 MIST-AP-01   aa:bb:cc:dd:ee:ff AP43     US-CAMPUS-01   connected
@@ -121,7 +115,7 @@ Rebuilt cross-API index
 ### Specific API Refresh
 
 ```
-$ wifimgr refresh cache --api mist-prod
+$ wifimgr refresh cache target mist-prod
 
 Refreshing mist-prod...
   sites: done (12 sites)
@@ -137,7 +131,7 @@ Rebuilt cross-API index
 
 ```go
 func handleCacheRefresh(ctx context.Context, args []string) error {
-    targetAPI := apiFlag
+    targetAPI := parsedArgs.Target
 
     if targetAPI != "" {
         // Validate API exists
@@ -171,7 +165,7 @@ Found 2 results across 2 APIs
 ### Specific API Search
 
 ```
-$ wifimgr search wireless laptop --api mist-prod
+$ wifimgr search wireless laptop target mist-prod
 
 Searching mist-prod for "laptop"...
 
@@ -185,7 +179,7 @@ Found 1 result in mist-prod
 
 ```go
 func handleSearch(ctx context.Context, searchType, text string) error {
-    targetAPI := apiFlag
+    targetAPI := parsedArgs.Target
 
     if targetAPI != "" {
         return searchSingleAPI(ctx, targetAPI, searchType, text)
@@ -235,10 +229,10 @@ func handleApplySite(ctx context.Context, siteName string) error {
     // Use site's configured API
     apiLabel := siteConfig.API
 
-    // If --api flag provided, warn about override
-    if apiFlag != "" && apiFlag != apiLabel {
-        logging.Warnf("Overriding site API %q with --api %q", apiLabel, apiFlag)
-        apiLabel = apiFlag
+    // If target provided, warn about override
+    if parsedArgs.Target != "" && parsedArgs.Target != apiLabel {
+        logging.Warnf("Overriding site API %q with target %q", apiLabel, parsedArgs.Target)
+        apiLabel = parsedArgs.Target
     }
 
     client, err := apiRegistry.GetClient(apiLabel)
@@ -263,7 +257,7 @@ Commands check vendor capabilities before executing:
 
 ```go
 func handleShowProfiles(ctx context.Context) error {
-    targetAPI := apiFlag
+    targetAPI := parsedArgs.Target
 
     if targetAPI != "" {
         client, err := apiRegistry.GetClient(targetAPI)
@@ -304,7 +298,7 @@ func handleShowProfiles(ctx context.Context) error {
 ### Unknown API Label
 
 ```
-$ wifimgr show api ap --api typo-api
+$ wifimgr show api ap target typo-api
 Error: API "typo-api" not found
 
 Available APIs: mist-prod, mist-lab, meraki-corp
@@ -313,7 +307,7 @@ Available APIs: mist-prod, mist-lab, meraki-corp
 ### Unsupported Capability
 
 ```
-$ wifimgr show profiles --api meraki-corp
+$ wifimgr show profiles target meraki-corp
 Error: device profiles not supported by meraki-corp (meraki vendor)
 
 This feature is only available for: mist
@@ -329,7 +323,7 @@ US-CAMPUS-01   mist     45        mist-prod
 US-CAMPUS-01   meraki   12        meraki-corp
 
 Found site "US-CAMPUS-01" in 2 APIs
-Tip: Use --api to filter to a specific API
+Tip: Use target to filter to a specific API
 ```
 
 ## Import Commands
@@ -382,7 +376,7 @@ $ wifimgr import api site US-SFO-LAB secrets    # Include sensitive data
 ### Import from Specific API
 
 ```
-$ wifimgr import api site US-SFO-LAB --api mist-prod
+$ wifimgr import api site US-SFO-LAB target mist-prod
 ```
 
 ### Output Structure
@@ -395,12 +389,12 @@ Files are written to:
 
 | Scenario | Behavior |
 |----------|----------|
-| Read without `--api` | Aggregate from all APIs |
-| Read with `--api` | Filter to specified API |
-| Write without `--api` | Use config's API |
-| Write with `--api` | Override with warning |
-| Import without `--api` | Use site's source API |
-| Import with `--api` | Use specified API |
-| Same site name, multiple APIs | Show all, suggest `--api` |
+| Read without `target` | Aggregate from all APIs |
+| Read with `target` | Filter to specified API |
+| Write without `target` | Use config's API |
+| Write with `target` | Override with warning |
+| Import without `target` | Use site's source API |
+| Import with `target` | Use specified API |
+| Same site name, multiple APIs | Show all, suggest `target` |
 | Capability not supported | Error with explanation |
 | Unknown API label | Error with available list |

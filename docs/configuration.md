@@ -183,7 +183,7 @@ With the Cobra migration, the CLI now uses a **simplified flag structure** that 
 **Configuration Management:**
 - Most configuration options are handled through **Viper** and configuration files
 - The `.cobra.yaml` file defines project settings (author, license, package name)
-- Complex flags like `--format`, `--force`, `--dry-run` have been **removed from global scope**
+- Options like format, force, and diff are handled as **positional keywords** rather than flags
 - Configuration values are read from config files rather than command-line flags
 
 **Benefits of Simplified Structure:**
@@ -348,7 +348,7 @@ WIFIMGR_PASSWORD=your-decryption-password
 
 When `WIFIMGR_PASSWORD` is set (either as an environment variable or in `.env.wifimgr`), the application will use it automatically to decrypt any `enc:` prefixed values without prompting.
 
-**Security note:** The password is cleared from memory after use when loaded via `.env.wifimgr` with the `-e` flag.
+**Security note:** The password remains available in memory for the duration of the session when loaded via `.env.wifimgr` with the `-e` flag, enabling decryption of multiple values without re-prompting.
 
 ### PSK Validation
 
