@@ -50,7 +50,7 @@ func (c *mistClient) GetSchemaDirectory() string {
 	configFile := filepath.Join(configDir, "wifimgr-config.json")
 	if _, err := os.Stat(configFile); err == nil {
 		// Load the config file to check for schemas directory
-		file, err := os.Open(configFile)
+		file, err := os.Open(configFile) // #nosec G304 -- path from operator-controlled config
 		if err != nil {
 			logging.Warnf("Failed to open config file to find schema directory: %v", err)
 		} else {

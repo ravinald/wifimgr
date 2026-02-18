@@ -213,6 +213,23 @@ type DeviceStatus struct {
 	PublicIP string `json:"public_ip,omitempty"`
 }
 
+// BSSIDEntry represents a single BSSID and its associated AP, SSID, and radio details.
+type BSSIDEntry struct {
+	BSSID          string `json:"bssid"` // normalized MAC (no separators)
+	APName         string `json:"ap_name"`
+	APSerial       string `json:"ap_serial"`
+	APMAC          string `json:"ap_mac"` // normalized, for DeviceStatus lookup
+	SiteID         string `json:"site_id"`
+	SiteName       string `json:"site_name"`
+	SSIDName       string `json:"ssid_name"`
+	SSIDNumber     int    `json:"ssid_number"`
+	Band           string `json:"band"` // "2.4", "5", "6"
+	Channel        int    `json:"channel"`
+	ChannelWidth   int    `json:"channel_width"`
+	Power          int    `json:"power"`
+	IsBroadcasting bool   `json:"is_broadcasting"`
+}
+
 // RFTemplate represents an RF configuration template.
 // For Mist: org-level templates that can be applied to sites.
 // For Meraki: per-network (site) RF profiles.

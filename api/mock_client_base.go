@@ -130,6 +130,11 @@ func (m *MockClient) Close() error {
 	return nil
 }
 
+// GetAPStats retrieves AP statistics for a site (mock implementation)
+func (m *MockClient) GetAPStats(_ context.Context, _ string) ([]map[string]interface{}, error) {
+	return nil, nil
+}
+
 // GetDeviceConfig retrieves the configuration for a specific device (mock implementation)
 func (m *MockClient) GetDeviceConfig(ctx context.Context, siteID, deviceID string) (*DeviceConfigResponse, error) {
 	// Mock implementation - return empty config

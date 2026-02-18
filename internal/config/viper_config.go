@@ -19,13 +19,6 @@ var (
 	siteIndexMu     sync.RWMutex
 )
 
-// GetSiteIndex returns the global site index
-func GetSiteIndex() *SiteIndex {
-	siteIndexMu.RLock()
-	defer siteIndexMu.RUnlock()
-	return globalSiteIndex
-}
-
 // GetSiteConfigPath returns the config file path for a site name (case-insensitive)
 // Returns the relative path (e.g., "demo/us-oak-pina.json") and true if found
 func GetSiteConfigPath(siteName string) (string, bool) {
@@ -216,7 +209,7 @@ func LoadAllConfigsViper(configFile string) ([]*SiteConfigFile, error) {
 		fullPath := filepath.Join(configDir, siteConfigFile)
 
 		// Read the raw file data for line number estimation
-		rawData, err := os.ReadFile(fullPath)
+		rawData, err := os.ReadFile(fullPath) // #nosec G304 -- path from operator-controlled config
 		if err != nil {
 			return nil, fmt.Errorf("failed to read site config %s: %w", siteConfigFile, err)
 		}

@@ -31,7 +31,7 @@ import (
 
 // apiApCmd represents the "show api ap" command
 var apiApCmd = &cobra.Command{
-	Use:   "ap [name-or-mac] [site site-name] [target api-label] [format] [all] [no-resolve]",
+	Use:   "ap [name-or-mac] [site site-name] [target api-label] [format json|csv] [all] [no-resolve]",
 	Short: "Show access point information from API cache",
 	Long: `Show access point information retrieved from the local API cache.
 

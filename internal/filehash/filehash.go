@@ -52,7 +52,7 @@ type FileMetadata struct {
 //   - error: Any error encountered during file reading or hash calculation
 func CalculateFileHash(filePath string) (string, error) {
 	// Open the file
-	file, err := os.Open(filePath)
+	file, err := os.Open(filePath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return "", fmt.Errorf("failed to open file for hashing: %w", err)
 	}
@@ -125,7 +125,7 @@ func CreateMetadataFile(filePath, description string) error {
 
 	// Ensure directory exists
 	dir := filepath.Dir(metaPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("failed to create directory for metadata file: %w", err)
 	}
 
@@ -141,17 +141,17 @@ func CreateMetadataFile(filePath, description string) error {
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(metadata); err != nil {
 		_ = tmpFile.Close()
-		_ = os.Remove(tmpPath)
+		_ = os.Remove(tmpPath) // #nosec G703 -- path from operator-controlled config
 		return fmt.Errorf("failed to write metadata to temporary file: %w", err)
 	}
 	if err := tmpFile.Close(); err != nil {
-		_ = os.Remove(tmpPath)
+		_ = os.Remove(tmpPath) // #nosec G703 -- path from operator-controlled config
 		return fmt.Errorf("failed to close temporary metadata file: %w", err)
 	}
 
 	// Rename temp file to actual metadata file (atomic operation)
-	if err := os.Rename(tmpPath, metaPath); err != nil {
-		_ = os.Remove(tmpPath)
+	if err := os.Rename(tmpPath, metaPath); err != nil { // #nosec G703 -- path from operator-controlled config
+		_ = os.Remove(tmpPath) // #nosec G703 -- path from operator-controlled config
 		return fmt.Errorf("failed to rename temporary metadata file: %w", err)
 	}
 
@@ -190,7 +190,7 @@ func VerifyFileIntegrity(filePath string) (bool, error) {
 	}
 
 	// Load metadata file
-	metaFile, err := os.Open(metaPath)
+	metaFile, err := os.Open(metaPath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return false, fmt.Errorf("failed to open metadata file: %w", err)
 	}
@@ -266,7 +266,7 @@ func GetFileMetadata(filePath string) (*FileMetadata, error) {
 	}
 
 	// Open metadata file
-	metaFile, err := os.Open(metaPath)
+	metaFile, err := os.Open(metaPath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return nil, fmt.Errorf("failed to open metadata file: %w", err)
 	}

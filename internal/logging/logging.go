@@ -146,14 +146,14 @@ func ConfigureLogging(config LogConfig) error {
 		dir := filepath.Dir(config.LogFile)
 		if dir != "" && dir != "." {
 			// Create directory if it doesn't exist (XDG state dir may not exist yet)
-			if err := os.MkdirAll(dir, 0755); err != nil {
+			if err := os.MkdirAll(dir, 0755); err != nil { // #nosec G301 -- log directory uses conventional permissions
 				return fmt.Errorf("failed to create log directory %s: %w", dir, err)
 			}
 		}
 
 		// Open log file
 		var err error
-		logFile, err = os.OpenFile(config.LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		logFile, err = os.OpenFile(config.LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 		if err != nil {
 			return fmt.Errorf("failed to open log file: %w", err)
 		}
@@ -263,11 +263,6 @@ func Error(args ...interface{}) {
 // Errorf logs a formatted message at the error level
 func Errorf(format string, args ...interface{}) {
 	defaultLogger.Errorf(format, args...)
-}
-
-// Fatalf logs a formatted message at the fatal level and then calls os.Exit(1)
-func Fatalf(format string, args ...interface{}) {
-	defaultLogger.Fatalf(format, args...)
 }
 
 // ConfigureLogger configures the logger with a simplified interface

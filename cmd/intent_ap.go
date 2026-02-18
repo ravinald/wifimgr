@@ -128,7 +128,7 @@ func runIntentAP(cmd *cobra.Command, args []string) error {
 			configFilePath := filepath.Join(configDir, siteConfigFile)
 
 			// Read the raw JSON file
-			fileBytes, err := os.ReadFile(configFilePath)
+			fileBytes, err := os.ReadFile(configFilePath) // #nosec G304 -- path from operator-controlled config
 			if err != nil {
 				logging.Errorf("Failed to read config file %s: %v", siteConfigFile, err)
 				continue

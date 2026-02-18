@@ -26,7 +26,7 @@ import (
 
 // apiSiteCmd represents the "show api site" command
 var apiSiteCmd = &cobra.Command{
-	Use:     "site [site-name] [target api-label] [format] [all]",
+	Use:     "site [site-name] [target api-label] [format json|csv] [all]",
 	Aliases: []string{"sites"},
 	Short:   "Show site information from API cache",
 	Long: `Show site information retrieved from the local API cache.

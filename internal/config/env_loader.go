@@ -17,7 +17,7 @@ import (
 // 2. Only loads into environment variables
 // 3. Clears values after use if needed
 func LoadEnvFile(filename string) error {
-	file, err := os.Open(filename)
+	file, err := os.Open(filename) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return fmt.Errorf("failed to open env file: %w", err)
 	}

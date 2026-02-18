@@ -21,34 +21,6 @@ type FileMetadata struct {
 	Version      int       `json:"version"`
 }
 
-// CopyFile copies a file from src to dst
-func CopyFile(src, dst string) error {
-	sourceFile, err := os.Open(src)
-	if err != nil {
-		return fmt.Errorf("failed to open source file %s: %w", src, err)
-	}
-	defer func() { _ = sourceFile.Close() }()
-
-	destFile, err := os.Create(dst)
-	if err != nil {
-		return fmt.Errorf("failed to create destination file %s: %w", dst, err)
-	}
-	defer func() { _ = destFile.Close() }()
-
-	_, err = io.Copy(destFile, sourceFile)
-	if err != nil {
-		return fmt.Errorf("failed to copy file content: %w", err)
-	}
-
-	// Sync to ensure data is written to disk
-	err = destFile.Sync()
-	if err != nil {
-		return fmt.Errorf("failed to sync destination file: %w", err)
-	}
-
-	return nil
-}
-
 // CreateFileMetadata creates a metadata file for the given file
 func CreateFileMetadata(filePath, metaPath, fileType string) error {
 	// Get file info
@@ -80,7 +52,7 @@ func CreateFileMetadata(filePath, metaPath, fileType string) error {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	err = os.WriteFile(metaPath, metaData, 0644)
+	err = os.WriteFile(metaPath, metaData, 0644) // #nosec G306 -- file integrity metadata (hashes, timestamps), not secrets
 	if err != nil {
 		return fmt.Errorf("failed to write metadata file %s: %w", metaPath, err)
 	}
@@ -100,7 +72,7 @@ func VerifyFileIntegrity(filePath, metaPath string) error {
 	}
 
 	// Read metadata
-	metaData, err := os.ReadFile(metaPath)
+	metaData, err := os.ReadFile(metaPath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return fmt.Errorf("failed to read metadata file %s: %w", metaPath, err)
 	}
@@ -137,7 +109,7 @@ func VerifyFileIntegrity(filePath, metaPath string) error {
 
 // calculateFileHash calculates SHA256 hash of a file
 func calculateFileHash(filePath string) (string, error) {
-	file, err := os.Open(filePath)
+	file, err := os.Open(filePath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return "", fmt.Errorf("failed to open file %s: %w", filePath, err)
 	}

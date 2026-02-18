@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-
 	"github.com/ravinald/wifimgr/api"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/formatter"
@@ -40,61 +38,6 @@ type ConfigFileData struct {
 type SiteConfigData struct {
 	SiteConfig   map[string]interface{} `json:"site_config"`
 	LastModified string                 `json:"last_modified,omitempty"`
-}
-
-// NewBackupCommand creates the backup command
-func NewBackupCommand(cfg *config.Config) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "backup",
-		Short: "Manage configuration backups",
-		Long:  `List and restore configuration backups`,
-	}
-
-	// Add subcommands
-	cmd.AddCommand(newListCommand(cfg))
-	cmd.AddCommand(newRestoreCommand(cfg))
-
-	return cmd
-}
-
-// newListCommand creates the list subcommand
-func newListCommand(cfg *config.Config) *cobra.Command {
-	return &cobra.Command{
-		Use:   "list [all | <site>]",
-		Short: "List configuration backups",
-		Long:  `List configuration backups for all sites or a specific site`,
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// Determine filter
-			filter := "all"
-			if len(args) > 0 {
-				filter = args[0]
-			}
-
-			return listBackups(cfg, filter)
-		},
-	}
-}
-
-// newRestoreCommand creates the restore subcommand
-func newRestoreCommand(cfg *config.Config) *cobra.Command {
-	return &cobra.Command{
-		Use:   "restore <site> <serial>",
-		Short: "Restore a configuration backup",
-		Long:  `Restore a specific configuration backup to the config directory`,
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			siteName := args[0]
-			serialStr := args[1]
-
-			serial, err := strconv.Atoi(serialStr)
-			if err != nil {
-				return fmt.Errorf("invalid serial number: %s", serialStr)
-			}
-
-			return restoreBackup(cfg, siteName, serial)
-		},
-	}
 }
 
 // listBackups lists configuration backups
@@ -138,7 +81,7 @@ func listBackups(cfg *config.Config, filter string) error {
 
 		// Read the backup file to get metadata
 		backupPath := filepath.Join(backupDir, fileName)
-		backupData, err := os.ReadFile(backupPath)
+		backupData, err := os.ReadFile(backupPath) // #nosec G304 -- path from operator-controlled config
 		if err != nil {
 			logging.Warnf("Failed to read backup file %s: %v", fileName, err)
 			continue
@@ -277,7 +220,7 @@ func restoreBackup(cfg *config.Config, siteName string, serial int) error {
 
 		// Read the file to check if it contains the site
 		backupPath := filepath.Join(backupDir, fileName)
-		backupData, err := os.ReadFile(backupPath)
+		backupData, err := os.ReadFile(backupPath) // #nosec G304 -- path from operator-controlled config
 		if err != nil {
 			continue
 		}
@@ -313,7 +256,7 @@ func restoreBackup(cfg *config.Config, siteName string, serial int) error {
 	}
 
 	// Read the backup file
-	backupData, err := os.ReadFile(backupFile)
+	backupData, err := os.ReadFile(backupFile) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return fmt.Errorf("failed to read backup file: %w", err)
 	}
@@ -343,12 +286,12 @@ func restoreBackup(cfg *config.Config, siteName string, serial int) error {
 		timestamp := time.Now().Format("20060102_150405")
 		currentBackupPath := filepath.Join(backupDir, fmt.Sprintf("%s.before_restore_%s", baseFileName, timestamp))
 
-		currentData, err := os.ReadFile(targetPath)
+		currentData, err := os.ReadFile(targetPath) // #nosec G304 -- path from operator-controlled config
 		if err != nil {
 			return fmt.Errorf("failed to read current config file: %w", err)
 		}
 
-		if err := os.WriteFile(currentBackupPath, currentData, 0644); err != nil {
+		if err := os.WriteFile(currentBackupPath, currentData, 0600); err != nil {
 			return fmt.Errorf("failed to backup current config: %w", err)
 		}
 
@@ -362,7 +305,7 @@ func restoreBackup(cfg *config.Config, siteName string, serial int) error {
 	}
 
 	// Write the restored configuration
-	if err := os.WriteFile(targetPath, restoredData, 0644); err != nil {
+	if err := os.WriteFile(targetPath, restoredData, 0600); err != nil {
 		return fmt.Errorf("failed to write restored config: %w", err)
 	}
 

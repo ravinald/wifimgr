@@ -73,6 +73,28 @@ func SortTableData(data []GenericTableData) {
 	})
 }
 
+// SortTableDataBy sorts a slice of GenericTableData by the given fields in priority order.
+// Empty values are pushed after non-empty values for each field.
+func SortTableDataBy(data []GenericTableData, fields ...string) {
+	sort.SliceStable(data, func(i, j int) bool {
+		for _, field := range fields {
+			vi := getStringField(data[i], field)
+			vj := getStringField(data[j], field)
+
+			if vi != "" && vj != "" {
+				if vi != vj {
+					return natural.Less(vi, vj)
+				}
+			} else if vi != "" && vj == "" {
+				return true
+			} else if vi == "" && vj != "" {
+				return false
+			}
+		}
+		return false
+	})
+}
+
 // getStringField safely extracts a string field from GenericTableData
 func getStringField(data GenericTableData, field string) string {
 	if val, ok := data[field]; ok {
