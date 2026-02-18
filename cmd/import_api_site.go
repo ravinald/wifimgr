@@ -701,7 +701,7 @@ func buildProfilesExport(cacheAccessor *vendors.CacheAccessor, siteID string) []
 }
 
 func loadExistingConfig(path string) (*SiteExportConfig, bool) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return nil, false
 	}
@@ -764,7 +764,7 @@ func compareSiteConfig(exportData, existingData *SiteExportConfig, fileExists bo
 func writeSiteConfig(path string, data *SiteExportConfig) error {
 	// Ensure directory exists
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
@@ -775,7 +775,7 @@ func writeSiteConfig(path string, data *SiteExportConfig) error {
 	}
 
 	// Write file
-	if err := os.WriteFile(path, jsonData, 0644); err != nil {
+	if err := os.WriteFile(path, jsonData, 0600); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 

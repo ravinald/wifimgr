@@ -20,6 +20,7 @@ type MockClient struct {
 	configsService   ConfigsService
 	statusesService  StatusesService
 	wlansService     WLANsService
+	bssidsService    BSSIDsService
 
 	// Error injection for testing error handling
 	SitesError     error
@@ -53,6 +54,7 @@ func NewMockClientWithAllServices(vendor, orgID string) *MockClient {
 		configsService:   NewMockConfigsService(),
 		statusesService:  NewMockStatusesService(),
 		wlansService:     NewMockWLANsService(),
+		bssidsService:    NewMockBSSIDsService(),
 	}
 }
 
@@ -65,6 +67,7 @@ func (m *MockClient) Templates() TemplatesService { return m.templatesService }
 func (m *MockClient) Configs() ConfigsService     { return m.configsService }
 func (m *MockClient) Statuses() StatusesService   { return m.statusesService }
 func (m *MockClient) WLANs() WLANsService         { return m.wlansService }
+func (m *MockClient) BSSIDs() BSSIDsService       { return m.bssidsService }
 func (m *MockClient) VendorName() string          { return m.vendor }
 func (m *MockClient) OrgID() string               { return m.orgID }
 
@@ -621,4 +624,27 @@ func (m *MockWLANsService) Delete(_ context.Context, id string) error {
 	}
 	delete(m.wlansById, id)
 	return nil
+}
+
+// MockBSSIDsService is a mock implementation of BSSIDsService.
+type MockBSSIDsService struct {
+	Entries []*BSSIDEntry
+	Error   error
+}
+
+// NewMockBSSIDsService creates a new mock BSSIDs service with sample data.
+func NewMockBSSIDsService() *MockBSSIDsService {
+	return &MockBSSIDsService{
+		Entries: []*BSSIDEntry{
+			{BSSID: "aabbccddeef0", APName: "AP-Floor1-01", APSerial: "AP001", APMAC: "aabbccddeef0", SiteID: "site-001", SiteName: "US-SFO-LAB", SSIDName: "Corp-WiFi", SSIDNumber: 0, Band: "5", Channel: 36, ChannelWidth: 80, Power: 17, IsBroadcasting: true},
+			{BSSID: "aabbccddeef1", APName: "AP-Floor1-01", APSerial: "AP001", APMAC: "aabbccddeef0", SiteID: "site-001", SiteName: "US-SFO-LAB", SSIDName: "Guest-WiFi", SSIDNumber: 1, Band: "5", Channel: 36, ChannelWidth: 80, Power: 17, IsBroadcasting: true},
+		},
+	}
+}
+
+func (m *MockBSSIDsService) List(_ context.Context) ([]*BSSIDEntry, error) {
+	if m.Error != nil {
+		return nil, m.Error
+	}
+	return m.Entries, nil
 }

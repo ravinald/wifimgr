@@ -97,7 +97,7 @@ func listBackupsWithRotation(_ *config.Config, siteName string) ([]Configuration
 				// Check if this backup contains the specified site
 				if siteName != "" {
 					// Read the file to check if it contains the site
-					data, err := os.ReadFile(backupPath)
+					data, err := os.ReadFile(backupPath) // #nosec G304 -- path from operator-controlled config
 					if err != nil {
 						continue
 					}
@@ -140,7 +140,7 @@ func listBackupsWithRotation(_ *config.Config, siteName string) ([]Configuration
 
 		// Create backup entries
 		for _, backupPath := range paths {
-			backupData, err := os.ReadFile(backupPath)
+			backupData, err := os.ReadFile(backupPath) // #nosec G304 -- path from operator-controlled config
 			if err != nil {
 				logging.Warnf("Failed to read backup file %s: %v", backupPath, err)
 				continue
@@ -259,7 +259,7 @@ func cleanupBackupsWithConfig(cfg *config.Config) error {
 		backupPath := filepath.Join(backupDir, file.Name())
 
 		// Try to parse the backup file to get timestamp
-		backupData, err := os.ReadFile(backupPath)
+		backupData, err := os.ReadFile(backupPath) // #nosec G304 -- path from operator-controlled config
 		if err != nil {
 			continue
 		}
@@ -293,7 +293,7 @@ func cleanupBackupsWithConfig(cfg *config.Config) error {
 // Note: siteName is unused - backups are file-based, not site-specific
 func createConfigBackupAfterApply(cfg *config.Config, _ string, configFilePath string) error {
 	backupDir := xdg.GetBackupsDir()
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
+	if err := os.MkdirAll(backupDir, 0750); err != nil {
 		return fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
@@ -312,7 +312,7 @@ func createConfigBackupAfterApply(cfg *config.Config, _ string, configFilePath s
 	}
 
 	// Read the original config file
-	originalData, err := os.ReadFile(configFilePath)
+	originalData, err := os.ReadFile(configFilePath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return fmt.Errorf("failed to read config file %s: %w", configFilePath, err)
 	}
@@ -345,7 +345,7 @@ func createConfigBackupAfterApply(cfg *config.Config, _ string, configFilePath s
 		return fmt.Errorf("failed to marshal backup data: %w", err)
 	}
 
-	if err := os.WriteFile(backupPath, backupData, 0644); err != nil {
+	if err := os.WriteFile(backupPath, backupData, 0600); err != nil {
 		return fmt.Errorf("failed to save backup to %s: %w", backupPath, err)
 	}
 

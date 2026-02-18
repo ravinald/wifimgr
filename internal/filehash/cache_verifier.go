@@ -75,7 +75,7 @@ func (v *CacheFileVerifier) VerifyIntegrity(cachePath string) (FileVerificationS
 	}
 
 	// Load file content to check if its structure matches what we expect
-	file, err := os.Open(cachePath)
+	file, err := os.Open(cachePath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return FileFailed, fmt.Errorf("failed to open cache file: %w", err)
 	}
@@ -182,7 +182,7 @@ func (v *CacheFileVerifier) HandleCorruption(cachePath string, reason string) (F
 // generateCacheSummary creates a human-readable summary of cache contents
 func (v *CacheFileVerifier) generateCacheSummary(cachePath string) (string, error) {
 	// Open the cache file
-	file, err := os.Open(cachePath)
+	file, err := os.Open(cachePath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return "", fmt.Errorf("failed to open cache file: %w", err)
 	}
@@ -253,7 +253,7 @@ func (v *CacheFileVerifier) regenerateCache(cachePath string, reason string) (Fi
 // validateCacheStructureWithLineNumbers validates the cache structure and reports line numbers for failures
 func (v *CacheFileVerifier) validateCacheStructureWithLineNumbers(cachePath string) string {
 	// Read the file content to get line numbers
-	fileContent, err := os.ReadFile(cachePath)
+	fileContent, err := os.ReadFile(cachePath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return fmt.Sprintf("Failed to read cache file for validation: %v", err)
 	}

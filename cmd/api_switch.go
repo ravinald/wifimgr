@@ -23,7 +23,7 @@ import (
 
 // apiSwitchCmd represents the "show api switch" command
 var apiSwitchCmd = &cobra.Command{
-	Use:   "switch [name-or-mac] [site site-name] [target api-label] [format] [all] [no-resolve]",
+	Use:   "switch [name-or-mac] [site site-name] [target api-label] [format json|csv] [all] [no-resolve]",
 	Short: "Show switch information from API cache",
 	Long: `Show switch information retrieved from the local API cache.
 

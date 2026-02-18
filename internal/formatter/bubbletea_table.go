@@ -278,9 +278,9 @@ func (m *BubbleTableModel) RenderStatic() string {
 	termWidth := 80 // default fallback
 
 	// Check if file descriptors are actual terminals
-	stdoutFd := int(os.Stdout.Fd())
-	stdinFd := int(os.Stdin.Fd())
-	stderrFd := int(os.Stderr.Fd())
+	stdoutFd := int(os.Stdout.Fd()) // #nosec G115 -- file descriptors are small non-negative integers
+	stdinFd := int(os.Stdin.Fd())   // #nosec G115 -- file descriptors are small non-negative integers
+	stderrFd := int(os.Stderr.Fd()) // #nosec G115 -- file descriptors are small non-negative integers
 
 	// Try stdout first (if it's a terminal)
 	if term.IsTerminal(stdoutFd) {

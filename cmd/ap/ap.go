@@ -520,7 +520,7 @@ func AssignBulkAPsFromFile(ctx context.Context, client api.Client, cfg *config.C
 	}
 
 	// Read the file content
-	fileContent, err := os.ReadFile(filePath)
+	fileContent, err := os.ReadFile(filePath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		logging.Errorf("Failed to read file %s: %v", filePath, err)
 		return fmt.Errorf("failed to read file %s: %v", filePath, err)
@@ -613,7 +613,7 @@ func AssignBulkAPsFromFile(ctx context.Context, client api.Client, cfg *config.C
 // AssignBulkAPsFromCSV assigns multiple APs from a CSV file where each line has a MAC and site
 func AssignBulkAPsFromCSV(ctx context.Context, client api.Client, cfg *config.Config, filePath string) error {
 	// Read the file content
-	fileContent, err := os.ReadFile(filePath)
+	fileContent, err := os.ReadFile(filePath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		logging.Errorf("Failed to read file %s: %v", filePath, err)
 		return fmt.Errorf("failed to read file %s: %v", filePath, err)

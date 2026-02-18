@@ -39,7 +39,10 @@ wifimgr uses Junos-style positional keywords instead of flags for most options. 
 | `target <label>` | Scope to a specific API          | `wifimgr show api sites target mist-prod` |
 | `diff`           | Preview changes without applying | `wifimgr apply ap US-LAB-01 diff`         |
 | `site <name>`    | Filter by site                   | `wifimgr show api ap site US-LAB-01`      |
-| `json` / `csv`   | Output format                    | `wifimgr show api ap json`                |
+| `essid <name>`   | Filter by SSID name              | `wifimgr show api bssid essid Corp-WiFi`  |
+| `sort <field>`   | Secondary sort (essid, ap)       | `wifimgr show api bssid sort essid`       |
+| `format json\|csv` | Output format                  | `wifimgr show api ap format csv`          |
+| `json` / `csv`   | Output format (shorthand)        | `wifimgr show api ap json`                |
 | `all`            | Show all fields (JSON only)      | `wifimgr show api ap json all`            |
 | `no-resolve`     | Show raw IDs instead of names    | `wifimgr show api ap no-resolve`          |
 | `force`          | Bypass confirmation prompts      | `wifimgr search wireless laptop force`    |
@@ -95,6 +98,16 @@ wifimgr show api wlans site US-LAB-01
 
 # Show device profiles
 wifimgr show api deviceprofiles
+
+# Show BSSIDs
+wifimgr show api bssid                          # All BSSIDs
+wifimgr show api bssid site US-LAB-01           # BSSIDs at specific site
+wifimgr show api bssid essid Corp-WiFi          # BSSIDs broadcasting Corp-WiFi
+wifimgr show api bssid essid "Guest WiFi"       # SSID with spaces
+wifimgr show api bssid AP-NAME essid Corp-WiFi  # AP filter + SSID filter
+wifimgr show api bssid sort essid               # Sort by site, then SSID
+wifimgr show api bssid sort ap                  # Sort by site, then AP name
+wifimgr show api bssid aa:bb:cc:dd:ee:ff        # Find specific BSSID
 ```
 
 ### Positional Arguments
@@ -105,7 +118,7 @@ All `show` commands accept these optional arguments in order:
 |------------|----------------|--------------------------------|
 | 1          | `<filter>`     | Device name or MAC to filter   |
 | 2          | `site <name>`  | Filter by site                 |
-| 3          | `json` / `csv` | Output format                  |
+| 3          | `format json\|csv` or `json` / `csv` | Output format     |
 | 4          | `all`          | Include all fields (JSON only) |
 | 5          | `no-resolve`   | Show IDs instead of names      |
 
@@ -1049,6 +1062,7 @@ Customize the table output for each command.
 |---------------------|---------------------|
 | `show.api.sites`    | `show api sites`    |
 | `show.api.ap`       | `show api ap`       |
+| `show.api.bssid`    | `show api bssid`    |
 | `show.inventory.ap` | `show inventory ap` |
 | `show.intent.sites` | `show intent sites` |
 

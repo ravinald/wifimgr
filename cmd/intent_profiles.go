@@ -109,7 +109,7 @@ func runShowIntentProfiles(cmd *cobra.Command, args []string) error {
 		fullPath := filepath.Join(configDir, profileFile)
 
 		// Read raw file data for line number estimation
-		rawData, err := os.ReadFile(fullPath)
+		rawData, err := os.ReadFile(fullPath) // #nosec G304 -- path from operator-controlled config
 		if err != nil {
 			logger.WithError(err).Errorf("Failed to read profile file %s", fullPath)
 			continue

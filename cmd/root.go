@@ -169,8 +169,8 @@ func initializeAPI() error {
 	opts := buildCLIOptions()
 
 	// Log terminal properties
-	if term.IsTerminal(int(os.Stdout.Fd())) {
-		if width, height, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
+	if term.IsTerminal(int(os.Stdout.Fd())) { // #nosec G115 -- file descriptors are small non-negative integers
+		if width, height, err := term.GetSize(int(os.Stdout.Fd())); err == nil { // #nosec G115 -- file descriptors are small non-negative integers
 			logging.Debugf("Terminal size: %d columns × %d rows", width, height)
 		}
 		logging.Debugf("Terminal type: %s", os.Getenv("TERM"))
@@ -384,6 +384,8 @@ func initializeLogging(opts config.CLIOptions) error {
 		initialLogConfig.Level = "debug"
 	case config.DebugInfo:
 		initialLogConfig.Level = "info"
+	case config.DebugNone:
+		// No debug flag — keep default level
 	}
 
 	if err := logging.ConfigureLogging(initialLogConfig); err != nil {

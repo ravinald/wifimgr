@@ -69,6 +69,9 @@ type CacheIndexes struct {
 	// WLANs - aggregated from all APIs
 	WLANsByID   map[string]*WLAN
 	WLANsBySSID map[string][]*WLAN // SSID name -> WLANs (multiple WLANs can have same SSID)
+
+	// BSSIDs - aggregated from all APIs (keyed by normalized BSSID MAC)
+	BSSIDsByBSSID map[string]*BSSIDEntry
 }
 
 // NewCacheAccessor creates a new cache accessor with pre-built indexes.
@@ -102,6 +105,7 @@ func newCacheIndexes() *CacheIndexes {
 		DeviceStatusByMAC:    make(map[string]*DeviceStatus),
 		WLANsByID:            make(map[string]*WLAN),
 		WLANsBySSID:          make(map[string][]*WLAN),
+		BSSIDsByBSSID:        make(map[string]*BSSIDEntry),
 	}
 }
 
@@ -278,6 +282,12 @@ func (ca *CacheAccessor) indexAPICache(cache *APICache, apiLabel string) {
 			ca.indexes.WLANsBySSID[wlan.SSID] = append(ca.indexes.WLANsBySSID[wlan.SSID], wlan)
 		}
 	}
+
+	// Index BSSIDs
+	for bssid, entry := range cache.BSSIDs {
+		normalizedBSSID := NormalizeMAC(bssid)
+		ca.indexes.BSSIDsByBSSID[normalizedBSSID] = entry
+	}
 }
 
 // GetManager returns the underlying cache manager.
@@ -309,5 +319,6 @@ func (ca *CacheAccessor) GetStats() map[string]int {
 		"gateway_configs": len(ca.indexes.GatewayConfigsByMAC),
 		"device_status":   len(ca.indexes.DeviceStatusByMAC),
 		"wlans":           len(ca.indexes.WLANsByID),
+		"bssids":          len(ca.indexes.BSSIDsByBSSID),
 	}
 }

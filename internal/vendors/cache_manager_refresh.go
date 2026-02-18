@@ -144,6 +144,39 @@ func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel strin
 		fmt.Printf(" not supported\n")
 	}
 
+	// Fetch BSSIDs (if supported)
+	if bssidSvc := client.BSSIDs(); bssidSvc != nil {
+		fmt.Printf("    Fetching BSSIDs...")
+		logging.Debugf("[cache] Fetching BSSIDs for %s", apiLabel)
+		entries, err := bssidSvc.List(ctx)
+		if err == nil {
+			if cache.BSSIDs == nil {
+				cache.BSSIDs = make(map[string]*BSSIDEntry)
+			}
+			// Build serial-to-MAC lookup from inventory for populating APMAC
+			serialToMAC := make(map[string]string)
+			for mac, item := range cache.Inventory.AP {
+				if item.Serial != "" {
+					serialToMAC[item.Serial] = mac
+				}
+			}
+			for _, entry := range entries {
+				// Populate APMAC from serial if not already set
+				if entry.APMAC == "" && entry.APSerial != "" {
+					if mac, ok := serialToMAC[entry.APSerial]; ok {
+						entry.APMAC = NormalizeMAC(mac)
+					}
+				}
+				cache.BSSIDs[NormalizeMAC(entry.BSSID)] = entry
+			}
+			fmt.Printf(" %d BSSIDs\n", len(entries))
+			logging.Debugf("[cache] Fetched %d BSSIDs for %s", len(entries), apiLabel)
+		} else {
+			fmt.Printf(" error\n")
+			logging.Warnf("[cache] Failed to fetch BSSIDs for %s: %v", apiLabel, err)
+		}
+	}
+
 	// Fetch templates (if supported)
 	if tmplSvc := client.Templates(); tmplSvc != nil {
 		fmt.Printf("    Fetching templates...")

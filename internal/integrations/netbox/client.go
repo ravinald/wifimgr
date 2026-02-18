@@ -35,7 +35,7 @@ func NewClient(cfg *Config) (*Client, error) {
 	httpClient := &http.Client{}
 	if !cfg.SSLVerify {
 		httpClient.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // #nosec G402 -- InsecureSkipVerify is user-configurable via ssl_verify setting
 		}
 		logging.Warnf("NetBox SSL verification is disabled")
 	}
@@ -293,7 +293,7 @@ func (c *Client) GetDeviceByMAC(ctx context.Context, mac string) (*Device, error
 
 // GetDeviceByID retrieves a device by its NetBox ID
 func (c *Client) GetDeviceByID(ctx context.Context, id int64) (*Device, error) {
-	device, _, err := c.api.DcimAPI.DcimDevicesRetrieve(ctx, int32(id)).Execute()
+	device, _, err := c.api.DcimAPI.DcimDevicesRetrieve(ctx, int32(id)).Execute() // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
 	if err != nil {
 		return nil, fmt.Errorf("failed to get device: %w", err)
 	}
@@ -358,9 +358,9 @@ func (c *Client) GetDevicesBySiteAndRole(ctx context.Context, siteSlug string, r
 // CreateDevice creates a new device in NetBox
 func (c *Client) CreateDevice(ctx context.Context, req *DeviceRequest) (*Device, error) {
 	// Convert IDs to the union types expected by the API
-	deviceTypeID := int32(req.DeviceType)
-	roleID := int32(req.Role)
-	siteID := int32(req.Site)
+	deviceTypeID := int32(req.DeviceType) // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
+	roleID := int32(req.Role)             // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
+	siteID := int32(req.Site)             // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
 
 	deviceReq := netbox.WritableDeviceWithConfigContextRequest{
 		Name:       *netbox.NewNullableString(&req.Name),
@@ -393,9 +393,9 @@ func (c *Client) CreateDevice(ctx context.Context, req *DeviceRequest) (*Device,
 // UpdateDevice updates an existing device in NetBox
 func (c *Client) UpdateDevice(ctx context.Context, id int64, req *DeviceRequest) (*Device, error) {
 	// Convert IDs to the union types expected by the API
-	deviceTypeID := int32(req.DeviceType)
-	roleID := int32(req.Role)
-	siteID := int32(req.Site)
+	deviceTypeID := int32(req.DeviceType) // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
+	roleID := int32(req.Role)             // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
+	siteID := int32(req.Site)             // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
 
 	deviceReq := netbox.WritableDeviceWithConfigContextRequest{
 		Name:       *netbox.NewNullableString(&req.Name),
@@ -415,7 +415,8 @@ func (c *Client) UpdateDevice(ctx context.Context, id int64, req *DeviceRequest)
 		deviceReq.Comments = &req.Comments
 	}
 
-	device, _, err := c.api.DcimAPI.DcimDevicesUpdate(ctx, int32(id)).
+	devID := int32(id) // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
+	device, _, err := c.api.DcimAPI.DcimDevicesUpdate(ctx, devID).
 		WritableDeviceWithConfigContextRequest(deviceReq).
 		Execute()
 	if err != nil {
@@ -427,7 +428,7 @@ func (c *Client) UpdateDevice(ctx context.Context, id int64, req *DeviceRequest)
 
 // CreateInterface creates a new interface on a device
 func (c *Client) CreateInterface(ctx context.Context, req *InterfaceRequest) (*Interface, error) {
-	deviceID := int32(req.Device)
+	deviceID := int32(req.Device) // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
 
 	ifaceReq := netbox.WritableInterfaceRequest{
 		Device: netbox.Int32AsBriefInterfaceRequestDevice(&deviceID),
@@ -451,7 +452,7 @@ func (c *Client) CreateInterface(ctx context.Context, req *InterfaceRequest) (*I
 // GetInterfacesByDevice returns all interfaces for a device
 func (c *Client) GetInterfacesByDevice(ctx context.Context, deviceID int64) ([]*Interface, error) {
 	res, _, err := c.api.DcimAPI.DcimInterfacesList(ctx).
-		DeviceId([]int32{int32(deviceID)}).
+		DeviceId([]int32{int32(deviceID)}). // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
 		Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to query interfaces: %w", err)
@@ -468,7 +469,7 @@ func (c *Client) GetInterfacesByDevice(ctx context.Context, deviceID int64) ([]*
 // UpdateInterface updates an existing interface
 func (c *Client) UpdateInterface(ctx context.Context, id int64, req *InterfaceUpdateRequest) (*Interface, error) {
 	// Fetch the existing interface to get required fields
-	existing, _, err := c.api.DcimAPI.DcimInterfacesRetrieve(ctx, int32(id)).Execute()
+	existing, _, err := c.api.DcimAPI.DcimInterfacesRetrieve(ctx, int32(id)).Execute() // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve interface: %w", err)
 	}
@@ -489,7 +490,8 @@ func (c *Client) UpdateInterface(ctx context.Context, id int64, req *InterfaceUp
 		patchReq.Enabled = req.Enabled
 	}
 
-	iface, _, err := c.api.DcimAPI.DcimInterfacesPartialUpdate(ctx, int32(id)).
+	ifaceID := int32(id) // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
+	iface, _, err := c.api.DcimAPI.DcimInterfacesPartialUpdate(ctx, ifaceID).
 		PatchedWritableInterfaceRequest(patchReq).
 		Execute()
 	if err != nil {
@@ -501,7 +503,7 @@ func (c *Client) UpdateInterface(ctx context.Context, id int64, req *InterfaceUp
 
 // GetInterfaceTemplates returns all interface templates for a device type
 func (c *Client) GetInterfaceTemplates(ctx context.Context, deviceTypeID int64) ([]*InterfaceTemplate, error) {
-	dtID := int32(deviceTypeID)
+	dtID := int32(deviceTypeID) // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
 	res, _, err := c.api.DcimAPI.DcimInterfaceTemplatesList(ctx).
 		DeviceTypeId([]*int32{&dtID}).
 		Execute()
@@ -589,7 +591,8 @@ func (c *Client) UpdateIPAddress(ctx context.Context, id int64, req *IPAddressRe
 		ipReq.DnsName = &req.DNSName
 	}
 
-	ip, _, err := c.api.IpamAPI.IpamIpAddressesUpdate(ctx, int32(id)).
+	ipID := int32(id) // #nosec G115 -- NetBox sequential IDs will not exceed int32 range
+	ip, _, err := c.api.IpamAPI.IpamIpAddressesUpdate(ctx, ipID).
 		WritableIPAddressRequest(ipReq).
 		Execute()
 	if err != nil {
@@ -775,7 +778,7 @@ func (c *Client) bulkCreateInterfaces(ctx context.Context, reqs []*InterfaceRequ
 		httpClient = http.DefaultClient
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := httpClient.Do(req) // #nosec G704 -- URL from trusted config, not user input
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute bulk create: %w", err)
 	}
@@ -838,7 +841,7 @@ func (c *Client) bulkDeleteInterfaces(ctx context.Context, ids []int64) error {
 		httpClient = http.DefaultClient
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := httpClient.Do(req) // #nosec G704 -- URL from trusted config, not user input
 	if err != nil {
 		return fmt.Errorf("failed to execute bulk delete: %w", err)
 	}
@@ -968,7 +971,7 @@ func (c *Client) bulkCreateWirelessLANs(ctx context.Context, reqs []*WirelessLAN
 		httpClient = http.DefaultClient
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := httpClient.Do(req) // #nosec G704 -- URL from trusted config, not user input
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute bulk create: %w", err)
 	}
