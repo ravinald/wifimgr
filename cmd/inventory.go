@@ -23,7 +23,7 @@ import (
 
 // showInventoryCmd represents the "show inventory" command
 var showInventoryCmd = &cobra.Command{
-	Use:   "inventory [device-type] [site site-name] [target api-label] [format] [all] [no-resolve]",
+	Use:   "inventory [device-type] [site site-name] [target api-label] [format json|csv] [all] [no-resolve]",
 	Short: "Show inventory information",
 	Long: `Show inventory information for network devices.
 

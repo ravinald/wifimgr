@@ -32,9 +32,9 @@ var (
 // isTerminal checks if we're running in a terminal that supports colors and symbols
 func isTerminal() bool {
 	// Check file descriptors to determine if we're in a terminal
-	stdoutFd := int(os.Stdout.Fd())
-	stdinFd := int(os.Stdin.Fd())
-	stderrFd := int(os.Stderr.Fd())
+	stdoutFd := int(os.Stdout.Fd()) // #nosec G115 -- file descriptors are small non-negative integers
+	stdinFd := int(os.Stdin.Fd())   // #nosec G115 -- file descriptors are small non-negative integers
+	stderrFd := int(os.Stderr.Fd()) // #nosec G115 -- file descriptors are small non-negative integers
 
 	// Try stdout first (most common case for CLI output)
 	if term.IsTerminal(stdoutFd) {

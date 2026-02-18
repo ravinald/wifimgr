@@ -110,6 +110,9 @@ type Client interface {
 	// AP-specific methods for backward compatibility
 	GetAPBySerialOrMAC(ctx context.Context, siteID, serial, mac string) (*AP, error)
 
+	// Stats API
+	GetAPStats(ctx context.Context, siteID string) ([]map[string]interface{}, error)
+
 	// Search API
 	SearchWiredClients(ctx context.Context, orgID string, text string) (*MistWiredClientResponse, error)
 	SearchWirelessClients(ctx context.Context, orgID string, text string) (*MistWirelessClientResponse, error)
@@ -128,7 +131,7 @@ type Client interface {
 // Config holds API credentials and options
 type Config struct {
 	BaseURL      string
-	APIToken     string
+	APIToken     string // #nosec G117 -- field name matches vendor API contract
 	Organization string
 	Timeout      time.Duration
 	Debug        bool

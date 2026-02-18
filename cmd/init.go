@@ -196,7 +196,7 @@ func createSkeletonSiteConfig(siteName, apiName string) *config.SiteConfigFile {
 func writeSiteConfigFile(siteConfig *config.SiteConfigFile, fullPath string) error {
 	// Create parent directories if they don't exist
 	dir := filepath.Dir(fullPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("failed to create directory '%s': %w", dir, err)
 	}
 
@@ -207,7 +207,7 @@ func writeSiteConfigFile(siteConfig *config.SiteConfigFile, fullPath string) err
 	}
 
 	// Write to file
-	if err := os.WriteFile(fullPath, jsonData, 0644); err != nil {
+	if err := os.WriteFile(fullPath, jsonData, 0600); err != nil {
 		return fmt.Errorf("failed to write file '%s': %w", fullPath, err)
 	}
 
@@ -224,7 +224,7 @@ func addSiteConfigToAppConfig(relativeFilename string) error {
 	}
 
 	// Read the current config file
-	data, err := os.ReadFile(configFile)
+	data, err := os.ReadFile(configFile) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -270,7 +270,7 @@ func addSiteConfigToAppConfig(relativeFilename string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(configFile, jsonData, 0644); err != nil {
+	if err := os.WriteFile(configFile, jsonData, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 

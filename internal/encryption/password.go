@@ -15,7 +15,7 @@ import (
 var PromptForAPIToken = func() (string, error) {
 	fmt.Print("Enter your Mist API token (input will not be displayed): ")
 	// Use ReadPassword to hide the input
-	tokenBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+	tokenBytes, err := term.ReadPassword(int(os.Stdin.Fd())) // #nosec G115 -- file descriptors are small non-negative integers
 	if err != nil {
 		return "", fmt.Errorf("failed to read API token: %w", err)
 	}
@@ -36,7 +36,7 @@ var PromptForAPIToken = func() (string, error) {
 func PromptForPassword(prompt string) (string, error) {
 	fmt.Print(prompt)
 	// Use ReadPassword to hide the input
-	passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+	passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd())) // #nosec G115 -- file descriptors are small non-negative integers
 	if err != nil {
 		return "", fmt.Errorf("failed to read password: %w", err)
 	}
@@ -95,11 +95,6 @@ var PromptForNewPassword = func() (string, error) {
 // PromptForExistingPassword prompts the user to enter an existing password
 var PromptForExistingPassword = func() (string, error) {
 	return PromptForPassword("Enter your password to decrypt the API token (input will not be displayed): ")
-}
-
-// IsTerminal determines if the given file descriptor is a terminal
-func IsTerminal(fd int) bool {
-	return term.IsTerminal(fd)
 }
 
 // PasswordEnvVar is the environment variable name for the decryption password

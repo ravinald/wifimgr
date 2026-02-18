@@ -141,7 +141,7 @@ func (c *mistClient) GetInventoryConfig(inventoryPath string) (*InventoryConfig,
 	c.logDebug("Reading inventory config from %s", inventoryPath)
 
 	// Read the inventory configuration file
-	data, err := os.ReadFile(inventoryPath)
+	data, err := os.ReadFile(inventoryPath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return nil, fmt.Errorf("failed to read inventory config: %w", err)
 	}

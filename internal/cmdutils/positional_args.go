@@ -22,6 +22,8 @@ type ParsedShowArgs struct {
 	Filter     string
 	SiteName   string
 	Target     string // API target label (e.g., "mist-prod", "meraki")
+	ESSIDName  string // SSID name filter (from "essid" keyword)
+	SortField  string // Secondary sort field (from "sort" keyword)
 	Format     string
 	ShowAll    bool
 	NoResolve  bool
@@ -46,7 +48,7 @@ func ParseShowArgs(args []string) (*ParsedShowArgs, error) {
 			if result.SiteName != "" {
 				return nil, fmt.Errorf("site specified multiple times")
 			}
-			result.SiteName = args[i+1]
+			result.SiteName = stripQuotes(args[i+1])
 			i++ // Skip the site name
 
 		case "target":
@@ -56,8 +58,50 @@ func ParseShowArgs(args []string) (*ParsedShowArgs, error) {
 			if result.Target != "" {
 				return nil, fmt.Errorf("target specified multiple times")
 			}
-			result.Target = args[i+1]
+			result.Target = stripQuotes(args[i+1])
 			i++ // Skip the API label
+
+		case "essid":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("'essid' requires an SSID name")
+			}
+			if result.ESSIDName != "" {
+				return nil, fmt.Errorf("essid specified multiple times")
+			}
+			result.ESSIDName = stripQuotes(args[i+1])
+			i++ // Skip the SSID name
+
+		case "sort":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("'sort' requires a field name (essid, ap)")
+			}
+			if result.SortField != "" {
+				return nil, fmt.Errorf("sort specified multiple times")
+			}
+			sortVal := strings.ToLower(args[i+1])
+			switch sortVal {
+			case "essid", "ap":
+				result.SortField = sortVal
+			default:
+				return nil, fmt.Errorf("invalid sort field %q: must be 'essid' or 'ap'", args[i+1])
+			}
+			i++ // Skip the sort field
+
+		case "format":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("'format' requires a format type (json, csv)")
+			}
+			if result.Format != "table" {
+				return nil, fmt.Errorf("format specified multiple times")
+			}
+			fmtVal := strings.ToLower(args[i+1])
+			switch fmtVal {
+			case "json", "csv":
+				result.Format = fmtVal
+			default:
+				return nil, fmt.Errorf("invalid format %q: must be 'json' or 'csv'", args[i+1])
+			}
+			i++ // Skip the format value
 
 		case "json", "csv":
 			if result.Format != "table" {
@@ -167,4 +211,13 @@ func ParseApplyArgs(args []string) (*ParsedApplyArgs, error) {
 	}
 
 	return result, nil
+}
+
+// stripQuotes removes surrounding double quotes from a value.
+// The shell normally handles quote stripping, but this provides a defensive fallback.
+func stripQuotes(s string) string {
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		return s[1 : len(s)-1]
+	}
+	return s
 }

@@ -10,7 +10,7 @@ import (
 
 // LoadConfig loads the main configuration from the specified file
 func LoadConfig(filename string) (*Config, error) {
-	file, err := os.Open(filename)
+	file, err := os.Open(filename) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return nil, fmt.Errorf("failed to open config file: %w", err)
 	}
@@ -66,7 +66,7 @@ func LoadSiteConfig(configDir string, filename string) (*SiteConfigFile, error) 
 	if filename != "" {
 		fullPath = filepath.Join(configDir, filename)
 	}
-	file, err := os.Open(fullPath)
+	file, err := os.Open(fullPath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return nil, fmt.Errorf("failed to open site config file %s: %w", fullPath, err)
 	}
@@ -214,7 +214,7 @@ func LoadAllConfigs(mainConfigFile string) (*Config, []*SiteConfigFile, error) {
 		fullPath := filepath.Join(mainConfig.Files.ConfigDir, configFile)
 
 		// Read the raw file data for line number estimation
-		rawData, err := os.ReadFile(fullPath)
+		rawData, err := os.ReadFile(fullPath) // #nosec G304 -- path from operator-controlled config
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read site config %s: %w", configFile, err)
 		}

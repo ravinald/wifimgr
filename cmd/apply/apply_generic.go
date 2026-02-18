@@ -453,7 +453,7 @@ func checkConfigFilesChanged(cfg *configPkg.Config, configFiles []string) (bool,
 	cacheFile := filepath.Join(cfg.Files.ConfigDir, ".file_hashes.json")
 	cache := &FileHashCache{Hashes: make(map[string]FileHashInfo)}
 
-	if data, err := os.ReadFile(cacheFile); err == nil {
+	if data, err := os.ReadFile(cacheFile); err == nil { // #nosec G304 -- path from operator-controlled config
 		if err := json.Unmarshal(data, cache); err != nil {
 			logging.Warnf("Failed to parse file hash cache: %v", err)
 		}
@@ -497,7 +497,7 @@ func checkConfigFilesChanged(cfg *configPkg.Config, configFiles []string) (bool,
 
 // calculateFileHash calculates SHA256 hash of a file
 func calculateFileHash(filePath string) (string, error) {
-	file, err := os.Open(filePath)
+	file, err := os.Open(filePath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return "", err
 	}
@@ -548,7 +548,7 @@ func updateFileHashes(cfg *configPkg.Config, configFiles []string) error {
 		return err
 	}
 
-	return os.WriteFile(cacheFile, data, 0644)
+	return os.WriteFile(cacheFile, data, 0644) // #nosec G306 -- file hash cache (.file_hashes.json), not secrets
 }
 
 // getSiteConfiguration finds and returns the site configuration
@@ -578,7 +578,7 @@ func getSiteConfiguration(cfg *configPkg.Config, configFiles []string, siteName 
 				filePath = filepath.Join(cfg.Files.ConfigDir, configFile)
 			}
 
-			fileData, err := os.ReadFile(filePath)
+			fileData, err := os.ReadFile(filePath) // #nosec G304 -- path from operator-controlled config
 			if err != nil {
 				logging.Warnf("Error reading config file %s for fallback search: %v", configFile, err)
 				continue

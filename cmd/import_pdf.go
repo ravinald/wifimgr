@@ -372,7 +372,7 @@ actual MAC addresses when the devices are discovered or provisioned.`,
 			}
 
 			// Write back to file
-			if err := os.WriteFile(siteConfigPath, jsonData, 0644); err != nil {
+			if err := os.WriteFile(siteConfigPath, jsonData, 0600); err != nil {
 				return fmt.Errorf("failed to save updated configuration: %w", err)
 			}
 

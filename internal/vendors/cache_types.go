@@ -67,6 +67,9 @@ type APICache struct {
 		Gateway map[string]*GatewayConfig `json:"gateway,omitempty"`
 	} `json:"configs,omitempty"`
 
+	// BSSIDs keyed by normalized BSSID MAC
+	BSSIDs map[string]*BSSIDEntry `json:"bssids,omitempty"`
+
 	// DeviceStatus by normalized MAC address
 	// Stored separately to allow independent refresh from inventory
 	DeviceStatus map[string]*DeviceStatus `json:"device_status,omitempty"`
@@ -140,6 +143,7 @@ func NewAPICache(apiLabel, vendor, orgID string) *APICache {
 			Gateway: make(map[string]*GatewayConfig),
 		},
 		WLANs:        make(map[string]*WLAN),
+		BSSIDs:       make(map[string]*BSSIDEntry),
 		DeviceStatus: make(map[string]*DeviceStatus),
 	}
 }
@@ -165,6 +169,7 @@ func (c *APICache) UpdateItemCounts() {
 	c.Meta.ItemCounts["templates_wlan"] = len(c.Templates.WLAN)
 	c.Meta.ItemCounts["profiles"] = len(c.Profiles.Devices)
 	c.Meta.ItemCounts["wlans"] = len(c.WLANs)
+	c.Meta.ItemCounts["bssids"] = len(c.BSSIDs)
 	c.Meta.ItemCounts["device_status"] = len(c.DeviceStatus)
 }
 
