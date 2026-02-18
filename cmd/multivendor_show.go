@@ -931,7 +931,7 @@ func getDeviceTypeName(deviceType string) string {
 // Returns nil if the file cannot be loaded.
 func loadManagedMACs(inventoryPath string, deviceTypes []string) map[string]string {
 	// Read the inventory file
-	data, err := os.ReadFile(inventoryPath)
+	data, err := os.ReadFile(inventoryPath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		logging.Errorf("Failed to read inventory file %s: %v", inventoryPath, err)
 		return nil

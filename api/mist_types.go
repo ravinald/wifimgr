@@ -50,7 +50,7 @@ type MistWLAN struct {
 			Radius *struct {
 				Host   *string `json:"host,omitempty"`
 				Port   *int    `json:"port,omitempty"`
-				Secret *string `json:"secret,omitempty"`
+				Secret *string `json:"secret,omitempty"` // #nosec G117 -- field name matches vendor API contract
 			} `json:"radius,omitempty"`
 		} `json:"enterprise,omitempty"`
 	} `json:"auth,omitempty"`

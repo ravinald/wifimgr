@@ -51,7 +51,7 @@ func (v *Validator) LoadSchema(name, schemaPath string) error {
 	compiler.Draft = jsonschema.Draft7
 
 	// Load schema file
-	schemaData, err := os.ReadFile(fullPath)
+	schemaData, err := os.ReadFile(fullPath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return fmt.Errorf("failed to read schema file %s: %w", fullPath, err)
 	}
@@ -86,7 +86,7 @@ func (v *Validator) ValidateFile(name, filePath string) (bool, error) {
 	}
 
 	// Load file data
-	data, err := os.ReadFile(filePath)
+	data, err := os.ReadFile(filePath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return false, fmt.Errorf("failed to read file %s: %w", filePath, err)
 	}

@@ -148,7 +148,7 @@ func getSiteConfigsFromFiles(configFiles []string) (map[string]SiteConfig, error
 			filePath = filepath.Join(configDir, fileName)
 		}
 
-		fileData, err := os.ReadFile(filePath)
+		fileData, err := os.ReadFile(filePath) // #nosec G304 G703 -- path from operator-controlled config
 		if err != nil {
 			return nil, fmt.Errorf("error reading config file %s: %w", filePath, err)
 		}
@@ -273,7 +273,7 @@ func findConfigFileForSite(cfg *config.Config, siteName string) (string, error) 
 			filePath = filepath.Join(cfg.Files.ConfigDir, configFile)
 		}
 
-		fileData, err := os.ReadFile(filePath)
+		fileData, err := os.ReadFile(filePath) // #nosec G304 -- path from operator-controlled config
 		if err != nil {
 			continue
 		}
@@ -328,7 +328,7 @@ func rollbackConfigFile(cfg *config.Config, siteName string, configFilePath stri
 
 	// Step 2: Copy current intent config to new .0 backup
 	logging.Debugf("Backing up current config to .0")
-	currentData, err := os.ReadFile(configFilePath)
+	currentData, err := os.ReadFile(configFilePath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return fmt.Errorf("failed to read current config: %w", err)
 	}
@@ -346,7 +346,7 @@ func rollbackConfigFile(cfg *config.Config, siteName string, configFilePath stri
 	}
 
 	newBackupPath := filepath.Join(backupDir, fmt.Sprintf("%s.0", baseFileName))
-	if err := os.WriteFile(newBackupPath, backupData, 0644); err != nil {
+	if err := os.WriteFile(newBackupPath, backupData, 0600); err != nil {
 		return fmt.Errorf("failed to create backup: %w", err)
 	}
 	fmt.Printf("  Created backup: %s.0 (previous config)\n", baseFileName)
@@ -356,12 +356,12 @@ func rollbackConfigFile(cfg *config.Config, siteName string, configFilePath stri
 	shiftedBackupPath := filepath.Join(backupDir, fmt.Sprintf("%s.%d", baseFileName, backupIndex+1))
 	logging.Debugf("Restoring from %s to %s", shiftedBackupPath, configFilePath)
 
-	restoreData, err := os.ReadFile(shiftedBackupPath)
+	restoreData, err := os.ReadFile(shiftedBackupPath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return fmt.Errorf("failed to read backup file: %w", err)
 	}
 
-	if err := os.WriteFile(configFilePath, restoreData, 0644); err != nil {
+	if err := os.WriteFile(configFilePath, restoreData, 0600); err != nil {
 		return fmt.Errorf("failed to restore config: %w", err)
 	}
 
@@ -438,7 +438,7 @@ func handleValidateBackupCommand(args []string) error {
 	fmt.Printf("Validating backup file: %s\n", backupFile)
 
 	// Read backup file
-	backupData, err := os.ReadFile(backupFile)
+	backupData, err := os.ReadFile(backupFile) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		fmt.Printf("%s Validation failed: cannot read file: %v\n", symbols.FailurePrefix(), err)
 		return err

@@ -79,6 +79,11 @@ func (a *Adapter) WLANs() vendors.WLANsService {
 	return &wlansService{client: a.legacy, orgID: a.orgID}
 }
 
+// BSSIDs returns the BSSIDsService for BSSID listing.
+func (a *Adapter) BSSIDs() vendors.BSSIDsService {
+	return &bssidsService{client: a.legacy, orgID: a.orgID}
+}
+
 // LegacyClient returns the underlying api.Client for advanced operations.
 // This should only be used when vendor-specific functionality is required.
 // Implements vendors.LegacyClientAccessor.

@@ -48,7 +48,7 @@ type Logging struct {
 // Credentials represents API credentials
 type Credentials struct {
 	APIID    string `json:"api_id"`
-	APIToken string `json:"api_token"`
+	APIToken string `json:"api_token"` // #nosec G117 -- field name matches vendor API contract
 	OrgID    string `json:"org_id"`
 
 	// Encryption related fields
@@ -362,7 +362,7 @@ type LACPConfig struct {
 type UplinkConfig struct {
 	Auth8021x    bool   `json:"8021x,omitempty"`
 	AuthIdentity string `json:"identity,omitempty"`
-	AuthPassword string `json:"password,omitempty"`
+	AuthPassword string `json:"password,omitempty"` // #nosec G117 -- field name matches vendor API contract
 }
 
 // IoTConfig represents IoT port configuration
@@ -494,7 +494,7 @@ type RADIUSConfig struct {
 type RADIUSServer struct {
 	Host   string `json:"host"`
 	Port   int    `json:"port,omitempty"`
-	Secret string `json:"secret,omitempty"`
+	Secret string `json:"secret,omitempty"` // #nosec G117 -- field name matches vendor API contract
 }
 
 // ACLPolicy represents an access control list policy

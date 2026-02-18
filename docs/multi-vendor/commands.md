@@ -26,6 +26,7 @@ wifimgr show api ap target mist-prod
 | Command | Default Behavior | With `target` |
 |---------|------------------|---------------|
 | `show api ap` | Aggregate from all APIs | Filter to specific API |
+| `show api bssid` | Aggregate from all APIs | Filter to specific API |
 | `show api sites` | Aggregate from all APIs | Filter to specific API |
 | `show api switch` | Aggregate from all APIs | Filter to specific API |
 | `show api wlans` | Aggregate from all APIs | Filter to specific API |

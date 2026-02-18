@@ -103,7 +103,7 @@ func HandleCommand(ctx context.Context, client api.Client, cfg *config.Config, a
 func LoadLocalInventory(filePath string) (*LocalInventoryFile, error) {
 	logging.Infof("Loading inventory from local file: %s", filePath)
 
-	file, err := os.Open(filePath)
+	file, err := os.Open(filePath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		logging.Errorf("Failed to open inventory file: %v", err)
 		return nil, fmt.Errorf("failed to open inventory file: %w", err)

@@ -229,5 +229,16 @@ func (a *Adapter) WLANs() vendors.WLANsService {
 	}
 }
 
+// BSSIDs returns the BSSIDsService for BSSID listing.
+func (a *Adapter) BSSIDs() vendors.BSSIDsService {
+	return &bssidsService{
+		dashboard:      a.dashboard,
+		orgID:          a.orgID,
+		rateLimiter:    a.rateLimiter,
+		retryConfig:    a.retryConfig,
+		suppressOutput: a.suppressOutput,
+	}
+}
+
 // Ensure Adapter implements vendors.Client at compile time.
 var _ vendors.Client = (*Adapter)(nil)

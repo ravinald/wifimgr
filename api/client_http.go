@@ -78,7 +78,7 @@ func (c *mistClient) do(ctx context.Context, method, path string, body interface
 			}
 
 			// Execute the request
-			resp, err := c.httpClient.Do(req)
+			resp, err := c.httpClient.Do(req) // #nosec G704 -- URL from trusted config, not user input
 			if err != nil {
 				return 0, err
 			}
@@ -112,7 +112,7 @@ func (c *mistClient) do(ctx context.Context, method, path string, body interface
 		}
 
 		// Execute the request
-		resp, err := c.httpClient.Do(req)
+		resp, err := c.httpClient.Do(req) // #nosec G704 -- URL from trusted config, not user input
 		if err != nil {
 			return fmt.Errorf("request failed: %w", err)
 		}
@@ -382,7 +382,7 @@ func (c *mistClient) calculateBackoff(attempt int) time.Duration {
 	}
 
 	// Add jitter (±20%)
-	jitter := int64(float64(backoff.Nanoseconds()) * 0.2 * (rand.Float64()*2 - 1))
+	jitter := int64(float64(backoff.Nanoseconds()) * 0.2 * (rand.Float64()*2 - 1)) // #nosec G404 -- math/rand used for non-security retry jitter
 	backoff = time.Duration(backoff.Nanoseconds() + jitter)
 
 	// Cap at 60 seconds

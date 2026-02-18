@@ -470,7 +470,7 @@ func (c *mistClient) GetRawDeviceJSON(ctx context.Context, siteID, deviceID stri
 		c.rateLimiter.wait()
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.httpClient.Do(req) // #nosec G704 -- URL from trusted config, not user input
 	if err != nil {
 		return "", fmt.Errorf("request failed: %w", err)
 	}

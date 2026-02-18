@@ -21,6 +21,7 @@ type Client interface {
 	Configs() ConfigsService
 	Statuses() StatusesService
 	WLANs() WLANsService
+	BSSIDs() BSSIDsService
 
 	// Metadata
 	VendorName() string
@@ -135,6 +136,12 @@ type WLANsService interface {
 	Create(ctx context.Context, wlan *WLAN) (*WLAN, error)
 	Update(ctx context.Context, id string, wlan *WLAN) (*WLAN, error)
 	Delete(ctx context.Context, id string) error
+}
+
+// BSSIDsService provides BSSID listing operations.
+// BSSIDs map wireless SSIDs to specific radio interfaces on access points.
+type BSSIDsService interface {
+	List(ctx context.Context) ([]*BSSIDEntry, error)
 }
 
 // LegacyClientAccessor provides access to the underlying legacy client.

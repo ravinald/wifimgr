@@ -326,7 +326,7 @@ func confirmExpensiveSearchIfNeeded(ctx context.Context, registry *vendors.APICl
 
 // isInteractive returns true if stdin is a terminal.
 func isInteractive() bool {
-	return term.IsTerminal(int(os.Stdin.Fd()))
+	return term.IsTerminal(int(os.Stdin.Fd())) // #nosec G115 -- file descriptors are small non-negative integers
 }
 
 // confirmPrompt reads user input and returns true if they confirm.

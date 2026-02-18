@@ -138,7 +138,7 @@ func ListIntentSites(ctx context.Context, client api.Client, formatOverride stri
 				if i < len(siteConfigFiles) {
 					siteConfigFile := siteConfigFiles[i]
 					configDir := viper.GetString("files.config_dir")
-					fileBytes, err := os.ReadFile(filepath.Join(configDir, siteConfigFile))
+					fileBytes, err := os.ReadFile(filepath.Join(configDir, siteConfigFile)) // #nosec G304 -- path from operator-controlled config
 					if err == nil {
 						// Parse the file to get access to raw JSON
 						var rawData map[string]interface{}

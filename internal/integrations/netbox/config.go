@@ -17,7 +17,7 @@ import (
 // Config represents NetBox integration configuration
 type Config struct {
 	URL            string        `json:"url"`
-	APIKey         string        `json:"api_key"`
+	APIKey         string        `json:"api_key"` // #nosec G117 -- field name matches vendor API contract
 	SSLVerify      bool          `json:"ssl_verify"`
 	SettingsSource string        `json:"settings_source,omitempty"` // "api" (default) or "netbox"
 	Mappings       MappingConfig `json:"mappings"`
@@ -286,7 +286,7 @@ func loadFromEnvFile(cfg *Config) error {
 	}
 
 	envFilePath := filepath.Join(homeDir, ".env.netbox")
-	file, err := os.Open(envFilePath)
+	file, err := os.Open(envFilePath) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return err // File doesn't exist, not an error
 	}

@@ -96,27 +96,7 @@ func GetInventoryFile() string {
 // EnsureDir creates a directory and all parent directories if they don't exist.
 // Returns nil if the directory already exists or was successfully created.
 func EnsureDir(path string) error {
-	return os.MkdirAll(path, 0755)
-}
-
-// EnsureConfigDir ensures the configuration directory exists.
-func EnsureConfigDir() error {
-	return EnsureDir(GetConfigDir())
-}
-
-// EnsureCacheDir ensures the cache directory exists.
-func EnsureCacheDir() error {
-	return EnsureDir(GetCacheDir())
-}
-
-// EnsureStateDir ensures the state directory exists.
-func EnsureStateDir() error {
-	return EnsureDir(GetStateDir())
-}
-
-// EnsureDataDir ensures the data directory exists.
-func EnsureDataDir() error {
-	return EnsureDir(GetDataDir())
+	return os.MkdirAll(path, 0755) // #nosec G301 -- XDG base directories use conventional 0755 permissions
 }
 
 // FindEnvFile searches for .env.wifimgr in multiple locations.

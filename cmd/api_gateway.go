@@ -23,7 +23,7 @@ import (
 
 // apiGatewayCmd represents the "show api gateway" command
 var apiGatewayCmd = &cobra.Command{
-	Use:   "gateway [name-or-mac] [site site-name] [target api-label] [format] [all] [no-resolve]",
+	Use:   "gateway [name-or-mac] [site site-name] [target api-label] [format json|csv] [all] [no-resolve]",
 	Short: "Show gateway information from API cache",
 	Long: `Show gateway information retrieved from the local API cache.
 
