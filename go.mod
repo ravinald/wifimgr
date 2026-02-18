@@ -10,7 +10,7 @@ require (
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/maruel/natural v1.3.0
 	github.com/meraki/dashboard-api-go/v5 v5.0.8
-	github.com/neilotoole/jsoncolor v0.7.1
+	github.com/neilotoole/jsoncolor v0.7.2
 	github.com/netbox-community/go-netbox/v4 v4.3.0
 	github.com/ravinald/jsondiff v1.1.3
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
