@@ -115,7 +115,7 @@ jobs:
           go build -ldflags "-w -s -X github.com/ravinald/wifimgr/cmd.Version=${VERSION} -X github.com/ravinald/wifimgr/cmd.BuildTime=${BUILD_TIME} -X github.com/ravinald/wifimgr/cmd.GitCommit=${GIT_COMMIT}" -o "$output" .
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wifimgr-${{ matrix.goos }}-${{ matrix.goarch }}
           path: wifimgr-*
