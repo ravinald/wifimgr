@@ -61,3 +61,5 @@ require (
 	golang.org/x/text v0.34.0 // indirect
 	gopkg.in/validator.v2 v2.0.1 // indirect
 )
+
+replace github.com/meraki/dashboard-api-go/v5 => github.com/ravinald/dashboard-api-go/v5 v5.0.9-0.20260303215912-dada4eebb1fd
