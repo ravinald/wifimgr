@@ -81,13 +81,19 @@ func isNonWirelessNetworkError(err error) bool {
 	return strings.Contains(msg, "this endpoint only supports wireless networks")
 }
 
+// clientDetailLookbackSeconds is how far back to ask Meraki for connection
+// stats. One hour missed stable, uneventful associations (clients connected
+// but not generating auth/DHCP events) so Band came up empty for them. 24h
+// catches a typical diurnal pattern while staying well under Meraki's 7-day
+// ceiling for this endpoint.
+const clientDetailLookbackSeconds = 24 * 3600
+
 // macsOnBand calls GetNetworkWirelessClientsConnectionStats with a band
 // filter and returns the MACs that had activity on that band during the
-// last hour. Short timespan keeps the list focused on current associations
-// and keeps the response small.
+// lookback window defined by clientDetailLookbackSeconds.
 func (s *clientDetailService) macsOnBand(ctx context.Context, networkID, band string) ([]string, error) {
 	params := &meraki.GetNetworkWirelessClientsConnectionStatsQueryParams{
-		Timespan: 3600, // one hour of activity
+		Timespan: clientDetailLookbackSeconds,
 		Band:     band,
 	}
 

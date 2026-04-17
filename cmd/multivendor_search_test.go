@@ -175,6 +175,25 @@ func TestBuildWirelessSearchColumns_SiteFilter(t *testing.T) {
 	}
 }
 
+func TestIsOnlineStatus(t *testing.T) {
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{"Online", true},
+		{"online", true},
+		{"ONLINE", true},
+		{"Offline", false},
+		{"offline", false},
+		{"", true}, // unknown state defaults to "keep the row"
+	}
+	for _, tt := range tests {
+		if got := isOnlineStatus(tt.in); got != tt.want {
+			t.Errorf("isOnlineStatus(%q) = %v, want %v", tt.in, got, tt.want)
+		}
+	}
+}
+
 func TestBuildWirelessSearchColumns_DetailShowsBandAndState(t *testing.T) {
 	orig := apiFlag
 	t.Cleanup(func() { apiFlag = orig })

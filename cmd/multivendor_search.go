@@ -15,9 +15,22 @@ import (
 )
 
 // searchWirelessMultiVendor searches for wireless clients across multiple APIs.
-// When detail is true, extra columns (Band, State) are rendered and populated
-// from live response (Status) and the per-client detail cache (Band).
-func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format string, force, _, detail bool) error {
+// When detail or extensive is true, extra columns (Band, State) are rendered
+// from the client-detail cache (Band) and live response (Status). The two
+// modes differ in which rows appear:
+//
+//   - detail:    Online clients only. Quick health overview — what's
+//                currently connected and on which band.
+//   - extensive: Online and offline clients. Useful for historical or
+//                troubleshooting views where disconnected devices matter.
+//
+// Both require the client-detail cache to be populated ahead of time via
+// `wifimgr refresh client site <name>`.
+func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format string, force, _, detail, extensive bool) error {
+	// detail columns turn on whenever either flag is set; extensive only
+	// broadens the row set.
+	showDetail := detail || extensive
+	includeOffline := extensive
 	// Validate target API if provided
 	if err := ValidateAPIFlag(); err != nil {
 		return err
@@ -90,12 +103,19 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 
 		// Convert results to table data
 		for _, client := range results.Results {
+			// detail mode drops offline clients; extensive mode keeps them.
+			// Default mode (neither flag) doesn't touch the row set so
+			// existing behavior stays intact.
+			if showDetail && !includeOffline && !isOnlineStatus(client.Status) {
+				continue
+			}
+
 			enrichWirelessClientFromCache(client, apiCache)
 
 			// Fill Band from the persistent client-detail cache when the
 			// operator asked for detail. Doing it here keeps the default
 			// path identical to before — cost unchanged, no cache hits.
-			if detail && cacheMgr != nil && client.Band == "" && client.MAC != "" {
+			if showDetail && cacheMgr != nil && client.Band == "" && client.MAC != "" {
 				if rec, ok := cacheMgr.LookupClientDetail(apiLabel, client.MAC); ok {
 					client.Band = rec.Band
 					if rec.FetchedAt.After(newestDetailFetch) {
@@ -144,7 +164,7 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 		return nil
 	}
 
-	columns := buildWirelessSearchColumns(siteID, len(targetAPIs), detail)
+	columns := buildWirelessSearchColumns(siteID, len(targetAPIs), showDetail)
 
 	// Create table config
 	tableConfig := formatter.TableConfig{
@@ -164,15 +184,26 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 	printer.Config.Columns = columns
 	fmt.Print(printer.Print())
 
-	if detail {
+	if showDetail {
 		printDetailFooter(detailCacheHits, newestDetailFetch, siteID)
 	}
 
 	return nil
 }
 
+// isOnlineStatus reports whether a vendor-supplied status string represents a
+// currently-connected client. Meraki returns "Online" / "Offline"; Mist
+// currently returns empty on the search response so callers treating empty as
+// "unknown, keep the row" is the safest behavior.
+func isOnlineStatus(s string) bool {
+	if s == "" {
+		return true // unknown state — don't hide the row
+	}
+	return strings.EqualFold(s, "online")
+}
+
 // searchWiredMultiVendor searches for wired clients across multiple APIs.
-func searchWiredMultiVendor(ctx context.Context, searchText, siteID, format string, force, _, _ bool) error {
+func searchWiredMultiVendor(ctx context.Context, searchText, siteID, format string, force, _, _, _ bool) error {
 	// Validate target API if provided
 	if err := ValidateAPIFlag(); err != nil {
 		return err
