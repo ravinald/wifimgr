@@ -89,7 +89,7 @@ type WLANProfile struct {
 
 // WLANAuth represents WLAN authentication configuration
 type WLANAuth struct {
-	Type          string         `json:"type"`                     // "open", "psk", "eap"
+	Type          string         `json:"type"`                     // "open", "psk", "ipsk" (Meraki identity PSK), "eap"
 	PSK           string         `json:"psk,omitempty"`            // Pre-shared key (may be encrypted)
 	Pairwise      []string       `json:"pairwise,omitempty"`       // ["wpa2-ccmp", "wpa3"]
 	RADIUSServers []RADIUSServer `json:"radius_servers,omitempty"` // RADIUS servers for 802.1X
