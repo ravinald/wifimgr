@@ -80,6 +80,11 @@ func TestParseSearchArgs(t *testing.T) {
 			args: []string{"site", "US-LAB-01", "detail"},
 			want: searchArgs{siteID: "US-LAB-01", format: "table", detail: true},
 		},
+		{
+			name: "extensive keyword",
+			args: []string{"site", "US-LAB-01", "extensive"},
+			want: searchArgs{siteID: "US-LAB-01", format: "table", extensive: true},
+		},
 	}
 
 	for _, tt := range tests {
