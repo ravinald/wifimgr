@@ -658,6 +658,7 @@ func convertNetworkClientToWirelessClient(client *meraki.ResponseItemNetworksGet
 		Manufacturer: client.Manufacturer,
 		OS:           client.Os,
 		APMAC:        client.RecentDeviceMac,
+		APName:       client.RecentDeviceName,
 	}
 
 	// VLAN is a string in Meraki, store as 0
@@ -680,6 +681,7 @@ func convertNetworkClientToWiredClient(client *meraki.ResponseItemNetworksGetNet
 		IP:           client.IP,
 		Manufacturer: client.Manufacturer,
 		SwitchMAC:    client.RecentDeviceMac,
+		SwitchName:   client.RecentDeviceName,
 		PortID:       client.Switchport,
 	}
 

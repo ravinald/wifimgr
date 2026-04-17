@@ -495,13 +495,14 @@ func TestConvertNetworkClientToWirelessClient(t *testing.T) {
 		{
 			name: "valid wireless client",
 			client: &meraki.ResponseItemNetworksGetNetworkClients{
-				Mac:             "aa:bb:cc:dd:ee:ff",
-				Description:     "johns-laptop",
-				IP:              "192.168.1.100",
-				SSID:            "Guest-WiFi",
-				Manufacturer:    "Apple",
-				Os:              "macOS 14.0",
-				RecentDeviceMac: "11:22:33:44:55:66",
+				Mac:              "aa:bb:cc:dd:ee:ff",
+				Description:      "johns-laptop",
+				IP:               "192.168.1.100",
+				SSID:             "Guest-WiFi",
+				Manufacturer:     "Apple",
+				Os:               "macOS 14.0",
+				RecentDeviceMac:  "11:22:33:44:55:66",
+				RecentDeviceName: "ap2-15",
 			},
 			networkID: "L_123",
 			want: &vendors.WirelessClient{
@@ -514,6 +515,7 @@ func TestConvertNetworkClientToWirelessClient(t *testing.T) {
 				Manufacturer: "Apple",
 				OS:           "macOS 14.0",
 				APMAC:        "11:22:33:44:55:66",
+				APName:       "ap2-15",
 				VLAN:         0,
 			},
 		},
@@ -543,6 +545,12 @@ func TestConvertNetworkClientToWirelessClient(t *testing.T) {
 			if got.SSID != tt.want.SSID {
 				t.Errorf("SSID = %q, want %q", got.SSID, tt.want.SSID)
 			}
+			if got.APName != tt.want.APName {
+				t.Errorf("APName = %q, want %q", got.APName, tt.want.APName)
+			}
+			if got.APMAC != tt.want.APMAC {
+				t.Errorf("APMAC = %q, want %q", got.APMAC, tt.want.APMAC)
+			}
 		})
 	}
 }
@@ -564,12 +572,13 @@ func TestConvertNetworkClientToWiredClient(t *testing.T) {
 		{
 			name: "valid wired client",
 			client: &meraki.ResponseItemNetworksGetNetworkClients{
-				Mac:             "aa:bb:cc:dd:ee:ff",
-				Description:     "server-01",
-				IP:              "192.168.1.10",
-				Manufacturer:    "HP",
-				RecentDeviceMac: "11:22:33:44:55:66",
-				Switchport:      "5",
+				Mac:              "aa:bb:cc:dd:ee:ff",
+				Description:      "server-01",
+				IP:               "192.168.1.10",
+				Manufacturer:     "HP",
+				RecentDeviceMac:  "11:22:33:44:55:66",
+				RecentDeviceName: "sw-core-1",
+				Switchport:       "5",
 			},
 			networkID: "L_456",
 			want: &vendors.WiredClient{
@@ -580,6 +589,7 @@ func TestConvertNetworkClientToWiredClient(t *testing.T) {
 				IP:           "192.168.1.10",
 				Manufacturer: "HP",
 				SwitchMAC:    "11:22:33:44:55:66",
+				SwitchName:   "sw-core-1",
 				PortID:       "5",
 				VLAN:         0,
 			},
@@ -609,6 +619,12 @@ func TestConvertNetworkClientToWiredClient(t *testing.T) {
 			}
 			if got.PortID != tt.want.PortID {
 				t.Errorf("PortID = %q, want %q", got.PortID, tt.want.PortID)
+			}
+			if got.SwitchName != tt.want.SwitchName {
+				t.Errorf("SwitchName = %q, want %q", got.SwitchName, tt.want.SwitchName)
+			}
+			if got.SwitchMAC != tt.want.SwitchMAC {
+				t.Errorf("SwitchMAC = %q, want %q", got.SwitchMAC, tt.want.SwitchMAC)
 			}
 		})
 	}

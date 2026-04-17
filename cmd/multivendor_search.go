@@ -71,8 +71,16 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 			continue
 		}
 
+		// Pull the per-API cache once per loop iteration; enrichment is
+		// best-effort, so a missing cache just leaves fields empty.
+		var apiCache *vendors.APICache
+		if cacheMgr != nil {
+			apiCache, _ = cacheMgr.GetAPICache(apiLabel)
+		}
+
 		// Convert results to table data
 		for _, client := range results.Results {
+			enrichWirelessClientFromCache(client, apiCache)
 			vendorName, _ := registry.GetVendor(apiLabel)
 			data := formatter.GenericTableData{
 				"mac":       client.MAC,
@@ -111,21 +119,7 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 		return nil
 	}
 
-	// Define columns
-	columns := []formatter.TableColumn{
-		{Field: "mac", Title: "MAC", MaxWidth: 0},
-		{Field: "ip", Title: "IP", MaxWidth: 0},
-		{Field: "hostname", Title: "Hostname", MaxWidth: 0},
-		{Field: "ssid", Title: "SSID", MaxWidth: 0},
-		{Field: "ap_name", Title: "AP Name", MaxWidth: 0},
-		{Field: "band", Title: "Band", MaxWidth: 0},
-		{Field: "site_name", Title: "Site", MaxWidth: 0},
-	}
-
-	// Add API column when showing from multiple APIs
-	if len(targetAPIs) > 1 || apiFlag == "" {
-		columns = append(columns, formatter.TableColumn{Field: "api", Title: "API", MaxWidth: 0})
-	}
+	columns := buildWirelessSearchColumns(siteID, len(targetAPIs))
 
 	// Create table config
 	tableConfig := formatter.TableConfig{
@@ -206,8 +200,14 @@ func searchWiredMultiVendor(ctx context.Context, searchText, siteID, format stri
 			continue
 		}
 
+		var apiCache *vendors.APICache
+		if cacheMgr != nil {
+			apiCache, _ = cacheMgr.GetAPICache(apiLabel)
+		}
+
 		// Convert results to table data
 		for _, wiredClient := range results.Results {
+			enrichWiredClientFromCache(wiredClient, apiCache)
 			vendorName, _ := registry.GetVendor(apiLabel)
 			data := formatter.GenericTableData{
 				"mac":         wiredClient.MAC,
@@ -245,21 +245,7 @@ func searchWiredMultiVendor(ctx context.Context, searchText, siteID, format stri
 		return nil
 	}
 
-	// Define columns
-	columns := []formatter.TableColumn{
-		{Field: "mac", Title: "MAC", MaxWidth: 0},
-		{Field: "ip", Title: "IP", MaxWidth: 0},
-		{Field: "hostname", Title: "Hostname", MaxWidth: 0},
-		{Field: "switch_name", Title: "Switch", MaxWidth: 0},
-		{Field: "port", Title: "Port", MaxWidth: 0},
-		{Field: "vlan", Title: "VLAN", MaxWidth: 0},
-		{Field: "site_name", Title: "Site", MaxWidth: 0},
-	}
-
-	// Add API column when showing from multiple APIs
-	if len(targetAPIs) > 1 || apiFlag == "" {
-		columns = append(columns, formatter.TableColumn{Field: "api", Title: "API", MaxWidth: 0})
-	}
+	columns := buildWiredSearchColumns(siteID, len(targetAPIs))
 
 	// Create table config
 	tableConfig := formatter.TableConfig{
@@ -326,6 +312,85 @@ func confirmExpensiveSearchIfNeeded(ctx context.Context, registry *vendors.APICl
 	}
 
 	return nil
+}
+
+// enrichWirelessClientFromCache fills search-result fields that vendor search
+// endpoints don't always populate themselves: AP name (via Inventory.AP keyed
+// by normalized MAC) and site name (via SiteIndex.ByID). Best-effort — a nil
+// cache or missing entries leave the original fields untouched.
+func enrichWirelessClientFromCache(c *vendors.WirelessClient, cache *vendors.APICache) {
+	if c == nil || cache == nil {
+		return
+	}
+	if c.APName == "" && c.APMAC != "" {
+		if ap, ok := cache.Inventory.AP[vendors.NormalizeMAC(c.APMAC)]; ok && ap != nil {
+			c.APName = ap.Name
+		}
+	}
+	if c.SiteName == "" && c.SiteID != "" {
+		if name, ok := cache.SiteIndex.ByID[c.SiteID]; ok {
+			c.SiteName = name
+		}
+	}
+}
+
+// enrichWiredClientFromCache is the WiredClient analogue — fills Switch name
+// (via Inventory.Switch by MAC) and site name (via SiteIndex.ByID).
+func enrichWiredClientFromCache(c *vendors.WiredClient, cache *vendors.APICache) {
+	if c == nil || cache == nil {
+		return
+	}
+	if c.SwitchName == "" && c.SwitchMAC != "" {
+		if sw, ok := cache.Inventory.Switch[vendors.NormalizeMAC(c.SwitchMAC)]; ok && sw != nil {
+			c.SwitchName = sw.Name
+		}
+	}
+	if c.SiteName == "" && c.SiteID != "" {
+		if name, ok := cache.SiteIndex.ByID[c.SiteID]; ok {
+			c.SiteName = name
+		}
+	}
+}
+
+// buildWirelessSearchColumns picks the columns for the wireless search table.
+// The Site column is dropped when the user explicitly scoped to a single site —
+// every row would carry the same value. The API column is added when results
+// may span multiple APIs.
+func buildWirelessSearchColumns(siteFilter string, targetAPICount int) []formatter.TableColumn {
+	cols := []formatter.TableColumn{
+		{Field: "mac", Title: "MAC", MaxWidth: 0},
+		{Field: "ip", Title: "IP", MaxWidth: 0},
+		{Field: "hostname", Title: "Hostname", MaxWidth: 0},
+		{Field: "ssid", Title: "SSID", MaxWidth: 0},
+		{Field: "ap_name", Title: "AP Name", MaxWidth: 0},
+		{Field: "band", Title: "Band", MaxWidth: 0},
+	}
+	if siteFilter == "" {
+		cols = append(cols, formatter.TableColumn{Field: "site_name", Title: "Site", MaxWidth: 0})
+	}
+	if targetAPICount > 1 || apiFlag == "" {
+		cols = append(cols, formatter.TableColumn{Field: "api", Title: "API", MaxWidth: 0})
+	}
+	return cols
+}
+
+// buildWiredSearchColumns mirrors buildWirelessSearchColumns for wired search.
+func buildWiredSearchColumns(siteFilter string, targetAPICount int) []formatter.TableColumn {
+	cols := []formatter.TableColumn{
+		{Field: "mac", Title: "MAC", MaxWidth: 0},
+		{Field: "ip", Title: "IP", MaxWidth: 0},
+		{Field: "hostname", Title: "Hostname", MaxWidth: 0},
+		{Field: "switch_name", Title: "Switch", MaxWidth: 0},
+		{Field: "port", Title: "Port", MaxWidth: 0},
+		{Field: "vlan", Title: "VLAN", MaxWidth: 0},
+	}
+	if siteFilter == "" {
+		cols = append(cols, formatter.TableColumn{Field: "site_name", Title: "Site", MaxWidth: 0})
+	}
+	if targetAPICount > 1 || apiFlag == "" {
+		cols = append(cols, formatter.TableColumn{Field: "api", Title: "API", MaxWidth: 0})
+	}
+	return cols
 }
 
 // resolveSearchSiteID maps a user-supplied site argument to the vendor site ID
