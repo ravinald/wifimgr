@@ -361,7 +361,7 @@ func rollbackConfigFile(cfg *config.Config, siteName string, configFilePath stri
 		return fmt.Errorf("failed to read backup file: %w", err)
 	}
 
-	if err := os.WriteFile(configFilePath, restoreData, 0600); err != nil {
+	if err := os.WriteFile(configFilePath, restoreData, 0600); err != nil { // #nosec G304 G703 -- path from operator-controlled config
 		return fmt.Errorf("failed to restore config: %w", err)
 	}
 
