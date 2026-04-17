@@ -1,6 +1,6 @@
 # Multi-Vendor User Guide
 
-This guide explains how to configure and use wifimgr with multiple vendors (Mist and Meraki).
+This guide explains how to configure and use wifimgr with multiple vendors (Mist, Meraki, and Ubiquiti).
 
 ## Quick Start
 
@@ -56,12 +56,13 @@ wifimgr show api ap target mist-prod
 
 API labels are user-defined identifiers for your API connections. Choose meaningful names:
 
-| Example Label   | Use Case                     |
-|-----------------|------------------------------|
-| `mist-prod`     | Mist production organization |
-| `mist-lab`      | Mist lab/test organization   |
-| `meraki-corp`   | Meraki corporate networks    |
-| `meraki-retail` | Meraki retail locations      |
+| Example Label    | Use Case                       |
+|------------------|--------------------------------|
+| `mist-prod`      | Mist production organization   |
+| `mist-lab`       | Mist lab/test organization     |
+| `meraki-corp`    | Meraki corporate networks      |
+| `meraki-retail`  | Meraki retail locations        |
+| `ubiquiti-corp`  | Ubiquiti corporate sites       |
 
 ### Vendor Configuration
 
@@ -103,6 +104,24 @@ api:
 2. Go to Organization -> Settings -> Dashboard API access
 3. Enable API access and generate a key
 4. Note your Organization ID from the URL
+
+#### Ubiquiti
+
+```yaml
+api:
+  ubiquiti-corp:
+    vendor: ubiquiti
+    credentials:
+      site_manager_api_key: "your-site-manager-api-key"
+```
+
+**Getting Ubiquiti Credentials:**
+1. Log into https://unifi.ui.com
+2. Go to Account Settings -> API Keys
+3. Create a new API key
+4. Copy the key (no org_id needed - the key is scoped to your account)
+
+**Note:** Ubiquiti Phase 1 supports read-only operations (sites, inventory, devices, statuses) via the Site Manager API. Write operations are planned for Phase 2.
 
 ### Environment Variables
 
@@ -219,27 +238,28 @@ wifimgr show api ap site US-CAMPUS-01 target mist-prod
 
 ## Capability Differences
 
-Most features are available across both vendors. Some advanced features are vendor-specific:
+Most features are available across all vendors. Some advanced features are vendor-specific:
 
-| Feature                | Mist   | Meraki   |
-|------------------------|--------|----------|
-| Sites/Networks         | ✓      | ✓        |
-| Inventory              | ✓      | ✓        |
-| Devices                | ✓      | ✓        |
-| Device Configs         | ✓      | ✓        |
-| Wireless Client Search | ✓      | ✓        |
-| Wired Client Search    | ✓      | ✓        |
-| Device Profiles        | ✓      | -        |
-| RF Templates           | ✓      | -        |
-| Gateway Templates      | ✓      | -        |
-| WLAN Templates         | ✓      | -        |
-| Gateway/Switch Apply   | -      | -        |
+| Feature                | Mist   | Meraki   | Ubiquiti |
+|------------------------|--------|----------|----------|
+| Sites/Networks         | ✓      | ✓        | ✓        |
+| Inventory              | ✓      | ✓        | ✓        |
+| Devices                | ✓      | ✓        | ✓        |
+| Device Statuses        | ✓      | ✓        | ✓        |
+| Device Configs         | ✓      | ✓        | -        |
+| Wireless Client Search | ✓      | ✓        | -        |
+| Wired Client Search    | ✓      | ✓        | -        |
+| Device Profiles        | ✓      | -        | -        |
+| RF Templates           | ✓      | -        | -        |
+| Gateway Templates      | ✓      | -        | -        |
+| WLAN Templates         | ✓      | -        | -        |
+| Gateway/Switch Apply   | -      | -        | -        |
 
-**Note:** Gateway and Switch apply functionality is planned for future releases. Currently, apply operations support APs on both vendors.
+**Note:** Ubiquiti Phase 1 provides read-only access via the Site Manager API. Search, configs, and write operations are planned for Phase 2 via the Network API.
 
 ### Search on Both Platforms
 
-Both Mist and Meraki support client search:
+Mist and Meraki support client search (Ubiquiti search is planned for Phase 2):
 
 ```bash
 # Search on Mist
@@ -396,6 +416,7 @@ wifimgr refresh device target mist-prod
 If you see rate limit errors:
 - Meraki: Default 10 requests/second
 - Mist: Default 5000 requests/hour
+- Ubiquiti: Default ~10,000 requests/minute
 
 The tool automatically handles rate limiting with backoff, but heavy operations may take time.
 
