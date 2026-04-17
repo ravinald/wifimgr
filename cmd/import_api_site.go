@@ -940,28 +940,6 @@ func slug(s string) string {
 	return strings.TrimRight(out, "-")
 }
 
-func buildProfilesExport(cacheAccessor *vendors.CacheAccessor, siteID string) []map[string]any {
-	var profiles []map[string]any
-
-	for _, profile := range cacheAccessor.GetAllDeviceProfiles() {
-		// Only include site-specific profiles
-		if !profile.ForSite || profile.SiteID != siteID {
-			continue
-		}
-
-		profileData := map[string]any{
-			"id":       profile.ID,
-			"name":     profile.Name,
-			"type":     profile.Type,
-			"for_site": profile.ForSite,
-		}
-
-		profiles = append(profiles, profileData)
-	}
-
-	return profiles
-}
-
 func loadExistingConfig(path string) (*SiteExportConfig, bool) {
 	data, err := os.ReadFile(path) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
@@ -1058,36 +1036,3 @@ func confirmOverwrite(path string) bool {
 	return response == "y" || response == "yes"
 }
 
-func copyMap(m map[string]any) map[string]any {
-	result := make(map[string]any)
-	for k, v := range m {
-		if nested, ok := v.(map[string]any); ok {
-			result[k] = copyMap(nested)
-		} else {
-			result[k] = v
-		}
-	}
-	return result
-}
-
-func redactSecrets(config map[string]any) {
-	// Common secret field names to redact
-	secretFields := []string{"psk", "passphrase", "secret", "password", "key"}
-
-	for key, value := range config {
-		keyLower := strings.ToLower(key)
-
-		// Check if this is a secret field
-		for _, secretField := range secretFields {
-			if strings.Contains(keyLower, secretField) {
-				config[key] = "***REDACTED***"
-				break
-			}
-		}
-
-		// Recursively check nested maps
-		if nested, ok := value.(map[string]any); ok {
-			redactSecrets(nested)
-		}
-	}
-}
