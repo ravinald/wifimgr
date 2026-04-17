@@ -21,8 +21,8 @@ the local cache files.
 
 Use 'wifimgr refresh <subcommand> --help' for detailed information about
 each refresh operation.`,
-	Example: `  # Refresh the full per-API cache (sites, inventory, configs, WLANs, ...)
-  wifimgr refresh cache
+	Example: `  # Refresh the device-level cache (sites, inventory, configs, WLANs, ...)
+  wifimgr refresh device
 
   # Refresh everything we know how to cache, including per-client detail
   wifimgr refresh all

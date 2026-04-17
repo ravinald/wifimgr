@@ -21,15 +21,15 @@ import (
 // this command when they land.
 var refreshAllCmd = &cobra.Command{
 	Use:   "all",
-	Short: "Refresh every cached data source (cache + client detail)",
+	Short: "Refresh every cached data source (device cache + client detail)",
 	Long: `Runs every refresh subcommand in sequence:
 
-  1. 'refresh cache'          — sites, inventory, device configs, WLANs, etc.
+  1. 'refresh device'         — sites, inventory, device configs, WLANs, etc.
   2. 'refresh client site X'  — per-client detail (e.g. Meraki connected band)
                                 for every site in every API that supports it.
 
 Step 2 can be expensive on large Meraki orgs (roughly 3 API calls per site).
-Use 'refresh cache' if you don't need client detail right now, or
+Use 'refresh device' if you don't need client detail right now, or
 'refresh client site <name>' for a single site.
 
 When multiple APIs are configured:

@@ -58,10 +58,10 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 	apiCounts := make(map[string]int)
 	apisWithSearch := 0
 
-	// Detail-mode bookkeeping: how many rows got a cached Band record and the
-	// freshest FetchedAt across them, for the footer timestamp.
+	// Bookkeeping for the Band cache: how many rows got a cached Band record
+	// and the newest FetchedAt across them, for the "last refreshed" footer.
 	var (
-		detailCacheHits   int
+		bandCacheHits     int
 		newestDetailFetch time.Time
 	)
 
@@ -112,16 +112,19 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 
 			enrichWirelessClientFromCache(client, apiCache)
 
-			// Fill Band from the persistent client-detail cache when the
-			// operator asked for detail. Doing it here keeps the default
-			// path identical to before — cost unchanged, no cache hits.
-			if showDetail && cacheMgr != nil && client.Band == "" && client.MAC != "" {
+			// Fill Band from the persistent client-detail cache whenever the
+			// row still has a blank Band. Band lives in the default column
+			// set now, so this enrichment runs for every search — it's a
+			// lightweight in-memory lookup against a cache that's already
+			// resident. Mist carries Band natively on the primary response
+			// and short-circuits via the `client.Band == ""` guard.
+			if cacheMgr != nil && client.Band == "" && client.MAC != "" {
 				if rec, ok := cacheMgr.LookupClientDetail(apiLabel, client.MAC); ok {
 					client.Band = rec.Band
 					if rec.FetchedAt.After(newestDetailFetch) {
 						newestDetailFetch = rec.FetchedAt
 					}
-					detailCacheHits++
+					bandCacheHits++
 				}
 			}
 
@@ -184,8 +187,11 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 	printer.Config.Columns = columns
 	fmt.Print(printer.Print())
 
-	if showDetail {
-		printDetailFooter(detailCacheHits, newestDetailFetch, siteID)
+	// Footer fires whenever the Band column was populated from cache on at
+	// least one row. Band is a default column, so this now appears on any
+	// plain `search wireless` after a refresh — no need to wait for detail.
+	if bandCacheHits > 0 || showDetail {
+		printBandCacheFooter(bandCacheHits, newestDetailFetch, siteID)
 	}
 
 	return nil
@@ -413,24 +419,23 @@ func enrichWiredClientFromCache(c *vendors.WiredClient, cache *vendors.APICache)
 }
 
 // buildWirelessSearchColumns picks the columns for the wireless search table.
-// The Site column is dropped when the user explicitly scoped to a single site —
-// every row would carry the same value. The API column is added when results
-// may span multiple APIs. When detail is true, Band and State columns are
-// included with a `[*]` marker so operators know the data is cache-sourced
-// (Band) or live-but-detail-gated (State).
-func buildWirelessSearchColumns(siteFilter string, targetAPICount int, detail bool) []formatter.TableColumn {
+// Band is now a default column, backed by the local client-detail cache —
+// the `[*]` marker signals "cached, may be stale" and the footer under the
+// table says when the cache was last refreshed. State only shows under
+// detail/extensive; it's live from the API response so no marker.
+// Site drops when the user explicitly scoped to a single site (every row
+// carries the same value). API is added when results may span multiple APIs.
+func buildWirelessSearchColumns(siteFilter string, targetAPICount int, showDetail bool) []formatter.TableColumn {
 	cols := []formatter.TableColumn{
 		{Field: "mac", Title: "MAC", MaxWidth: 0},
 		{Field: "ip", Title: "IP", MaxWidth: 0},
 		{Field: "hostname", Title: "Hostname", MaxWidth: 0},
 		{Field: "ssid", Title: "SSID", MaxWidth: 0},
 		{Field: "ap_name", Title: "AP Name", MaxWidth: 0},
+		{Field: "band", Title: "Band [*]", MaxWidth: 0},
 	}
-	if detail {
-		cols = append(cols,
-			formatter.TableColumn{Field: "band", Title: "Band [*]", MaxWidth: 0},
-			formatter.TableColumn{Field: "state", Title: "State [*]", MaxWidth: 0},
-		)
+	if showDetail {
+		cols = append(cols, formatter.TableColumn{Field: "state", Title: "State", MaxWidth: 0})
 	}
 	if siteFilter == "" {
 		cols = append(cols, formatter.TableColumn{Field: "site_name", Title: "Site", MaxWidth: 0})
@@ -462,26 +467,27 @@ func buildWiredSearchColumns(siteFilter string, targetAPICount int, _ bool) []fo
 	return cols
 }
 
-// printDetailFooter emits the provenance footer for `search ... detail`. The
-// Band column carries a `[*]` marker in its header; this footer says when the
-// cache was last refreshed, or nudges the operator to run `refresh client site`
-// when nothing is cached.
-func printDetailFooter(cacheHits int, newest time.Time, siteFilter string) {
+// printBandCacheFooter emits the provenance footer under the wireless search
+// table. The Band column carries a `[*]` marker; this footer explains when
+// the Band cache was last refreshed or nudges the operator to populate it.
+// Fires whenever cacheHits > 0 OR the operator asked for detail/extensive
+// (so they see the footer even when nothing matched).
+func printBandCacheFooter(cacheHits int, newest time.Time, siteFilter string) {
 	fmt.Println()
 	if cacheHits == 0 {
 		if siteFilter == "" {
-			fmt.Println("[*] no client detail cached — run `refresh client site <name>` to populate")
+			fmt.Println("[*] no Band data cached — run `refresh client site <name>` to populate")
 		} else {
-			fmt.Printf("[*] no client detail cached for %s — run `refresh client site %q` to populate\n",
+			fmt.Printf("[*] no Band data cached for %s — run `refresh client site %q` to populate\n",
 				siteFilter, siteFilter)
 		}
 		return
 	}
 	if siteFilter == "" {
-		fmt.Printf("[*] last refreshed %s — run `refresh client site <name>` to update\n",
+		fmt.Printf("[*] Band cache last refreshed %s — run `refresh client site <name>` to update\n",
 			newest.Format(time.RFC3339))
 	} else {
-		fmt.Printf("[*] last refreshed %s — run `refresh client site %q` to update\n",
+		fmt.Printf("[*] Band cache last refreshed %s — run `refresh client site %q` to update\n",
 			newest.Format(time.RFC3339), siteFilter)
 	}
 }
