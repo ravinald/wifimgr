@@ -380,6 +380,7 @@ The main configuration file (`~/.config/wifimgr/wifimgr-config.json`) supports t
   "files": {
     "config_dir": "~/.config/wifimgr",
     "site_configs": ["sites/us-oak-pina.json"],
+    "templates": ["wlans/us-oak-pina.json"],
     "cache_dir": "~/.cache/wifimgr",
     "inventory": "~/.config/wifimgr/inventory.json",
     "log_file": "~/.local/state/wifimgr/wifimgr.log",

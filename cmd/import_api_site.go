@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/ravinald/wifimgr/internal/cmdutils"
+	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/vendors"
 	"github.com/ravinald/wifimgr/internal/vendors/meraki"
@@ -260,61 +261,152 @@ func runImportAPISite(cmd *cobra.Command, args []string) error {
 
 	logger.Infof("Importing site '%s' from API '%s' (scope: %s, save: %v)", siteName, apiLabel, parsed.scope, parsed.saveMode)
 
-	// Build the export data
-	exportData, err := buildSiteExportData(cacheAccessor, site, parsed.scope, parsed.includeSecrets)
+	// Build the export data (site config + companion WLAN template)
+	exportData, templateData, err := buildSiteExportData(cacheAccessor, site, parsed.scope, parsed.includeSecrets)
 	if err != nil {
 		return fmt.Errorf("failed to build export data: %w", err)
 	}
 
-	// Determine output path
-	var outputPath string
-	if parsed.outputFile != "" {
-		// Custom output file specified
-		if filepath.IsAbs(parsed.outputFile) {
-			// Absolute path - use as-is
-			outputPath = parsed.outputFile
-		} else {
-			// Relative path - join with config_dir
-			configDir := viper.GetString("files.config_dir")
-			outputPath = filepath.Join(configDir, parsed.outputFile)
-		}
-	} else {
-		// Default output path (XDG config directory)
-		outputPath = filepath.Join(xdg.GetConfigDir(), apiLabel, "sites", siteName+".json")
-	}
+	// Determine output paths for both files. The site path follows the
+	// operator's --output if provided; the template path is derived from it
+	// so both files live in a predictable layout.
+	configDir := viper.GetString("files.config_dir")
+	sitePath := resolveSiteOutputPath(parsed.outputFile, configDir, apiLabel, siteName)
+	templatePath := resolveTemplateOutputPath(sitePath, configDir, apiLabel, siteName)
 
-	// Check if file exists (needed for compare mode)
-	existingData, fileExists := loadExistingConfig(outputPath)
-
+	// Non-save modes (STDOUT preview, compare) only operate on the site
+	// document today — templates are only materialized when saving.
 	if parsed.compareMode {
-		return compareSiteConfig(exportData, existingData, fileExists, outputPath, siteName)
+		if exportData == nil {
+			return fmt.Errorf("compare is not supported with scope %q", parsed.scope)
+		}
+		existingData, fileExists := loadExistingConfig(sitePath)
+		return compareSiteConfig(exportData, existingData, fileExists, sitePath, siteName)
 	}
 
-	// Without save mode, just print to STDOUT
 	if !parsed.saveMode {
-		jsonData, err := json.MarshalIndent(exportData, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal data: %w", err)
+		switch {
+		case exportData != nil:
+			jsonData, err := json.MarshalIndent(exportData, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal data: %w", err)
+			}
+			fmt.Println(string(jsonData))
+		case templateData != nil:
+			jsonData, err := json.MarshalIndent(templateData, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal template data: %w", err)
+			}
+			fmt.Println(string(jsonData))
 		}
-		fmt.Println(string(jsonData))
 		return nil
 	}
 
-	// Save mode: write to file
-	// If file exists, ask for confirmation
-	if fileExists {
-		if !confirmOverwrite(outputPath) {
-			fmt.Println("Import cancelled")
-			return nil
+	// Save mode: write whichever files the scope produced, confirming any
+	// overwrites first.
+	if exportData != nil {
+		if _, exists := loadExistingConfig(sitePath); exists {
+			if !confirmOverwrite(sitePath) {
+				fmt.Println("Import cancelled")
+				return nil
+			}
+		}
+		if err := writeSiteConfig(sitePath, exportData); err != nil {
+			return fmt.Errorf("failed to write site config: %w", err)
 		}
 	}
 
-	// Write the file
-	if err := writeSiteConfig(outputPath, exportData); err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
+	if templateData != nil {
+		if _, err := os.Stat(templatePath); err == nil {
+			if !confirmOverwrite(templatePath) {
+				fmt.Println("Template import cancelled")
+				return nil
+			}
+		}
+		if err := writeWLANTemplateFile(templatePath, templateData); err != nil {
+			return fmt.Errorf("failed to write WLAN template: %w", err)
+		}
 	}
 
-	fmt.Printf("Exported site configuration to: %s\n", outputPath)
+	printActivationHint(sitePath, templatePath, exportData != nil, templateData != nil, configDir)
+	return nil
+}
+
+// resolveSiteOutputPath picks the on-disk location for the site config file.
+// Respects an explicit --output, falls back to <configDir>/<api>/sites/<name>.json.
+func resolveSiteOutputPath(outputFile, configDir, apiLabel, siteName string) string {
+	if outputFile != "" {
+		if filepath.IsAbs(outputFile) {
+			return outputFile
+		}
+		return filepath.Join(configDir, outputFile)
+	}
+	return filepath.Join(xdg.GetConfigDir(), apiLabel, "sites", siteName+".json")
+}
+
+// resolveTemplateOutputPath mirrors the site path into the companion template
+// directory. When the site path lives under `.../sites/...`, the template goes
+// to the same relative path with `/sites/` swapped for `/wlans/`. Otherwise it
+// falls back to `<configDir>/<api>/wlans/<site-name>.json`.
+func resolveTemplateOutputPath(sitePath, configDir, apiLabel, siteName string) string {
+	if strings.Contains(sitePath, string(os.PathSeparator)+"sites"+string(os.PathSeparator)) {
+		return strings.Replace(sitePath, string(os.PathSeparator)+"sites"+string(os.PathSeparator), string(os.PathSeparator)+"wlans"+string(os.PathSeparator), 1)
+	}
+	return filepath.Join(xdg.GetConfigDir(), apiLabel, "wlans", siteName+".json")
+}
+
+// printActivationHint tells the operator exactly what to add to the main
+// config, using paths relative to config_dir so the message matches what they
+// type into `files.site_configs` / `files.templates`.
+func printActivationHint(sitePath, templatePath string, wroteSite, wroteTemplate bool, configDir string) {
+	relSite := relativeFromConfigDir(sitePath, configDir)
+	relTemplate := relativeFromConfigDir(templatePath, configDir)
+
+	switch {
+	case wroteSite && wroteTemplate:
+		fmt.Printf("Wrote site config:    %s\n", sitePath)
+		fmt.Printf("Wrote WLAN template:  %s\n", templatePath)
+		fmt.Printf("\nTo activate, add to your wifimgr-config.json:\n")
+		fmt.Printf("  \"files\": {\n")
+		fmt.Printf("    \"site_configs\": [ ..., %q ],\n", relSite)
+		fmt.Printf("    \"templates\":    [ ..., %q ]\n", relTemplate)
+		fmt.Printf("  }\n")
+	case wroteSite:
+		fmt.Printf("Exported site configuration to: %s\n", sitePath)
+		fmt.Printf("\nTo activate, add to files.site_configs: %q\n", relSite)
+	case wroteTemplate:
+		fmt.Printf("Exported WLAN template to: %s\n", templatePath)
+		fmt.Printf("\nTo activate, add to files.templates: %q\n", relTemplate)
+	}
+}
+
+// relativeFromConfigDir returns path rendered relative to configDir when
+// possible, preserving the form the operator types into main config.
+func relativeFromConfigDir(path, configDir string) string {
+	if configDir == "" {
+		return path
+	}
+	if rel, err := filepath.Rel(configDir, path); err == nil && !strings.HasPrefix(rel, "..") {
+		return rel
+	}
+	return path
+}
+
+// writeWLANTemplateFile serializes a WLANProfileFile to disk, creating the
+// parent directory if needed. Mirrors writeSiteConfig so file permissions and
+// directory modes stay consistent between the pair.
+func writeWLANTemplateFile(path string, file *config.WLANProfileFile) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+	data, err := json.MarshalIndent(file, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal template: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil { // #nosec G304 G703 -- path from operator-controlled config
+		return fmt.Errorf("failed to write template file: %w", err)
+	}
 	return nil
 }
 
@@ -329,13 +421,15 @@ type SiteExportConfigData struct {
 	Sites map[string]*SiteConfigData `json:"sites"`
 }
 
-// SiteConfigData represents the configuration data for a single site
+// SiteConfigData represents the configuration data for a single site.
+// The shape matches config.SiteConfigObj so exported files load back through
+// the same path as hand-written site configs.
 type SiteConfigData struct {
-	API        string           `json:"api,omitempty"`
-	SiteConfig map[string]any   `json:"site_config"`
-	Devices    *DevicesConfig   `json:"devices,omitempty"`
-	WLANs      []map[string]any `json:"wlan,omitempty"`
-	Profiles   []map[string]any `json:"profiles,omitempty"`
+	API        string                       `json:"api,omitempty"`
+	SiteConfig map[string]any               `json:"site_config"`
+	Devices    *DevicesConfig               `json:"devices,omitempty"`
+	WLAN       []string                     `json:"wlan,omitempty"`     // template labels; definitions live in the companion wlan_profiles file
+	Profiles   config.SiteConfigObjProfiles `json:"profiles,omitempty"` // device/radio/wlan template label refs (device-profile export not yet migrated)
 }
 
 // DevicesConfig holds device configurations by type
@@ -345,7 +439,33 @@ type DevicesConfig struct {
 	Gateway map[string]map[string]any `json:"gateway,omitempty"`
 }
 
-func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.SiteInfo, scope ImportScope, includeSecrets bool) (*SiteExportConfig, error) {
+// buildSiteExportData builds both halves of an import: the site config file
+// and, when WLANs are in scope, the companion WLAN template file. Either can
+// be nil depending on scope — `wlans`-only returns a nil *SiteExportConfig,
+// device-type scopes return a nil *config.WLANProfileFile.
+func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.SiteInfo, scope ImportScope, includeSecrets bool) (*SiteExportConfig, *config.WLANProfileFile, error) {
+	siteSlug := slug(site.Name)
+
+	// WLANs always processed first so label references land on the site entry.
+	var wlanLabels []string
+	var wlanProfiles map[string]*config.WLANProfile
+	if scope == ScopeFull || scope == ScopeWLANs {
+		wlanLabels, wlanProfiles = buildWLANsExport(cacheAccessor, site.ID, siteSlug, includeSecrets)
+	}
+
+	var templateFile *config.WLANProfileFile
+	if len(wlanProfiles) > 0 {
+		templateFile = &config.WLANProfileFile{
+			Version:      1,
+			WLANProfiles: wlanProfiles,
+		}
+	}
+
+	// `wlans` scope emits only the template file.
+	if scope == ScopeWLANs {
+		return nil, templateFile, nil
+	}
+
 	siteData := &SiteConfigData{
 		API: site.SourceAPI,
 		SiteConfig: map[string]any{
@@ -357,7 +477,6 @@ func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.Sit
 		},
 	}
 
-	// Add location if available
 	if site.Latitude != 0 || site.Longitude != 0 {
 		siteData.SiteConfig["latlng"] = map[string]float64{
 			"lat": site.Latitude,
@@ -365,7 +484,6 @@ func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.Sit
 		}
 	}
 
-	// Add devices if scope includes them
 	if scope == ScopeFull || scope == ScopeAP || scope == ScopeSwitch || scope == ScopeGateway {
 		devices, err := buildDevicesExport(cacheAccessor, site.ID, site.SourceVendor, scope)
 		if err != nil {
@@ -375,21 +493,16 @@ func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.Sit
 		}
 	}
 
-	// Add WLANs if scope includes them
-	if scope == ScopeFull || scope == ScopeWLANs {
-		wlans := buildWLANsExport(cacheAccessor, site.ID, includeSecrets)
-		if len(wlans) > 0 {
-			siteData.WLANs = wlans
-		}
+	if len(wlanLabels) > 0 {
+		siteData.WLAN = wlanLabels
 	}
 
-	// Add site-specific profiles if scope includes them
-	if scope == ScopeFull || scope == ScopeProfiles {
-		profiles := buildProfilesExport(cacheAccessor, site.ID)
-		if len(profiles) > 0 {
-			siteData.Profiles = profiles
-		}
-	}
+	// NOTE: buildProfilesExport still returns the old `[]map[string]any` shape
+	// and is a stale code path for Mist device-profile imports. Migrating it to
+	// label-and-file form is tracked separately; today it's a no-op for Meraki
+	// (which has no device-profile concept) and harmlessly empty for most Mist
+	// sites that rely on org-level profiles.
+	_ = scope // placeholder for when the profile export path is migrated
 
 	return &SiteExportConfig{
 		Version: 1,
@@ -398,7 +511,7 @@ func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.Sit
 				site.Name: siteData,
 			},
 		},
-	}, nil
+	}, templateFile, nil
 }
 
 func buildDevicesExport(cacheAccessor *vendors.CacheAccessor, siteID string, sourceVendor string, scope ImportScope) (*DevicesConfig, error) {
@@ -644,38 +757,187 @@ func buildDevicesExport(cacheAccessor *vendors.CacheAccessor, siteID string, sou
 	return devices, nil
 }
 
-func buildWLANsExport(cacheAccessor *vendors.CacheAccessor, siteID string, includeSecrets bool) []map[string]any {
-	var wlans []map[string]any
+// buildWLANsExport converts vendor-normalized WLANs for a site into the
+// Mist-canonical pair of (label list, label→profile map). Thin wrapper around
+// the accessor so the transformation logic stays testable.
+func buildWLANsExport(cacheAccessor *vendors.CacheAccessor, siteID, siteSlug string, includeSecrets bool) ([]string, map[string]*config.WLANProfile) {
+	return synthesizeWLANLabels(cacheAccessor.GetWLANsBySite(siteID), siteSlug, includeSecrets)
+}
 
-	for _, wlan := range cacheAccessor.GetWLANsBySite(siteID) {
-		wlanData := map[string]any{
-			"ssid":       wlan.SSID,
-			"id":         wlan.ID,
-			"enabled":    wlan.Enabled,
-			"hidden":     wlan.Hidden,
-			"auth_type":  wlan.AuthType,
-			"encryption": wlan.EncryptionMode,
-			"band":       wlan.Band,
-		}
-
-		if wlan.VLANID > 0 {
-			wlanData["vlan_id"] = wlan.VLANID
-		}
-
-		// Include raw config if available
-		if wlan.Config != nil {
-			config := copyMap(wlan.Config)
-			if !includeSecrets {
-				// Redact sensitive data
-				redactSecrets(config)
-			}
-			wlanData["config"] = config
-		}
-
-		wlans = append(wlans, wlanData)
+// synthesizeWLANLabels is the pure half of buildWLANsExport: given a slice of
+// vendor-normalized WLANs and a site slug, produce label references and the
+// matching WLANProfile map. Separated so unit tests can drive it directly.
+func synthesizeWLANLabels(vendorWLANs []*vendors.WLAN, siteSlug string, includeSecrets bool) ([]string, map[string]*config.WLANProfile) {
+	if len(vendorWLANs) == 0 {
+		return nil, nil
 	}
 
-	return wlans
+	labels := make([]string, 0, len(vendorWLANs))
+	profiles := make(map[string]*config.WLANProfile, len(vendorWLANs))
+	used := make(map[string]int) // collision counter keyed on bare label
+
+	for _, w := range vendorWLANs {
+		base := fmt.Sprintf("%s--%s", siteSlug, slug(w.SSID))
+		label := base
+		if n := used[base]; n > 0 {
+			label = fmt.Sprintf("%s-%d", base, n+1)
+		}
+		used[base]++
+
+		profiles[label] = convertVendorWLANToProfile(w, includeSecrets)
+		labels = append(labels, label)
+	}
+
+	return labels, profiles
+}
+
+// convertVendorWLANToProfile maps a vendor-normalized WLAN into the portable
+// WLANProfile shape the template system uses. Vendor-specific metadata
+// (network IDs, SSID slot numbers, ipAssignmentMode, etc.) is deliberately
+// dropped — this is the portable half. PSK and RADIUS secrets honor
+// includeSecrets and are otherwise omitted.
+func convertVendorWLANToProfile(w *vendors.WLAN, includeSecrets bool) *config.WLANProfile {
+	profile := &config.WLANProfile{
+		SSID:    w.SSID,
+		Enabled: w.Enabled,
+		Hidden:  w.Hidden,
+		Band:    w.Band,
+		VLANID:  w.VLANID,
+		Auth: config.WLANAuth{
+			Type: normalizeAuthType(w.AuthType),
+		},
+	}
+
+	if includeSecrets && w.PSK != "" {
+		profile.Auth.PSK = w.PSK
+	}
+
+	if pairwise := encryptionModeToPairwise(w.EncryptionMode); len(pairwise) > 0 {
+		profile.Auth.Pairwise = pairwise
+	}
+
+	if len(w.RadiusServers) > 0 {
+		servers := make([]config.RADIUSServer, 0, len(w.RadiusServers))
+		for _, rs := range w.RadiusServers {
+			cs := config.RADIUSServer{Host: rs.Host, Port: rs.Port}
+			if includeSecrets {
+				cs.Secret = rs.Secret
+			}
+			servers = append(servers, cs)
+		}
+		profile.Auth.RADIUSServers = servers
+	}
+
+	// Bandwidth and portal settings live in the raw vendor config map; pull
+	// them opportunistically so the round-trip stays close to lossless without
+	// leaking vendor-specific field names into the profile schema.
+	if w.Config != nil {
+		if up, ok := firstInt(w.Config, "per_client_bandwidth_limit_up", "perClientBandwidthLimitUp"); ok {
+			profile.ClientLimitUp = up
+		}
+		if down, ok := firstInt(w.Config, "per_client_bandwidth_limit_down", "perClientBandwidthLimitDown"); ok {
+			profile.ClientLimitDown = down
+		}
+		if portal := extractPortal(w.Config); portal != nil {
+			profile.Portal = portal
+		}
+	}
+
+	return profile
+}
+
+// normalizeAuthType maps vendor-specific auth strings into the canonical
+// "open" / "psk" / "eap" set used by WLANProfile.
+func normalizeAuthType(t string) string {
+	switch strings.ToLower(strings.TrimSpace(t)) {
+	case "", "open":
+		return "open"
+	case "psk", "wpa", "wpa-psk", "wpa2-psk", "wpa3-psk", "wpa2/wpa3-psk", "sae":
+		return "psk"
+	case "eap", "enterprise", "wpa2-enterprise", "wpa3-enterprise", "8021x-radius", "wpa-eap", "wpa2-eap":
+		return "eap"
+	default:
+		return t // leave verbatim so operators can see what came through
+	}
+}
+
+// encryptionModeToPairwise splits a vendor encryption label into WLANProfile's
+// Pairwise list. Empty input returns a nil slice so the field stays omitempty.
+func encryptionModeToPairwise(mode string) []string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", "none":
+		return nil
+	case "wpa2":
+		return []string{"wpa2-ccmp"}
+	case "wpa3":
+		return []string{"wpa3"}
+	case "wpa2/wpa3", "wpa2+wpa3":
+		return []string{"wpa2-ccmp", "wpa3"}
+	default:
+		return []string{mode}
+	}
+}
+
+// firstInt returns the first key in the map (checked in order) that resolves to
+// an int-like value, along with its int value.
+func firstInt(m map[string]any, keys ...string) (int, bool) {
+	for _, k := range keys {
+		v, ok := m[k]
+		if !ok {
+			continue
+		}
+		switch n := v.(type) {
+		case int:
+			return n, true
+		case int64:
+			return int(n), true
+		case float64:
+			return int(n), true
+		}
+	}
+	return 0, false
+}
+
+// extractPortal derives a PortalConfig from the raw vendor config if captive
+// portal / splash settings are present. Returns nil when the vendor didn't
+// advertise a portal.
+func extractPortal(m map[string]any) *config.PortalConfig {
+	// Meraki: `splashPage` is "None" when disabled, otherwise a human-readable
+	// auth type like "Password-protected with Meraki RADIUS" or "Click-through".
+	if sp, ok := m["splashPage"].(string); ok && sp != "" && !strings.EqualFold(sp, "none") {
+		return &config.PortalConfig{Enabled: true, Auth: sp}
+	}
+	// Mist: `portal.enabled` bool, `portal.auth` string.
+	if raw, ok := m["portal"].(map[string]any); ok {
+		enabled, _ := raw["enabled"].(bool)
+		auth, _ := raw["auth"].(string)
+		if enabled || auth != "" {
+			return &config.PortalConfig{Enabled: enabled, Auth: auth}
+		}
+	}
+	return nil
+}
+
+// slug lowercases a string and collapses runs of non-alphanumeric characters
+// into single hyphens. Used to produce stable label and filename tokens.
+func slug(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	lastDash := true // treat leading as dash-boundary so we trim
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+			lastDash = false
+		default:
+			if !lastDash {
+				b.WriteByte('-')
+				lastDash = true
+			}
+		}
+	}
+	out := b.String()
+	return strings.TrimRight(out, "-")
 }
 
 func buildProfilesExport(cacheAccessor *vendors.CacheAccessor, siteID string) []map[string]any {
