@@ -38,10 +38,19 @@ func TestNormalizeAuthType(t *testing.T) {
 		{"", "open"},
 		{"open", "open"},
 		{"Open", "open"},
+		{"open-with-radius", "open"},
+		{"open-enhanced", "open"},
 		{"psk", "psk"},
 		{"wpa2-psk", "psk"},
 		{"wpa3-psk", "psk"},
+		{"sae", "psk"},
+		{"ipsk-without-radius", "ipsk"},
+		{"ipsk-with-radius", "ipsk"},
+		{"ipsk-with-nac", "ipsk"},
+		{"IPSK", "ipsk"},
 		{"8021x-radius", "eap"},
+		{"8021x-meraki", "eap"},
+		{"8021x-google", "eap"},
 		{"wpa2-enterprise", "eap"},
 		{"WPA3-Enterprise", "eap"},
 		{"exotic", "exotic"}, // unknown passes through verbatim
@@ -50,6 +59,79 @@ func TestNormalizeAuthType(t *testing.T) {
 		if got := normalizeAuthType(tt.in); got != tt.want {
 			t.Errorf("normalizeAuthType(%q) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+}
+
+func TestNormalizeBand(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"", ""},
+		{"dual", "dual"},
+		{"5", "5"},
+		{"Dual band operation", "dual"},
+		{"Dual band operation with Band Steering", "dual"},
+		{"5 GHz band only", "5"},
+		{"2.4 GHz band only", "2.4"},
+		{"6 GHz band only", "6"},
+		{"All Bands", "all"},
+		{"exotic-mode", "exotic-mode"}, // unknown passes through
+	}
+	for _, tt := range tests {
+		if got := normalizeBand(tt.in); got != tt.want {
+			t.Errorf("normalizeBand(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestDerivePairwiseFromConfig(t *testing.T) {
+	tests := []struct {
+		name       string
+		cfg        map[string]any
+		legacyMode string
+		want       []string
+	}{
+		{
+			name: "meraki wpa2 only",
+			cfg:  map[string]any{"wpaEncryptionMode": "WPA2 only"},
+			want: []string{"wpa2-ccmp"},
+		},
+		{
+			name: "meraki wpa3 transition",
+			cfg:  map[string]any{"wpaEncryptionMode": "WPA3 Transition Mode"},
+			want: []string{"wpa2-ccmp", "wpa3"},
+		},
+		{
+			name: "meraki wpa3 personal",
+			cfg:  map[string]any{"wpaEncryptionMode": "WPA3 Personal"},
+			want: []string{"wpa3"},
+		},
+		{
+			name:       "falls back when wpaEncryptionMode missing",
+			cfg:        map[string]any{"other": "stuff"},
+			legacyMode: "wpa2",
+			want:       []string{"wpa2-ccmp"},
+		},
+		{
+			name:       "falls back when wpaEncryptionMode unknown",
+			cfg:        map[string]any{"wpaEncryptionMode": "Future Mode"},
+			legacyMode: "wpa3",
+			want:       []string{"wpa3"},
+		},
+		{
+			name:       "nil config falls through to legacy",
+			cfg:        nil,
+			legacyMode: "wpa2",
+			want:       []string{"wpa2-ccmp"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := derivePairwiseFromConfig(tt.cfg, tt.legacyMode)
+			if !equalStrings(got, tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -134,6 +216,38 @@ func TestConvertVendorWLANToProfile_Meraki(t *testing.T) {
 	gotNoSec := convertVendorWLANToProfile(w, false)
 	if gotNoSec.Auth.PSK != "" {
 		t.Errorf("PSK leaked when includeSecrets=false: %q", gotNoSec.Auth.PSK)
+	}
+}
+
+// TestConvertVendorWLANToProfile_MerakiRealWorld mirrors the exact field shape
+// a Meraki site produces today (verbose bandSelection string, legacy "wpa"
+// encryption mode, iPSK auth type) and checks the output is canonical.
+func TestConvertVendorWLANToProfile_MerakiRealWorld(t *testing.T) {
+	w := &vendors.WLAN{
+		SSID:           "Scale - Office Devices",
+		Enabled:        true,
+		Band:           "Dual band operation with Band Steering",
+		AuthType:       "ipsk-without-radius",
+		EncryptionMode: "wpa",
+		Config: map[string]any{
+			"wpaEncryptionMode": "WPA2 only",
+			"splashPage":        "None",
+			"bandSelection":     "Dual band operation with Band Steering",
+		},
+	}
+	got := convertVendorWLANToProfile(w, false)
+
+	if got.Band != "dual" {
+		t.Errorf("Band = %q, want %q", got.Band, "dual")
+	}
+	if got.Auth.Type != "ipsk" {
+		t.Errorf("Auth.Type = %q, want %q", got.Auth.Type, "ipsk")
+	}
+	if !equalStrings(got.Auth.Pairwise, []string{"wpa2-ccmp"}) {
+		t.Errorf("Auth.Pairwise = %v, want [wpa2-ccmp]", got.Auth.Pairwise)
+	}
+	if got.Portal != nil {
+		t.Errorf("splashPage=None should not produce a Portal, got %+v", got.Portal)
 	}
 }
 
