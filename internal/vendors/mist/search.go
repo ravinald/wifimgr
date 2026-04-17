@@ -17,9 +17,11 @@ type searchService struct {
 
 // SearchWiredClients searches for wired clients by text (hostname, MAC, IP, etc.).
 // The opts.SiteID can be used to scope the search to a specific site.
+// An empty text paired with a non-empty SiteID lists every wired client on that
+// site; Mist treats `text=` as "no filter" and the per-result SiteID check below
+// narrows the response to the requested site.
 func (s *searchService) SearchWiredClients(ctx context.Context, text string, opts vendors.SearchOptions) (*vendors.WiredSearchResults, error) {
 	// Mist API supports flexible text search with a single API call.
-	// The siteID is passed to the API for site-scoped searches.
 	response, err := s.client.SearchWiredClients(ctx, s.orgID, text)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search wired clients: %w", err)
@@ -54,6 +56,9 @@ func (s *searchService) SearchWiredClients(ctx context.Context, text string, opt
 
 // SearchWirelessClients searches for wireless clients by text.
 // The opts.SiteID can be used to scope the search to a specific site.
+// An empty text paired with a non-empty SiteID lists every wireless client on
+// that site; Mist's search endpoint treats `text=` as "no filter" and returns
+// all clients, which the per-result SiteID filter below then narrows down.
 func (s *searchService) SearchWirelessClients(ctx context.Context, text string, opts vendors.SearchOptions) (*vendors.WirelessSearchResults, error) {
 	// Mist API supports flexible text search with a single API call.
 	response, err := s.client.SearchWirelessClients(ctx, s.orgID, text)
