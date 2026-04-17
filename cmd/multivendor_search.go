@@ -42,7 +42,7 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 	apiCounts := make(map[string]int)
 	apisWithSearch := 0
 
-	opts := vendors.SearchOptions{SiteID: siteID}
+	cacheMgr := GetCacheManager()
 
 	for _, apiLabel := range targetAPIs {
 		client, err := registry.GetClient(apiLabel)
@@ -57,6 +57,8 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 			continue
 		}
 		apisWithSearch++
+
+		opts := vendors.SearchOptions{SiteID: resolveSearchSiteID(cacheMgr, apiLabel, siteID)}
 
 		results, err := searchSvc.SearchWirelessClients(ctx, searchText, opts)
 		if err != nil {
@@ -175,7 +177,7 @@ func searchWiredMultiVendor(ctx context.Context, searchText, siteID, format stri
 	apiCounts := make(map[string]int)
 	apisWithSearch := 0
 
-	opts := vendors.SearchOptions{SiteID: siteID}
+	cacheMgr := GetCacheManager()
 
 	for _, apiLabel := range targetAPIs {
 		client, err := registry.GetClient(apiLabel)
@@ -190,6 +192,8 @@ func searchWiredMultiVendor(ctx context.Context, searchText, siteID, format stri
 			continue
 		}
 		apisWithSearch++
+
+		opts := vendors.SearchOptions{SiteID: resolveSearchSiteID(cacheMgr, apiLabel, siteID)}
 
 		results, err := searchSvc.SearchWiredClients(ctx, searchText, opts)
 		if err != nil {
@@ -322,6 +326,20 @@ func confirmExpensiveSearchIfNeeded(ctx context.Context, registry *vendors.APICl
 	}
 
 	return nil
+}
+
+// resolveSearchSiteID maps a user-supplied site argument to the vendor site ID
+// for the given API. If the value matches a site name in that API's cache it is
+// replaced with the corresponding ID; otherwise the value is returned as-is,
+// which lets the caller pass raw Mist UUIDs or Meraki L_xxx network IDs.
+func resolveSearchSiteID(cacheMgr *vendors.CacheManager, apiLabel, siteArg string) string {
+	if siteArg == "" || cacheMgr == nil {
+		return siteArg
+	}
+	if id, err := cacheMgr.GetSiteIDByName(apiLabel, siteArg); err == nil && id != "" {
+		return id
+	}
+	return siteArg
 }
 
 // isInteractive returns true if stdin is a terminal.

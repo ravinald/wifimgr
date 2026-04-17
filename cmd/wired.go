@@ -24,7 +24,7 @@ import (
 
 // wiredCmd represents the wired command
 var wiredCmd = &cobra.Command{
-	Use:   "wired <search-text> [site <site-name>] [force] [json|csv] [no-resolve]",
+	Use:   "wired [<search-text>] [site <site-name-or-id>] [force] [json|csv] [no-resolve]",
 	Short: "Search wired devices",
 	Long: `Search for wired devices by name, MAC address, or other criteria.
 
@@ -32,20 +32,25 @@ When multiple APIs are configured:
   - Without target: Searches across all APIs that support wired search
   - With target: Searches only the specified API
 
+Omit the search text and pass a site to list every wired client on that site.
+The site value may be either a site name or the vendor's site/network ID.
+
 Arguments:
-  search-text   Required. Text to search for
-  site          Optional. Keyword followed by site name to scope search
+  search-text   Optional. Text to search for; omit when using "site" alone to list all clients.
+  site          Optional. Keyword followed by site name or ID to scope the search.
   force         Optional. Bypass confirmation prompts for expensive searches
   json|csv      Optional. Output format (default: table)
   no-resolve    Optional. Disable field ID to name resolution
 
 Examples:
-  wifimgr search wired laptop                    # Search for "laptop" in all sites
-  wifimgr search wired laptop site US-LAB-01    # Search in specific site
-  wifimgr search wired laptop force             # Skip confirmation for expensive search
-  wifimgr search wired aa:bb:cc:dd:ee:ff        # Search by MAC address
-  wifimgr search wired john json                # Search and show as JSON
-  wifimgr search wired laptop target mist-prod   # Search only in mist-prod`,
+  wifimgr search wired laptop                                              # Search for "laptop" in all sites
+  wifimgr search wired laptop site US-LAB-01                               # Search in a specific site
+  wifimgr search wired site "MX - Av. Ejercito Nacional Mexicano 904"     # List every client on that site
+  wifimgr search wired site L_3732358191183298569                          # Same, by vendor site ID
+  wifimgr search wired laptop force                                        # Skip confirmation for expensive search
+  wifimgr search wired aa:bb:cc:dd:ee:ff                                   # Search by MAC address
+  wifimgr search wired john json                                           # Search and show as JSON
+  wifimgr search wired laptop target mist-prod                             # Search only in mist-prod`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		// Allow "help" as a special keyword
 		for _, arg := range args {
@@ -53,9 +58,8 @@ Examples:
 				return nil
 			}
 		}
-		// Otherwise require 1-6 args
-		if len(args) < 1 || len(args) > 6 {
-			return fmt.Errorf("accepts between 1 and 6 arg(s), received %d", len(args))
+		if len(args) > 7 {
+			return fmt.Errorf("accepts up to 7 arg(s), received %d", len(args))
 		}
 		return nil
 	},
@@ -67,6 +71,9 @@ Examples:
 			}
 		}
 		parsed := parseSearchArgs(args)
+		if err := validateSearchArgs(parsed); err != nil {
+			return err
+		}
 		return searchWiredMultiVendor(globalContext, parsed.searchText, parsed.siteID, parsed.format, parsed.force, parsed.noResolve)
 	},
 }

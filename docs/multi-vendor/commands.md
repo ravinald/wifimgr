@@ -176,6 +176,30 @@ laptop-john  aa:bb:cc:dd:ee:ff 10.1.1.50   MIST-AP-01   US-CAMPUS-01
 Found 1 result in mist-prod
 ```
 
+### List every client on a site
+
+Drop the search text and pass a site to see every wireless or wired client the
+vendor knows about. The site value can be either a site name from your cache or
+the vendor's own site/network ID.
+
+```
+$ wifimgr search wireless site "MX - Av. Ejercito Nacional Mexicano 904"
+$ wifimgr search wireless site L_3732358191183298569
+$ wifimgr search wired site US-LAB-01 json
+```
+
+Names are resolved per-API through the same cache `show` uses, so a name that
+lives in one API won't bleed into another. If the name doesn't match anything,
+the value is passed through as an ID — handy when you're pasting a Meraki
+`L_xxx` or a Mist UUID straight from the dashboard.
+
+Running `search wireless` with no text and no site is an error:
+
+```
+$ wifimgr search wireless
+Error: specify a search term or a site to list all clients
+```
+
 ### Implementation
 
 ```go

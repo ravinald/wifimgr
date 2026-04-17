@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -37,40 +38,38 @@ Use 'wifimgr search <subcommand> --help' for detailed information about each sea
   # Search for wired devices
   wifimgr search wired aa:bb:cc:dd:ee:ff
 
-  # Search within specific site
+  # List every client on a site
+  wifimgr search wireless site "MX - Av. Ejercito Nacional Mexicano 904"
+
+  # Search within a specific site
   wifimgr search wireless device-name site US-LAB-01`,
 }
 
 // searchArgs holds parsed search command arguments.
 type searchArgs struct {
 	searchText string
-	siteID     string
+	siteID     string // site name or site ID; resolved later per-API
 	force      bool
 	format     string
 	noResolve  bool
 }
 
 // parseSearchArgs parses positional arguments for search commands.
-// Expected format: <search-text> [site <site-name>] [force] [json|csv] [no-resolve]
+// Expected format: [<search-text>] [site <site-name-or-id>] [force] [json|csv] [no-resolve]
+// When the first argument is the "site" keyword, no search text is required —
+// the caller should list all clients scoped to the given site.
 func parseSearchArgs(args []string) searchArgs {
 	result := searchArgs{
 		format: "table",
 	}
 
-	if len(args) == 0 {
-		return result
-	}
-
-	result.searchText = args[0]
-
-	for i := 1; i < len(args); i++ {
+	for i := 0; i < len(args); i++ {
 		arg := strings.ToLower(args[i])
 		switch arg {
 		case "site":
-			// Next arg is the site name
 			if i+1 < len(args) {
-				result.siteID = args[i+1]
-				i++ // Skip the site name
+				result.siteID = searchStripQuotes(args[i+1])
+				i++
 			}
 		case "force":
 			result.force = true
@@ -78,10 +77,33 @@ func parseSearchArgs(args []string) searchArgs {
 			result.format = arg
 		case "no-resolve":
 			result.noResolve = true
+		default:
+			if result.searchText == "" {
+				result.searchText = args[i]
+			}
 		}
 	}
 
 	return result
+}
+
+// validateSearchArgs ensures the parsed args have enough information to run a
+// meaningful search. At minimum either a search term or a site must be given.
+func validateSearchArgs(parsed searchArgs) error {
+	if parsed.searchText == "" && parsed.siteID == "" {
+		return fmt.Errorf("specify a search term or a site to list all clients (e.g. `search wireless laptop` or `search wireless site \"US-LAB-01\"`)")
+	}
+	return nil
+}
+
+// searchStripQuotes removes surrounding double quotes as a defensive fallback;
+// the shell normally handles quoting, but multi-word site names occasionally
+// arrive with stray quotes when forwarded from scripts.
+func searchStripQuotes(s string) string {
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		return s[1 : len(s)-1]
+	}
+	return s
 }
 
 func init() {

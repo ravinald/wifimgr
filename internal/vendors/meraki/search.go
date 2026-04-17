@@ -335,14 +335,14 @@ func (s *searchService) searchNetworkWirelessClients(ctx context.Context, networ
 		return results, nil
 	}
 
-	// Convert and filter results
+	// Convert and filter results. An empty text skips the local filter so the
+	// caller gets every client on the network — this is the "list all clients
+	// on this site" path used when the user runs `search wireless site X`.
+	applyFilter := shouldApplyLocalFilter(text)
 	for i := range *clients {
 		client := &(*clients)[i]
-		// Local text filter if not MAC or IP (description field)
-		if !macaddr.IsValid(text) && !isIPAddress(text) {
-			if !matchesText(client, text) {
-				continue
-			}
+		if applyFilter && !matchesText(client, text) {
+			continue
 		}
 		wc := convertNetworkClientToWirelessClient(client, networkID)
 		if wc != nil {
@@ -411,14 +411,13 @@ func (s *searchService) searchNetworkWiredClients(ctx context.Context, networkID
 		return results, nil
 	}
 
-	// Convert and filter results
+	// Convert and filter results. An empty text skips the local filter so the
+	// caller gets every client on the network (list-all-on-site path).
+	applyFilter := shouldApplyLocalFilter(text)
 	for i := range *clients {
 		client := &(*clients)[i]
-		// Local text filter if not MAC or IP
-		if !macaddr.IsValid(text) && !isIPAddress(text) {
-			if !matchesText(client, text) {
-				continue
-			}
+		if applyFilter && !matchesText(client, text) {
+			continue
 		}
 		wc := convertNetworkClientToWiredClient(client, networkID)
 		if wc != nil {
@@ -428,6 +427,20 @@ func (s *searchService) searchNetworkWiredClients(ctx context.Context, networkID
 
 	results.Total = len(results.Results)
 	return results, nil
+}
+
+// shouldApplyLocalFilter reports whether a local, in-memory text filter should
+// run over network-client results. It skips filtering when:
+//   - text is empty (list-all-on-site path)
+//   - text is a MAC or IP (the upstream query already applies the filter)
+func shouldApplyLocalFilter(text string) bool {
+	if text == "" {
+		return false
+	}
+	if macaddr.IsValid(text) || isIPAddress(text) {
+		return false
+	}
+	return true
 }
 
 // searchAllNetworksWireless searches all networks for wireless clients (expensive operation).
