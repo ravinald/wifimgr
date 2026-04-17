@@ -240,20 +240,16 @@ func runImportAPISite(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get cache accessor: %w", err)
 	}
 
-	// Find the site, optionally filtered by API label
+	// Find the site, optionally filtered by API label. Propagate the accessor
+	// error directly so "did you mean?" suggestions embedded in it survive.
 	var site *vendors.SiteInfo
 	if parsed.apiLabel != "" {
-		// Explicit API specified in positional args
 		site, err = cacheAccessor.GetSiteByNameAndAPI(siteName, parsed.apiLabel)
-		if err != nil {
-			return fmt.Errorf("site '%s' not found in API '%s'", siteName, parsed.apiLabel)
-		}
 	} else {
-		// No API specified - find site in any API
 		site, err = cacheAccessor.GetSiteByName(siteName)
-		if err != nil {
-			return fmt.Errorf("site not found: %s", siteName)
-		}
+	}
+	if err != nil {
+		return err
 	}
 
 	// Determine the API label to use
