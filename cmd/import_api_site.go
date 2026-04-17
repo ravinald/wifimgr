@@ -797,7 +797,7 @@ func convertVendorWLANToProfile(w *vendors.WLAN, includeSecrets bool) *config.WL
 		SSID:    w.SSID,
 		Enabled: w.Enabled,
 		Hidden:  w.Hidden,
-		Band:    w.Band,
+		Band:    normalizeBand(w.Band),
 		VLANID:  w.VLANID,
 		Auth: config.WLANAuth{
 			Type: normalizeAuthType(w.AuthType),
@@ -808,7 +808,7 @@ func convertVendorWLANToProfile(w *vendors.WLAN, includeSecrets bool) *config.WL
 		profile.Auth.PSK = w.PSK
 	}
 
-	if pairwise := encryptionModeToPairwise(w.EncryptionMode); len(pairwise) > 0 {
+	if pairwise := derivePairwiseFromConfig(w.Config, w.EncryptionMode); len(pairwise) > 0 {
 		profile.Auth.Pairwise = pairwise
 	}
 
@@ -843,17 +843,84 @@ func convertVendorWLANToProfile(w *vendors.WLAN, includeSecrets bool) *config.WL
 }
 
 // normalizeAuthType maps vendor-specific auth strings into the canonical
-// "open" / "psk" / "eap" set used by WLANProfile.
+// set used by WLANProfile: "open" (incl. OWE and MAC-RADIUS), "psk" (plain
+// pre-shared key), "ipsk" (Meraki-style identity PSK, preserved as its own
+// class because it implies per-client key provisioning) and "eap" (any
+// 802.1X / enterprise variant).
 func normalizeAuthType(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "", "open":
 		return "open"
+	case "open-with-radius", "open-with-nac", "open-enhanced":
+		return "open"
 	case "psk", "wpa", "wpa-psk", "wpa2-psk", "wpa3-psk", "wpa2/wpa3-psk", "sae":
 		return "psk"
-	case "eap", "enterprise", "wpa2-enterprise", "wpa3-enterprise", "8021x-radius", "wpa-eap", "wpa2-eap":
+	case "ipsk", "ipsk-without-radius", "ipsk-with-radius", "ipsk-with-nac":
+		return "ipsk"
+	case "eap", "enterprise", "wpa2-enterprise", "wpa3-enterprise",
+		"wpa-eap", "wpa2-eap",
+		"8021x", "8021x-radius", "8021x-meraki", "8021x-google", "8021x-entra", "8021x-localradius":
 		return "eap"
 	default:
 		return t // leave verbatim so operators can see what came through
+	}
+}
+
+// normalizeBand maps vendor-specific band labels into WLANProfile's canonical
+// "2.4" / "5" / "6" / "dual" / "all" set. Meraki's bandSelection uses long
+// strings like "Dual band operation with Band Steering" — band steering is a
+// mode flag, not a separate band, so both dual-band variants collapse to
+// "dual". Unknown values pass through verbatim.
+func normalizeBand(b string) string {
+	s := strings.ToLower(strings.TrimSpace(b))
+	switch s {
+	case "":
+		return ""
+	case "2.4", "2.4ghz", "2.4 ghz", "2.4 ghz band only":
+		return "2.4"
+	case "5", "5ghz", "5 ghz", "5 ghz band only":
+		return "5"
+	case "6", "6ghz", "6 ghz", "6 ghz band only":
+		return "6"
+	case "dual", "dual band operation", "dual band operation with band steering":
+		return "dual"
+	case "all", "all bands", "tri-band":
+		return "all"
+	default:
+		return b
+	}
+}
+
+// derivePairwiseFromConfig prefers Meraki's modern `wpaEncryptionMode` field
+// (which carries strings like "WPA2 only" or "WPA3 Transition Mode") when
+// present in the raw vendor config. Falls back to the legacy EncryptionMode
+// via encryptionModeToPairwise when wpaEncryptionMode is absent.
+func derivePairwiseFromConfig(cfg map[string]any, legacyMode string) []string {
+	if cfg != nil {
+		if v, ok := cfg["wpaEncryptionMode"].(string); ok && v != "" {
+			if p := merakiWpaModeToPairwise(v); p != nil {
+				return p
+			}
+		}
+	}
+	return encryptionModeToPairwise(legacyMode)
+}
+
+// merakiWpaModeToPairwise maps Meraki's wpaEncryptionMode string (human-
+// readable, varies across API versions) to canonical pairwise cipher labels.
+// Unknown values return nil so the caller can fall back.
+func merakiWpaModeToPairwise(mode string) []string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "wpa1 only":
+		return []string{"wpa"}
+	case "wpa1 and wpa2", "wpa2 only":
+		return []string{"wpa2-ccmp"}
+	case "wpa3 personal", "wpa3 only":
+		return []string{"wpa3"}
+	case "wpa3 transition mode", "wpa2/wpa3", "wpa2 and wpa3":
+		return []string{"wpa2-ccmp", "wpa3"}
+	default:
+		return nil
 	}
 }
 
