@@ -240,5 +240,20 @@ func (a *Adapter) BSSIDs() vendors.BSSIDsService {
 	}
 }
 
+// ClientDetail returns the ClientDetailService that powers
+// `refresh client site <name>` for Meraki. Meraki's primary client list
+// endpoint doesn't include connected band, so the implementation makes a
+// second per-network call to connectivity events and takes the most recent
+// band seen per MAC.
+func (a *Adapter) ClientDetail() vendors.ClientDetailService {
+	return &clientDetailService{
+		dashboard:      a.dashboard,
+		orgID:          a.orgID,
+		rateLimiter:    a.rateLimiter,
+		retryConfig:    a.retryConfig,
+		suppressOutput: a.suppressOutput,
+	}
+}
+
 // Ensure Adapter implements vendors.Client at compile time.
 var _ vendors.Client = (*Adapter)(nil)

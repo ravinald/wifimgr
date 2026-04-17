@@ -303,6 +303,56 @@ func TestCacheManager_GetSiteIDByName_NotFound(t *testing.T) {
 	}
 }
 
+func TestCacheManager_ClientDetail_SaveLookupFreshness(t *testing.T) {
+	tmpDir := t.TempDir()
+	cm := NewCacheManager(tmpDir, NewAPIClientRegistry())
+	if err := cm.Initialize(); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+	if err := cm.SaveAPICache(NewAPICache("meraki", "meraki", "org-1")); err != nil {
+		t.Fatalf("SaveAPICache failed: %v", err)
+	}
+
+	t0 := time.Now().UTC().Truncate(time.Second)
+	records := []*ClientDetail{
+		{MAC: "AA:BB:CC:DD:EE:FF", SiteID: "L_123", Band: "5", FetchedAt: t0},
+		{MAC: "11:22:33:44:55:66", SiteID: "L_123", Band: "2.4", FetchedAt: t0.Add(-time.Minute)},
+		{MAC: "ab:cd:ef:00:11:22", SiteID: "L_456", Band: "6", FetchedAt: t0.Add(-time.Hour)},
+	}
+	newest, err := cm.SaveClientDetail("meraki", records)
+	if err != nil {
+		t.Fatalf("SaveClientDetail failed: %v", err)
+	}
+	if !newest.Equal(t0) {
+		t.Errorf("SaveClientDetail newest = %v, want %v", newest, t0)
+	}
+
+	// Lookup by normalized MAC (case/separator insensitive via NormalizeMAC).
+	got, ok := cm.LookupClientDetail("meraki", "aa-bb-cc-dd-ee-ff")
+	if !ok {
+		t.Fatal("expected LookupClientDetail to find record for AA:BB:CC:DD:EE:FF")
+	}
+	if got.Band != "5" {
+		t.Errorf("LookupClientDetail = %+v, want Band=5", got)
+	}
+
+	// Freshness scoped to site L_123 should return t0 (the newest within that site).
+	fr, ok := cm.ClientDetailFreshness("meraki", "L_123")
+	if !ok || !fr.Equal(t0) {
+		t.Errorf("ClientDetailFreshness(L_123) = %v, %v; want %v, true", fr, ok, t0)
+	}
+
+	// Unknown site returns (zero, false).
+	if _, ok := cm.ClientDetailFreshness("meraki", "L_nonexistent"); ok {
+		t.Error("ClientDetailFreshness on unknown site should return false")
+	}
+
+	// Missing MAC returns (nil, false).
+	if _, ok := cm.LookupClientDetail("meraki", "99:99:99:99:99:99"); ok {
+		t.Error("LookupClientDetail on unknown MAC should return false")
+	}
+}
+
 func TestCacheManager_VerifyAPICache(t *testing.T) {
 	tmpDir := t.TempDir()
 	cm := NewCacheManager(tmpDir, NewAPIClientRegistry())
