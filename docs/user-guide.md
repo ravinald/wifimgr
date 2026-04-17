@@ -391,6 +391,13 @@ wifimgr refresh cache mist-prod
 # Refresh all APIs
 wifimgr refresh cache
 
+# Refresh everything we know how to cache, including per-site client detail
+# (sites × 3 extra Meraki calls for band lookup — use sparingly)
+wifimgr refresh all
+
+# Per-client detail for a single site (Meraki band / State enrichment)
+wifimgr refresh client site US-LAB-01
+
 # Check cache status before operations
 wifimgr show api status
 ```
