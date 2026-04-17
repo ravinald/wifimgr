@@ -16,19 +16,28 @@ func (ca *CacheAccessor) GetSiteByID(id string) (*SiteInfo, error) {
 	return site, nil
 }
 
-// GetSiteByName returns a site by its name.
+// GetSiteByName returns a site by its name. On miss, the error message
+// includes up to three "did you mean?" suggestions within 3 edits of the
+// requested name.
 func (ca *CacheAccessor) GetSiteByName(name string) (*SiteInfo, error) {
 	ca.mu.RLock()
 	defer ca.mu.RUnlock()
 
 	site, ok := ca.indexes.SitesByName[name]
 	if !ok {
-		return nil, fmt.Errorf("site not found: %s", name)
+		candidates := make([]string, 0, len(ca.indexes.SitesByName))
+		for n := range ca.indexes.SitesByName {
+			candidates = append(candidates, n)
+		}
+		hint := FormatSuggestions(SuggestSiteNames(name, candidates, 3, 3))
+		return nil, fmt.Errorf("site not found: %s%s", name, hint)
 	}
 	return site, nil
 }
 
-// GetSiteByNameAndAPI returns a site by its name from a specific API.
+// GetSiteByNameAndAPI returns a site by its name from a specific API. On a
+// miss (either name or API mismatch) the error includes "did you mean?"
+// suggestions from the requested API's sites.
 func (ca *CacheAccessor) GetSiteByNameAndAPI(name, apiLabel string) (*SiteInfo, error) {
 	ca.mu.RLock()
 	defer ca.mu.RUnlock()
@@ -36,7 +45,14 @@ func (ca *CacheAccessor) GetSiteByNameAndAPI(name, apiLabel string) (*SiteInfo, 
 	// First check if the site exists at all
 	site, ok := ca.indexes.SitesByName[name]
 	if !ok {
-		return nil, fmt.Errorf("site not found: %s", name)
+		candidates := make([]string, 0, len(ca.indexes.SitesByName))
+		for n, s := range ca.indexes.SitesByName {
+			if s.SourceAPI == apiLabel {
+				candidates = append(candidates, n)
+			}
+		}
+		hint := FormatSuggestions(SuggestSiteNames(name, candidates, 3, 3))
+		return nil, fmt.Errorf("site not found: %s%s", name, hint)
 	}
 
 	// Check if it's from the requested API
