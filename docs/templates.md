@@ -448,6 +448,25 @@ wifimgr apply site US-NYC-OFFICE ap diff
 
 The diff shows the expanded values, not the template references.
 
+## Auto-Generated Templates from Import
+
+`wifimgr import api site <name> save` writes two files: the site config itself (into `<configDir>/<api>/sites/<site>.json`) and a companion WLAN template file (into `<configDir>/<api>/wlans/<site>.json`). The site file carries label references like `wlan: ["<site-slug>--<ssid-slug>", ...]`; the template file holds the matching `wlan_profiles` definitions.
+
+This matters most for Meraki and other vendors that don't have a native shared-WLAN-profile model. Everything that comes in from the API gets mapped into the Mist-canonical template shape, so once the files are registered the site loads through the same path as a hand-written one. The importer prints the exact two lines to add to your main config:
+
+```
+Wrote site config:    meraki/sites/MX-MEX-904EN.json
+Wrote WLAN template:  meraki/wlans/MX-MEX-904EN.json
+
+To activate, add to your wifimgr-config.json:
+  "files": {
+    "site_configs": [ ..., "meraki/sites/MX-MEX-904EN.json" ],
+    "templates":    [ ..., "meraki/wlans/MX-MEX-904EN.json" ]
+  }
+```
+
+Labels are synthesized as `<site-slug>--<ssid-slug>` to keep them unique across sites. Collisions (two SSIDs that slug to the same base) get `-2`, `-3` suffixes. The files are freestanding — rename labels, merge profiles, or re-scope them across sites once they're yours.
+
 ## Best Practices
 
 1. **Name templates descriptively**: Use names like `high-density`, `conference-room`, `warehouse` that describe the use case
