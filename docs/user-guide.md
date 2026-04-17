@@ -279,12 +279,24 @@ wifimgr search wired 5c:5b:35:8e:4c:f9    # Full MAC search
 wifimgr search wired laptop site US-LAB-01
 wifimgr search wireless phone site US-LAB-01
 
+# List every client on a site (drop the search text)
+wifimgr search wireless site "MX - Av. Ejercito Nacional Mexicano 904"
+wifimgr search wired site US-LAB-01 json
+
+# Paste a vendor site/network ID straight from the dashboard
+wifimgr search wireless site L_3732358191183298569
+
 # Output as JSON
 wifimgr search wireless phone json
 
 # Bypass confirmation for expensive searches (multi-site)
 wifimgr search wired laptop force
 ```
+
+The `site` argument takes either the cached site name or the vendor's own ID
+(Mist UUID, Meraki `L_xxx` network ID). Names are resolved per-API, so the same
+name in different APIs maps to the right target. Names with spaces need shell
+quoting, nothing more exotic.
 
 ### Cost Estimation and Confirmations
 
