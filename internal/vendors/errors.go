@@ -7,13 +7,17 @@ type SiteNotFoundError struct {
 	SiteName     string
 	APILabel     string
 	SearchedAPIs []string
+	Suggestions  []string // close-match candidates for "did you mean?" hints
 }
 
 func (e *SiteNotFoundError) Error() string {
+	var base string
 	if e.APILabel != "" {
-		return fmt.Sprintf("site %q not found in API %q", e.SiteName, e.APILabel)
+		base = fmt.Sprintf("site %q not found in API %q", e.SiteName, e.APILabel)
+	} else {
+		base = fmt.Sprintf("site %q not found", e.SiteName)
 	}
-	return fmt.Sprintf("site %q not found", e.SiteName)
+	return base + FormatSuggestions(e.Suggestions)
 }
 
 // UserMessage returns a user-friendly error message with remediation advice.
@@ -25,6 +29,7 @@ func (e *SiteNotFoundError) UserMessage() string {
 	if len(e.SearchedAPIs) > 0 {
 		msg += fmt.Sprintf("\n\nSearched APIs: %v", e.SearchedAPIs)
 	}
+	msg += FormatSuggestions(e.Suggestions)
 	msg += "\n\nTry:\n  - Refresh the cache: wifimgr refresh cache\n  - Check site name spelling\n  - Use --api to target a specific API"
 	return msg
 }
