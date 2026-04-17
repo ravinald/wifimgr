@@ -143,6 +143,8 @@ func (c *CacheManager) GetSiteAPIs(siteName string) []string {
 }
 
 // GetSiteIDByName returns the site ID for a given site name in a specific API.
+// On miss, the returned SiteNotFoundError includes up to three close-match
+// suggestions drawn from the same API's site names.
 func (c *CacheManager) GetSiteIDByName(apiLabel, siteName string) (string, error) {
 	cache, err := c.GetAPICache(apiLabel)
 	if err != nil {
@@ -151,7 +153,15 @@ func (c *CacheManager) GetSiteIDByName(apiLabel, siteName string) (string, error
 
 	siteID, found := cache.SiteIndex.ByName[siteName]
 	if !found {
-		return "", &SiteNotFoundError{SiteName: siteName, APILabel: apiLabel}
+		candidates := make([]string, 0, len(cache.SiteIndex.ByName))
+		for n := range cache.SiteIndex.ByName {
+			candidates = append(candidates, n)
+		}
+		return "", &SiteNotFoundError{
+			SiteName:    siteName,
+			APILabel:    apiLabel,
+			Suggestions: SuggestSiteNames(siteName, candidates, 3, 3),
+		}
 	}
 
 	return siteID, nil
