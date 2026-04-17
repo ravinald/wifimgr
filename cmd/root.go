@@ -331,7 +331,7 @@ func initializeAPI() error {
 	})
 
 	// Cache operations are now handled by the multi-vendor cache manager per-API
-	// Use 'wifimgr refresh cache' to rebuild cache
+	// Use 'wifimgr refresh device' to rebuild the device-level cache
 
 	return nil
 }

@@ -73,7 +73,7 @@ Each API can have its own `cache_ttl` setting to control when cached data is con
 **Example:**
 - `"cache_ttl": 86400` - Cache expires after 1 day (default)
 - `"cache_ttl": 3600` - Cache expires after 1 hour
-- `"cache_ttl": 0` - Cache never expires, only refreshed via `refresh cache` command
+- `"cache_ttl": 0` - Cache never expires, only refreshed via `refresh device` command
 
 ### Credentials
 

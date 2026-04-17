@@ -36,7 +36,7 @@ wifimgr show api ap target mist-prod
 | `show site <name>` | Show from all APIs with that name | Show from specific API |
 | `search wired <text>` | Search all APIs | Search specific API |
 | `search wireless <text>` | Search all APIs | Search specific API |
-| `refresh cache` | Refresh all APIs (parallel) | Refresh specific API only |
+| `refresh device` | Refresh all APIs (parallel) | Refresh specific API only |
 
 ### Write Commands
 
@@ -100,7 +100,7 @@ Found site "US-CAMPUS-01" in 2 APIs
 ### Default: Refresh All APIs (Parallel)
 
 ```
-$ wifimgr refresh cache
+$ wifimgr refresh device
 
 Refreshing all APIs...
   mist-prod: refreshing sites... done (12 sites)
@@ -116,7 +116,7 @@ Rebuilt cross-API index
 ### Specific API Refresh
 
 ```
-$ wifimgr refresh cache target mist-prod
+$ wifimgr refresh device target mist-prod
 
 Refreshing mist-prod...
   sites: done (12 sites)

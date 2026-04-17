@@ -298,49 +298,57 @@ The `site` argument takes either the cached site name or the vendor's own ID
 name in different APIs maps to the right target. Names with spaces need shell
 quoting, nothing more exotic.
 
-### Connected Band and Client State (`detail` / `extensive`)
+### Connected Band (default) and Client State (`detail` / `extensive`)
 
-Meraki's default wireless client list doesn't include the connected band, and
-mixing online and offline clients in the default view muddies troubleshooting.
-A two-step workflow surfaces both when you need them:
+**Band is a default column.** Every `search wireless` table shows a
+`Band [*]` column. The `[*]` marker means the value comes from the local
+client-detail cache and may be stale; the footer under the table reports
+when the cache was last refreshed:
+
+```
+[*] Band cache last refreshed 2026-04-17T21:35:20Z — run `refresh client site <name>` to update
+```
+
+Mist carries Band natively on the primary response so Mist sites populate
+without any cache dependency. Meraki relies on the cache; populate it with
+`wifimgr refresh client site <name>` or `wifimgr refresh all`.
+
+**`detail` and `extensive`** add the live `State` column (`Online` /
+`Offline`) and change which rows show:
 
 ```bash
-# Populate the per-site client detail cache (one Meraki call per band).
+# Populate the per-site client detail cache (Meraki only; one call per band).
 wifimgr refresh client site "US-LAB-01"
 
-# Online clients only, with Band + State columns.
+# Default: everything the API returns, Band column visible.
+wifimgr search wireless site "US-LAB-01"
+
+# Online clients only, with State column added.
 wifimgr search wireless site "US-LAB-01" detail
 
-# Online + offline, with Band + State columns.
+# Online + offline, with State column added.
 wifimgr search wireless site "US-LAB-01" extensive
 ```
 
-The Band column shows `2.4`, `5`, or `6` for clients with wireless activity on
-the site during the 24 hours before the refresh. The State column comes live
-from the search response (`Online` / `Offline`). A footer under the table
-reports when the cache was last refreshed:
+Picking between the two modifiers:
 
-```
-[*] last refreshed 2026-04-17T21:35:20Z — run `refresh client site <name>` to update
-```
+- **`detail`**: quick "what's currently connected" view. Offline clients are
+  filtered out.
+- **`extensive`**: everything the API returned. Useful when the device you're
+  hunting may be offline or when you want a historical picture.
 
-Picking between the two:
+**Fresh install flow.** On first use, run `wifimgr refresh all` to populate
+both the device cache (sites, inventory, configs, WLANs) and the per-site
+client-detail cache (Band). After that, `refresh device` is a cheap refresh
+of device-level data and `refresh client site <name>` is for targeted Band
+updates.
 
-- **`detail`**: quick "what's currently connected and on which band" view.
-  Offline clients are filtered out.
-- **`extensive`**: everything the API returned plus Band/State columns. Useful
-  when the device you're hunting may be offline, or when you want a historical
-  picture of who's been on the network.
-
-If the cache is empty for the site, the columns render blank and the footer
-prompts you to run `refresh client site <name>`. Mist sites return Band
-natively on the primary search response, so `refresh client` is a no-op there
-and `detail`/`extensive` just add the columns without any cache dependency.
-
-Note: Band coverage depends on Meraki's stats endpoint seeing connection events
-in the last 24h. Clients with perfectly stable, uneventful associations may
-still show a blank Band — they're present on the air, just not generating the
-auth/DHCP events that populate Meraki's stats.
+**Why Band may still be blank for some online clients.** Meraki's
+ConnectionStats endpoint only lists clients with connection events (auth,
+DHCP, etc.) during the lookback window (24 hours). Perfectly stable clients
+that haven't re-authed or renewed DHCP may not appear in Meraki's stats and
+therefore have no cached band. They're there on the air, just silent from
+Meraki's stats endpoint.
 
 ### Cost Estimation and Confirmations
 
@@ -372,7 +380,7 @@ Sync local cache with API data. The cache system tracks age via `LastRefresh` ti
 ### Standard Usage
 
 ```bash
-wifimgr refresh cache                     # Refresh all cache data
+wifimgr refresh device                     # Refresh all cache data
 ```
 
 Run this after making changes outside wifimgr, or when cache data is stale.
@@ -402,10 +410,10 @@ meraki-corp  stale     2024-01-26T08:15:00  30h10m   true
 
 ```bash
 # Refresh specific API
-wifimgr refresh cache mist-prod
+wifimgr refresh device mist-prod
 
 # Refresh all APIs
-wifimgr refresh cache
+wifimgr refresh device
 
 # Refresh everything we know how to cache, including per-site client detail
 # (sites × 3 extra Meraki calls for band lookup — use sparingly)
@@ -1179,7 +1187,7 @@ Logs go to `~/.local/state/wifimgr/wifimgr.log` by default. Enable stdout:
 If data seems stale or incorrect:
 
 ```bash
-wifimgr refresh cache
+wifimgr refresh device
 ```
 
 ## API Errors
@@ -1198,4 +1206,4 @@ Common HTTP status codes:
 If apply reports a device not found:
 1. Verify the MAC address is correct
 2. Check the device is in inventory: `wifimgr show inventory ap`
-3. Refresh cache: `wifimgr refresh cache`
+3. Refresh cache: `wifimgr refresh device`
