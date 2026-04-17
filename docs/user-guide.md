@@ -298,33 +298,49 @@ The `site` argument takes either the cached site name or the vendor's own ID
 name in different APIs maps to the right target. Names with spaces need shell
 quoting, nothing more exotic.
 
-### Connected Band and Client State (`detail`)
+### Connected Band and Client State (`detail` / `extensive`)
 
 Meraki's default wireless client list doesn't include the connected band, and
-hiding the online/offline state in the default view keeps the table readable.
+mixing online and offline clients in the default view muddies troubleshooting.
 A two-step workflow surfaces both when you need them:
 
 ```bash
 # Populate the per-site client detail cache (one Meraki call per band).
 wifimgr refresh client site "US-LAB-01"
 
-# Render extra Band and State columns. Data comes from the local cache.
+# Online clients only, with Band + State columns.
 wifimgr search wireless site "US-LAB-01" detail
+
+# Online + offline, with Band + State columns.
+wifimgr search wireless site "US-LAB-01" extensive
 ```
 
-The Band column shows `2.4`, `5`, or `6` for clients that had wireless activity
-on the site during the last hour before the refresh. The State column comes
-live from the search response (`Online` / `Offline`). The footer under the
-table tells you when the cache was last refreshed:
+The Band column shows `2.4`, `5`, or `6` for clients with wireless activity on
+the site during the 24 hours before the refresh. The State column comes live
+from the search response (`Online` / `Offline`). A footer under the table
+reports when the cache was last refreshed:
 
 ```
 [*] last refreshed 2026-04-17T21:35:20Z — run `refresh client site <name>` to update
 ```
 
+Picking between the two:
+
+- **`detail`**: quick "what's currently connected and on which band" view.
+  Offline clients are filtered out.
+- **`extensive`**: everything the API returned plus Band/State columns. Useful
+  when the device you're hunting may be offline, or when you want a historical
+  picture of who's been on the network.
+
 If the cache is empty for the site, the columns render blank and the footer
 prompts you to run `refresh client site <name>`. Mist sites return Band
 natively on the primary search response, so `refresh client` is a no-op there
-and `detail` just adds the columns without any cache dependency.
+and `detail`/`extensive` just add the columns without any cache dependency.
+
+Note: Band coverage depends on Meraki's stats endpoint seeing connection events
+in the last 24h. Clients with perfectly stable, uneventful associations may
+still show a blank Band — they're present on the air, just not generating the
+auth/DHCP events that populate Meraki's stats.
 
 ### Cost Estimation and Confirmations
 

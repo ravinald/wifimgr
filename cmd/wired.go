@@ -24,7 +24,7 @@ import (
 
 // wiredCmd represents the wired command
 var wiredCmd = &cobra.Command{
-	Use:   "wired [<search-text>] [site <site-name-or-id>] [force] [detail] [json|csv] [no-resolve]",
+	Use:   "wired [<search-text>] [site <site-name-or-id>] [force] [detail|extensive] [json|csv] [no-resolve]",
 	Short: "Search wired devices",
 	Long: `Search for wired devices by name, MAC address, or other criteria.
 
@@ -74,7 +74,7 @@ Examples:
 		if err := validateSearchArgs(parsed); err != nil {
 			return err
 		}
-		return searchWiredMultiVendor(globalContext, parsed.searchText, parsed.siteID, parsed.format, parsed.force, parsed.noResolve, parsed.detail)
+		return searchWiredMultiVendor(globalContext, parsed.searchText, parsed.siteID, parsed.format, parsed.force, parsed.noResolve, parsed.detail, parsed.extensive)
 	},
 }
 

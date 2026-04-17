@@ -168,7 +168,7 @@ func runRefreshClientSite(cmd *cobra.Command, args []string) error {
 	}
 
 	logging.Debugf("refresh client wrote %d records, newest=%s", len(records), newest)
-	fmt.Printf("  %d clients — band from connection stats (last hour)\n", len(records))
+	fmt.Printf("  %d clients — band from connection stats (last 24h)\n", len(records))
 	fmt.Printf("  done in %s\n", time.Since(start).Round(time.Millisecond))
 	return nil
 }
