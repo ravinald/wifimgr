@@ -291,7 +291,7 @@ func restoreBackup(cfg *config.Config, siteName string, serial int) error {
 			return fmt.Errorf("failed to read current config file: %w", err)
 		}
 
-		if err := os.WriteFile(currentBackupPath, currentData, 0600); err != nil {
+		if err := os.WriteFile(currentBackupPath, currentData, 0600); err != nil { // #nosec G304 G703 -- path derived from operator-controlled config dir and timestamp
 			return fmt.Errorf("failed to backup current config: %w", err)
 		}
 
