@@ -197,6 +197,29 @@ func TestIsIPAddress(t *testing.T) {
 	}
 }
 
+// TestShouldApplyLocalFilter verifies when the in-memory text filter is applied
+// over Meraki network clients. Empty text must skip filtering so the caller can
+// list every client on a site; MAC and IP are already filtered upstream.
+func TestShouldApplyLocalFilter(t *testing.T) {
+	tests := []struct {
+		text string
+		want bool
+	}{
+		{"", false},
+		{"laptop-john", true},
+		{"aa:bb:cc:dd:ee:ff", false},
+		{"AA:BB:CC:DD:EE:FF", false},
+		{"192.168.1.1", false},
+		{"fe80::1", false},
+		{"descriptor-with-colons:but-not-mac", true},
+	}
+	for _, tt := range tests {
+		if got := shouldApplyLocalFilter(tt.text); got != tt.want {
+			t.Errorf("shouldApplyLocalFilter(%q) = %v, want %v", tt.text, got, tt.want)
+		}
+	}
+}
+
 // TestMatchesText tests local text filtering.
 func TestMatchesText(t *testing.T) {
 	tests := []struct {
