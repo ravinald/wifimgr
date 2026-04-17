@@ -298,6 +298,34 @@ The `site` argument takes either the cached site name or the vendor's own ID
 name in different APIs maps to the right target. Names with spaces need shell
 quoting, nothing more exotic.
 
+### Connected Band and Client State (`detail`)
+
+Meraki's default wireless client list doesn't include the connected band, and
+hiding the online/offline state in the default view keeps the table readable.
+A two-step workflow surfaces both when you need them:
+
+```bash
+# Populate the per-site client detail cache (one Meraki call per band).
+wifimgr refresh client site "US-LAB-01"
+
+# Render extra Band and State columns. Data comes from the local cache.
+wifimgr search wireless site "US-LAB-01" detail
+```
+
+The Band column shows `2.4`, `5`, or `6` for clients that had wireless activity
+on the site during the last hour before the refresh. The State column comes
+live from the search response (`Online` / `Offline`). The footer under the
+table tells you when the cache was last refreshed:
+
+```
+[*] last refreshed 2026-04-17T21:35:20Z — run `refresh client site <name>` to update
+```
+
+If the cache is empty for the site, the columns render blank and the footer
+prompts you to run `refresh client site <name>`. Mist sites return Band
+natively on the primary search response, so `refresh client` is a no-op there
+and `detail` just adds the columns without any cache dependency.
+
 ### Cost Estimation and Confirmations
 
 Searches without a site filter may require multiple API calls. The command estimates the cost and prompts for confirmation:

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"golang.org/x/term"
 
@@ -14,7 +15,9 @@ import (
 )
 
 // searchWirelessMultiVendor searches for wireless clients across multiple APIs.
-func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format string, force, _ bool) error {
+// When detail is true, extra columns (Band, State) are rendered and populated
+// from live response (Status) and the per-client detail cache (Band).
+func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format string, force, _, detail bool) error {
 	// Validate target API if provided
 	if err := ValidateAPIFlag(); err != nil {
 		return err
@@ -41,6 +44,13 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 	var allResults []formatter.GenericTableData
 	apiCounts := make(map[string]int)
 	apisWithSearch := 0
+
+	// Detail-mode bookkeeping: how many rows got a cached Band record and the
+	// freshest FetchedAt across them, for the footer timestamp.
+	var (
+		detailCacheHits   int
+		newestDetailFetch time.Time
+	)
 
 	cacheMgr := GetCacheManager()
 
@@ -81,6 +91,20 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 		// Convert results to table data
 		for _, client := range results.Results {
 			enrichWirelessClientFromCache(client, apiCache)
+
+			// Fill Band from the persistent client-detail cache when the
+			// operator asked for detail. Doing it here keeps the default
+			// path identical to before — cost unchanged, no cache hits.
+			if detail && cacheMgr != nil && client.Band == "" && client.MAC != "" {
+				if rec, ok := cacheMgr.LookupClientDetail(apiLabel, client.MAC); ok {
+					client.Band = rec.Band
+					if rec.FetchedAt.After(newestDetailFetch) {
+						newestDetailFetch = rec.FetchedAt
+					}
+					detailCacheHits++
+				}
+			}
+
 			vendorName, _ := registry.GetVendor(apiLabel)
 			data := formatter.GenericTableData{
 				"mac":       client.MAC,
@@ -90,6 +114,7 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 				"ap_name":   client.APName,
 				"ap_mac":    client.APMAC,
 				"band":      client.Band,
+				"state":     client.Status,
 				"vlan":      client.VLAN,
 				"site_id":   client.SiteID,
 				"site_name": client.SiteName,
@@ -119,7 +144,7 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 		return nil
 	}
 
-	columns := buildWirelessSearchColumns(siteID, len(targetAPIs))
+	columns := buildWirelessSearchColumns(siteID, len(targetAPIs), detail)
 
 	// Create table config
 	tableConfig := formatter.TableConfig{
@@ -139,11 +164,15 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 	printer.Config.Columns = columns
 	fmt.Print(printer.Print())
 
+	if detail {
+		printDetailFooter(detailCacheHits, newestDetailFetch, siteID)
+	}
+
 	return nil
 }
 
 // searchWiredMultiVendor searches for wired clients across multiple APIs.
-func searchWiredMultiVendor(ctx context.Context, searchText, siteID, format string, force, _ bool) error {
+func searchWiredMultiVendor(ctx context.Context, searchText, siteID, format string, force, _, _ bool) error {
 	// Validate target API if provided
 	if err := ValidateAPIFlag(); err != nil {
 		return err
@@ -245,7 +274,7 @@ func searchWiredMultiVendor(ctx context.Context, searchText, siteID, format stri
 		return nil
 	}
 
-	columns := buildWiredSearchColumns(siteID, len(targetAPIs))
+	columns := buildWiredSearchColumns(siteID, len(targetAPIs), false)
 
 	// Create table config
 	tableConfig := formatter.TableConfig{
@@ -355,15 +384,22 @@ func enrichWiredClientFromCache(c *vendors.WiredClient, cache *vendors.APICache)
 // buildWirelessSearchColumns picks the columns for the wireless search table.
 // The Site column is dropped when the user explicitly scoped to a single site —
 // every row would carry the same value. The API column is added when results
-// may span multiple APIs.
-func buildWirelessSearchColumns(siteFilter string, targetAPICount int) []formatter.TableColumn {
+// may span multiple APIs. When detail is true, Band and State columns are
+// included with a `[*]` marker so operators know the data is cache-sourced
+// (Band) or live-but-detail-gated (State).
+func buildWirelessSearchColumns(siteFilter string, targetAPICount int, detail bool) []formatter.TableColumn {
 	cols := []formatter.TableColumn{
 		{Field: "mac", Title: "MAC", MaxWidth: 0},
 		{Field: "ip", Title: "IP", MaxWidth: 0},
 		{Field: "hostname", Title: "Hostname", MaxWidth: 0},
 		{Field: "ssid", Title: "SSID", MaxWidth: 0},
 		{Field: "ap_name", Title: "AP Name", MaxWidth: 0},
-		{Field: "band", Title: "Band", MaxWidth: 0},
+	}
+	if detail {
+		cols = append(cols,
+			formatter.TableColumn{Field: "band", Title: "Band [*]", MaxWidth: 0},
+			formatter.TableColumn{Field: "state", Title: "State [*]", MaxWidth: 0},
+		)
 	}
 	if siteFilter == "" {
 		cols = append(cols, formatter.TableColumn{Field: "site_name", Title: "Site", MaxWidth: 0})
@@ -375,7 +411,9 @@ func buildWirelessSearchColumns(siteFilter string, targetAPICount int) []formatt
 }
 
 // buildWiredSearchColumns mirrors buildWirelessSearchColumns for wired search.
-func buildWiredSearchColumns(siteFilter string, targetAPICount int) []formatter.TableColumn {
+// Meraki wired clients don't participate in the band cache today, but the
+// `detail` flag is carried for symmetry.
+func buildWiredSearchColumns(siteFilter string, targetAPICount int, _ bool) []formatter.TableColumn {
 	cols := []formatter.TableColumn{
 		{Field: "mac", Title: "MAC", MaxWidth: 0},
 		{Field: "ip", Title: "IP", MaxWidth: 0},
@@ -391,6 +429,30 @@ func buildWiredSearchColumns(siteFilter string, targetAPICount int) []formatter.
 		cols = append(cols, formatter.TableColumn{Field: "api", Title: "API", MaxWidth: 0})
 	}
 	return cols
+}
+
+// printDetailFooter emits the provenance footer for `search ... detail`. The
+// Band column carries a `[*]` marker in its header; this footer says when the
+// cache was last refreshed, or nudges the operator to run `refresh client site`
+// when nothing is cached.
+func printDetailFooter(cacheHits int, newest time.Time, siteFilter string) {
+	fmt.Println()
+	if cacheHits == 0 {
+		if siteFilter == "" {
+			fmt.Println("[*] no client detail cached — run `refresh client site <name>` to populate")
+		} else {
+			fmt.Printf("[*] no client detail cached for %s — run `refresh client site %q` to populate\n",
+				siteFilter, siteFilter)
+		}
+		return
+	}
+	if siteFilter == "" {
+		fmt.Printf("[*] last refreshed %s — run `refresh client site <name>` to update\n",
+			newest.Format(time.RFC3339))
+	} else {
+		fmt.Printf("[*] last refreshed %s — run `refresh client site %q` to update\n",
+			newest.Format(time.RFC3339), siteFilter)
+	}
 }
 
 // resolveSearchSiteID maps a user-supplied site argument to the vendor site ID

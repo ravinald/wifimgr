@@ -22,6 +22,7 @@ type Client interface {
 	Statuses() StatusesService
 	WLANs() WLANsService
 	BSSIDs() BSSIDsService
+	ClientDetail() ClientDetailService
 
 	// Metadata
 	VendorName() string
@@ -142,6 +143,18 @@ type WLANsService interface {
 // BSSIDs map wireless SSIDs to specific radio interfaces on access points.
 type BSSIDsService interface {
 	List(ctx context.Context) ([]*BSSIDEntry, error)
+}
+
+// ClientDetailService provides per-client detail fetches that supplement
+// what the default search endpoint returns. It exists because some vendors
+// (notably Meraki) don't expose per-client connected band on their client
+// list, forcing a secondary event-history lookup. Optional — vendors that
+// already carry this data on the primary search response may return nil.
+type ClientDetailService interface {
+	// FetchSiteClientDetail returns per-client detail records for every
+	// wireless client currently seen on the given site. The records carry
+	// normalized MAC, band, and last-known status with a fetch timestamp.
+	FetchSiteClientDetail(ctx context.Context, siteID string) ([]*ClientDetail, error)
 }
 
 // LegacyClientAccessor provides access to the underlying legacy client.

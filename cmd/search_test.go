@@ -70,6 +70,16 @@ func TestParseSearchArgs(t *testing.T) {
 			args: []string{"aa:bb:cc:dd:ee:ff", "site", "US-LAB-01", "json"},
 			want: searchArgs{searchText: "aa:bb:cc:dd:ee:ff", siteID: "US-LAB-01", format: "json"},
 		},
+		{
+			name: "detail keyword alone",
+			args: []string{"laptop", "detail"},
+			want: searchArgs{searchText: "laptop", format: "table", detail: true},
+		},
+		{
+			name: "site-scoped detail",
+			args: []string{"site", "US-LAB-01", "detail"},
+			want: searchArgs{siteID: "US-LAB-01", format: "table", detail: true},
+		},
 	}
 
 	for _, tt := range tests {
