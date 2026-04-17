@@ -189,12 +189,29 @@ type WirelessClient struct {
 	SSID         string `json:"ssid,omitempty"`
 	VLAN         int    `json:"vlan,omitempty"`
 	Band         string `json:"band,omitempty"`         // "2.4", "5", or "6"
+	Status       string `json:"status,omitempty"`       // vendor-supplied state, e.g. "Online" / "Offline"
 	Manufacturer string `json:"manufacturer,omitempty"` // from OUI lookup
 	OS           string `json:"os,omitempty"`
 
 	// Provenance tracks where this data came from (set by loader, not serialized)
 	SourceAPI    string `json:"-"`
 	SourceVendor string `json:"-"`
+}
+
+// ClientDetail is a cached per-client supplement populated by
+// `refresh client site <name>`. It exists because some vendor APIs (notably
+// Meraki) don't expose per-client connected band on their primary client
+// list endpoint, so we maintain a persistent cache fed by the operator on
+// demand. Keyed by normalized MAC.
+//
+// Connection status (online/offline) is deliberately NOT cached here —
+// Meraki's primary search response already carries it live, so re-using
+// cached status would invite staleness bugs.
+type ClientDetail struct {
+	MAC       string    `json:"mac"`
+	SiteID    string    `json:"site_id,omitempty"`
+	Band      string    `json:"band,omitempty"` // "2.4" / "5" / "6"
+	FetchedAt time.Time `json:"fetched_at"`
 }
 
 // DeviceStatus represents the current status of a device.

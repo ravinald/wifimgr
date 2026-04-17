@@ -52,10 +52,11 @@ type searchArgs struct {
 	force      bool
 	format     string
 	noResolve  bool
+	detail     bool // render per-client detail columns (Meraki band etc.) from the local cache
 }
 
 // parseSearchArgs parses positional arguments for search commands.
-// Expected format: [<search-text>] [site <site-name-or-id>] [force] [json|csv] [no-resolve]
+// Expected format: [<search-text>] [site <site-name-or-id>] [force] [detail] [json|csv] [no-resolve]
 // When the first argument is the "site" keyword, no search text is required —
 // the caller should list all clients scoped to the given site.
 func parseSearchArgs(args []string) searchArgs {
@@ -77,6 +78,8 @@ func parseSearchArgs(args []string) searchArgs {
 			result.format = arg
 		case "no-resolve":
 			result.noResolve = true
+		case "detail":
+			result.detail = true
 		default:
 			if result.searchText == "" {
 				result.searchText = args[i]

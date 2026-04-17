@@ -84,6 +84,13 @@ func (a *Adapter) BSSIDs() vendors.BSSIDsService {
 	return &bssidsService{client: a.legacy, orgID: a.orgID}
 }
 
+// ClientDetail returns nil. Mist's wireless client search already carries
+// connected band on the primary response, so there is no secondary
+// enrichment for wifimgr to cache.
+func (a *Adapter) ClientDetail() vendors.ClientDetailService {
+	return nil
+}
+
 // LegacyClient returns the underlying api.Client for advanced operations.
 // This should only be used when vendor-specific functionality is required.
 // Implements vendors.LegacyClientAccessor.

@@ -159,7 +159,7 @@ func TestBuildWirelessSearchColumns_SiteFilter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			apiFlag = tt.apiFlagValue
-			cols := buildWirelessSearchColumns(tt.siteFilter, tt.targetAPICount)
+			cols := buildWirelessSearchColumns(tt.siteFilter, tt.targetAPICount, false)
 			fields := columnFields(cols)
 			for _, want := range tt.wantContains {
 				if !containsString(fields, want) {
@@ -175,17 +175,59 @@ func TestBuildWirelessSearchColumns_SiteFilter(t *testing.T) {
 	}
 }
 
+func TestBuildWirelessSearchColumns_DetailShowsBandAndState(t *testing.T) {
+	orig := apiFlag
+	t.Cleanup(func() { apiFlag = orig })
+	apiFlag = ""
+
+	cols := buildWirelessSearchColumns("site", 1, true)
+	fields := columnFields(cols)
+	titles := columnTitles(cols)
+
+	if !containsString(fields, "band") || !containsString(fields, "state") {
+		t.Errorf("detail=true: expected band and state columns, got %v", fields)
+	}
+	// Header markers should surface on band/state so the footer timestamp
+	// maps unambiguously.
+	if !containsString(titles, "Band [*]") {
+		t.Errorf("expected 'Band [*]' header, got %v", titles)
+	}
+	if !containsString(titles, "State [*]") {
+		t.Errorf("expected 'State [*]' header, got %v", titles)
+	}
+}
+
+func TestBuildWirelessSearchColumns_DefaultHidesBandAndState(t *testing.T) {
+	orig := apiFlag
+	t.Cleanup(func() { apiFlag = orig })
+	apiFlag = ""
+
+	cols := buildWirelessSearchColumns("", 2, false)
+	fields := columnFields(cols)
+	if containsString(fields, "band") || containsString(fields, "state") {
+		t.Errorf("detail=false: band/state should be hidden, got %v", fields)
+	}
+}
+
+func columnTitles(cols []formatter.TableColumn) []string {
+	out := make([]string, 0, len(cols))
+	for _, c := range cols {
+		out = append(out, c.Title)
+	}
+	return out
+}
+
 func TestBuildWiredSearchColumns_SiteFilter(t *testing.T) {
 	orig := apiFlag
 	t.Cleanup(func() { apiFlag = orig })
 	apiFlag = ""
 
-	cols := buildWiredSearchColumns("", 2)
+	cols := buildWiredSearchColumns("", 2, false)
 	if !containsString(columnFields(cols), "site_name") {
 		t.Errorf("no site filter: expected site_name column")
 	}
 
-	cols = buildWiredSearchColumns("US-LAB-01", 2)
+	cols = buildWiredSearchColumns("US-LAB-01", 2, false)
 	if containsString(columnFields(cols), "site_name") {
 		t.Errorf("site filter: expected site_name to be omitted")
 	}

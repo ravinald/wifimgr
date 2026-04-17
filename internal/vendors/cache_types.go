@@ -73,6 +73,12 @@ type APICache struct {
 	// DeviceStatus by normalized MAC address
 	// Stored separately to allow independent refresh from inventory
 	DeviceStatus map[string]*DeviceStatus `json:"device_status,omitempty"`
+
+	// ClientDetail holds extra per-client state that the default search
+	// endpoint doesn't expose (e.g. Meraki connected band). Populated only
+	// when an operator runs `refresh client site <name>`. Keyed by
+	// normalized MAC.
+	ClientDetail map[string]*ClientDetail `json:"client_detail,omitempty"`
 }
 
 // CrossAPIIndex represents the cross-API index file structure.
