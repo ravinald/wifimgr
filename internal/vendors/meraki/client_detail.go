@@ -3,6 +3,7 @@ package meraki
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	meraki "github.com/meraki/dashboard-api-go/v5/sdk"
@@ -39,6 +40,15 @@ func (s *clientDetailService) FetchSiteClientDetail(ctx context.Context, siteID 
 	for _, band := range []string{"2.4", "5", "6"} {
 		macs, err := s.macsOnBand(ctx, siteID, band)
 		if err != nil {
+			// Networks without a wireless product (MX-only, switch-only,
+			// camera-only, etc.) reject the endpoint. Treat that as "no
+			// wireless clients here" instead of a hard failure so bulk
+			// iteration across a mixed org doesn't abort on the first
+			// appliance-only site.
+			if isNonWirelessNetworkError(err) {
+				logging.Debugf("[meraki] network %s has no wireless product; skipping", siteID)
+				return nil, nil
+			}
 			return nil, fmt.Errorf("band %s: %w", band, err)
 		}
 		for _, mac := range macs {
@@ -56,6 +66,19 @@ func (s *clientDetailService) FetchSiteClientDetail(ctx context.Context, siteID 
 		})
 	}
 	return records, nil
+}
+
+// isNonWirelessNetworkError reports whether err came from Meraki refusing a
+// wireless endpoint on a network that has no wireless product (MX-only,
+// switch-only, camera-only, etc.). The SDK doesn't expose a typed error for
+// this, so we match the error body text. Case-insensitive to survive minor
+// wording changes.
+func isNonWirelessNetworkError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "this endpoint only supports wireless networks")
 }
 
 // macsOnBand calls GetNetworkWirelessClientsConnectionStats with a band
