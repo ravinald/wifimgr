@@ -342,31 +342,42 @@ client-detail cache (Band). After that, `refresh device` is a cheap refresh
 of device-level data and `refresh client site <name>` is for targeted Band
 updates.
 
-**How State is determined.** The `State` column is derived from Band, not
-from Meraki's native `status` flag. The rule:
+**How State is determined.** Meraki's `status` field is the canonical
+source — it's what the Meraki dashboard displays and what every other tool
+in the ecosystem uses. We apply one targeted override: if Meraki claims
+`Online` for a wireless client but the local Band cache has no evidence
+(no recent auth/DHCP events captured by Meraki's stats endpoint), we report
+`Offline` instead. Tight rule, one direction only:
 
-- **Band present** (either live from the API or from the client-detail
-  cache) → `Online`. We have concrete evidence the client generated
-  connection-stats events recently.
-- **Band absent** → `Offline`. No evidence; we don't assert liveness.
+| Meraki `status` | Band cache | Reported State |
+|---|---|---|
+| Online | present | `Online` |
+| **Online** | **empty + cache has been populated** | **`Offline` (override)** |
+| Offline | — | `Offline` |
 
-This is deliberate conservatism. Meraki's `status` flag reports recent
-visibility (client seen in the last hour or so), not current association,
-so a client can show "Online" there while being truly quiet on the air for
-a day or more. Using Band as the evidence ties the two signals together:
-if we don't have on-air evidence, we don't claim the client is live.
+The override only fires when the per-API `ClientDetail` cache has at least
+one entry — i.e., you've actually run `refresh client site <name>` or
+`refresh all` on the relevant site. Before the first refresh there's no
+evidence to compare against, so Meraki's `status` flows through unchanged
+and the table is sensible on a fresh install.
 
-Fresh-install fallback: before the first `refresh client site <name>` /
-`refresh all` runs, there's no cache to derive from — `State` then falls
-back to Meraki's native `status` so the table isn't misleading on first
-use. After the first refresh, the band-derived rule takes over.
+Why the override exists: Meraki's `status` reports recent visibility, not
+current on-air association. The docs themselves note "a slight delay to a
+client's online/offline status" and the "data is updated at most once every
+five minutes." A client can keep the `Online` flag for a while after it's
+actually stopped transmitting. When we've refreshed the Band cache and the
+client hasn't shown up in any band's connection-stats response over the
+24-hour lookback, that's strong evidence it isn't currently on air — and we
+prefer understating liveness to overstating it.
 
-**Why Band (and therefore State) may still lag.** Meraki's ConnectionStats
-endpoint only lists clients with connection events (auth, DHCP, etc.) during
-the lookback window (24 hours). Stable clients with long-lived associations
-may not generate enough events to appear — they render as `Offline` because
-we have no evidence otherwise. Re-running `refresh client site <name>` on a
-schedule that matches your tolerance for staleness is the current workaround.
+**Why Band (and therefore the override) can still surprise.** Meraki's
+ConnectionStats endpoint only lists clients with connection events (auth,
+DHCP, etc.) during the 24-hour lookback window. Stable clients with
+long-lived associations may not generate enough events to appear, which
+triggers the override for clients that are genuinely on-air but quiet. If
+that's a recurring problem for your environment, re-run `refresh client
+site <name>` more frequently, or widen the band-lookback window in a
+follow-up (the endpoint allows up to 7 days).
 
 ### Cost Estimation and Confirmations
 
