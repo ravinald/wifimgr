@@ -36,7 +36,10 @@ import (
 
 // Global state for initialized client and site configs
 var (
-	globalClient  api.Client
+	globalClient api.Client
+	// globalContext is populated from the root command's context in
+	// PersistentPreRunE. Callers read it to make cancellable vendor calls.
+	// It is set before any Tier-1/Tier-2 RunE fires.
 	globalContext context.Context = context.Background()
 )
 
@@ -69,6 +72,13 @@ It provides commands to:
 
 For detailed usage information, run 'wifimgr help [command]'`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Capture the root context so legacy call sites reading globalContext
+		// see SIGINT/SIGTERM cancellation. Cobra seeds cmd.Context() from the
+		// ctx we passed to ExecuteContext in Execute().
+		if ctx := cmd.Context(); ctx != nil {
+			globalContext = ctx
+		}
+
 		// Determine initialization tier based on command annotations
 		tier := cmdutils.GetCommandTier(cmd.Annotations)
 
@@ -99,16 +109,13 @@ For detailed usage information, run 'wifimgr help [command]'`,
 	},
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	// Ensure logging cleanup happens when the program exits
+// Execute runs the root Cobra command with the provided context. The context
+// is surfaced to every RunE via cmd.Context() and captured into globalContext
+// in PersistentPreRunE so existing call sites get cancellation for free.
+// Returns the command error (or nil); main owns the exit code.
+func Execute(ctx context.Context) error {
 	defer logging.Cleanup()
-
-	err := rootCmd.Execute()
-	if err != nil {
-		os.Exit(1)
-	}
+	return rootCmd.ExecuteContext(ctx)
 }
 
 // initializeConfig initializes Viper configuration and logging only.

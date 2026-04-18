@@ -7,11 +7,45 @@ you may not use this file except in compliance with the License.
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/ravinald/wifimgr/internal/vendors"
 )
+
+// formatRefreshError renders a refresh-batch error in the most useful form
+// available. Typed errors from internal/vendors that implement UserMessage
+// get the user-friendly rendering (remediation hint); everything else falls
+// back to the plain error string.
+func formatRefreshError(err error) string {
+	if err == nil {
+		return ""
+	}
+	var authErr *vendors.AuthError
+	if errors.As(err, &authErr) {
+		return authErr.UserMessage()
+	}
+	var srvErr *vendors.ServerError
+	if errors.As(err, &srvErr) {
+		return srvErr.UserMessage()
+	}
+	var rlErr *vendors.RateLimitError
+	if errors.As(err, &rlErr) {
+		return rlErr.UserMessage()
+	}
+	var nfErr *vendors.NotFoundError
+	if errors.As(err, &nfErr) {
+		return nfErr.UserMessage()
+	}
+	var tErr *vendors.TransportError
+	if errors.As(err, &tErr) {
+		return tErr.UserMessage()
+	}
+	return err.Error()
+}
 
 // refreshDeviceCmd represents `refresh device` — the former `refresh cache`.
 // Renamed because the tool now persists two distinct caches (device-level
@@ -113,7 +147,7 @@ func runMultiVendorRefresh() error {
 		if len(errors) > 0 {
 			fmt.Println("\nErrors:")
 			for apiLabel, err := range errors {
-				fmt.Printf("  %s: %v\n", apiLabel, err)
+				fmt.Printf("  %s: %s\n", apiLabel, formatRefreshError(err))
 			}
 		}
 
