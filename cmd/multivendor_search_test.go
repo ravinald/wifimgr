@@ -194,7 +194,28 @@ func TestIsOnlineStatus(t *testing.T) {
 	}
 }
 
-func TestBuildWirelessSearchColumns_DetailShowsBandAndState(t *testing.T) {
+func TestBuildWirelessSearchColumns_BandAlwaysVisible(t *testing.T) {
+	orig := apiFlag
+	t.Cleanup(func() { apiFlag = orig })
+	apiFlag = ""
+
+	// Default view: Band present with [*] marker, State hidden.
+	cols := buildWirelessSearchColumns("", 2, false)
+	fields := columnFields(cols)
+	titles := columnTitles(cols)
+
+	if !containsString(fields, "band") {
+		t.Errorf("default: expected Band column always, got %v", fields)
+	}
+	if containsString(fields, "state") {
+		t.Errorf("default: State should be hidden, got %v", fields)
+	}
+	if !containsString(titles, "Band [*]") {
+		t.Errorf("default: expected 'Band [*]' header, got %v", titles)
+	}
+}
+
+func TestBuildWirelessSearchColumns_DetailAddsState(t *testing.T) {
 	orig := apiFlag
 	t.Cleanup(func() { apiFlag = orig })
 	apiFlag = ""
@@ -203,28 +224,18 @@ func TestBuildWirelessSearchColumns_DetailShowsBandAndState(t *testing.T) {
 	fields := columnFields(cols)
 	titles := columnTitles(cols)
 
-	if !containsString(fields, "band") || !containsString(fields, "state") {
-		t.Errorf("detail=true: expected band and state columns, got %v", fields)
+	if !containsString(fields, "band") {
+		t.Errorf("detail=true: expected Band column, got %v", fields)
 	}
-	// Header markers should surface on band/state so the footer timestamp
-	// maps unambiguously.
+	if !containsString(fields, "state") {
+		t.Errorf("detail=true: expected State column, got %v", fields)
+	}
+	// State is live from the API response; no [*] marker on it.
+	if !containsString(titles, "State") || containsString(titles, "State [*]") {
+		t.Errorf("detail=true: expected plain 'State' header (no marker), got %v", titles)
+	}
 	if !containsString(titles, "Band [*]") {
-		t.Errorf("expected 'Band [*]' header, got %v", titles)
-	}
-	if !containsString(titles, "State [*]") {
-		t.Errorf("expected 'State [*]' header, got %v", titles)
-	}
-}
-
-func TestBuildWirelessSearchColumns_DefaultHidesBandAndState(t *testing.T) {
-	orig := apiFlag
-	t.Cleanup(func() { apiFlag = orig })
-	apiFlag = ""
-
-	cols := buildWirelessSearchColumns("", 2, false)
-	fields := columnFields(cols)
-	if containsString(fields, "band") || containsString(fields, "state") {
-		t.Errorf("detail=false: band/state should be hidden, got %v", fields)
+		t.Errorf("detail=true: Band keeps '[*]' marker, got %v", titles)
 	}
 }
 

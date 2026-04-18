@@ -34,7 +34,7 @@ files:
 ### 2. Refresh the Cache
 
 ```bash
-wifimgr refresh cache
+wifimgr refresh device
 ```
 
 ### 3. View Your Infrastructure
@@ -189,10 +189,10 @@ wifimgr apply site US-LAB-01 target meraki-prod
 
 ```bash
 # Refresh all APIs in parallel
-wifimgr refresh cache
+wifimgr refresh device
 
 # Refresh only one API
-wifimgr refresh cache target mist-prod
+wifimgr refresh device target mist-prod
 ```
 
 ## Handling Duplicate Site Names
@@ -369,13 +369,13 @@ Error: site 'US-LAB-01' not found in any API
 Searched APIs: mist-prod, meraki-prod
 
 Try:
-  - Refresh the cache: wifimgr refresh cache
+  - Refresh the cache: wifimgr refresh device
   - Check site name spelling
   - Use target <label> to filter to a specific API
 ```
 
 **Solution:**
-1. Run `wifimgr refresh cache` to update the cache
+1. Run `wifimgr refresh device` to update the cache
 2. Check the exact site name with `wifimgr show api sites`
 3. Verify the site exists in the vendor dashboard
 
@@ -385,10 +385,10 @@ If data seems outdated:
 
 ```bash
 # Refresh all caches
-wifimgr refresh cache
+wifimgr refresh device
 
 # Or refresh a specific API
-wifimgr refresh cache target mist-prod
+wifimgr refresh device target mist-prod
 ```
 
 ### Rate Limiting
