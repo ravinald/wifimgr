@@ -199,26 +199,63 @@ wifimgr apply cleanup-backups --days 30
 
 ## import
 
-Bootstrap local config files from current API state.
+Bootstrap local config from current API state. Each command emits a single,
+loadable `ImportFile` — site body + its WLAN templates in one place — and you
+wire it up by adding the path to `files.imports` in the main config. Once
+registered, `apply diff` treats imported state as the desired state and
+should report no changes until you edit the file.
 
 ### Standard Usage
 
 ```bash
 wifimgr import api site US-LAB-01         # Preview to STDOUT
-wifimgr import api site US-LAB-01 save    # Save to file
+wifimgr import api site US-LAB-01 save    # Write <config_dir>/import/us-lab-01_<api>.json
 ```
 
-This is useful when taking over management of an existing site. Import the current state, then make changes to the local config and apply them.
+Useful when taking over a site: import the current state, register the file
+in `files.imports`, then edit locally and re-apply.
 
 ### Scope Options
 
 ```bash
 wifimgr import api site US-LAB-01 full           # Everything (default)
-wifimgr import api site US-LAB-01 type wlans    # Only WLANs
-wifimgr import api site US-LAB-01 type profiles # Only site-specific profiles
-wifimgr import api site US-LAB-01 type ap       # Only access points
-wifimgr import api site US-LAB-01 type switch   # Only switches
-wifimgr import api site US-LAB-01 type gateway  # Only gateways
+wifimgr import api site US-LAB-01 type wlans     # Only WLANs (templates-only file)
+wifimgr import api site US-LAB-01 type profiles  # Only site-specific profiles
+wifimgr import api site US-LAB-01 type ap        # Only access points
+wifimgr import api site US-LAB-01 type switch    # Only switches
+wifimgr import api site US-LAB-01 type gateway   # Only gateways
+```
+
+### Vendor-Level Templates
+
+Some APIs carry templates above the site boundary — Mist org-level WLANs
+today. Pull those into their own import file:
+
+```bash
+wifimgr import api templates target mist-prod         # Preview to STDOUT
+wifimgr import api templates target mist-prod save    # Write <config_dir>/import/wlan-template_mist-prod.json
+wifimgr import api templates target mist-prod type wlan save
+```
+
+Meraki has no org-level WLAN templates (SSIDs live inside networks), so
+pointing this command at a Meraki target reports nothing and exits cleanly.
+
+### Wiring Imports Into Main Config
+
+Each import file is self-describing. Register the path(s) in `files.imports`
+and the loader will dispatch the `Config` and `Templates` sections into the
+right registries automatically:
+
+```json
+{
+  "files": {
+    "site_configs": [ "sites/us-lab-01.json" ],
+    "imports": [
+      "import/wlan-template_mist-prod.json",
+      "import/us-lab-01_mist-prod.json"
+    ]
+  }
+}
 ```
 
 ### Common Recipes
@@ -227,14 +264,17 @@ wifimgr import api site US-LAB-01 type gateway  # Only gateways
 # Preview and pipe to jq
 wifimgr import api site US-LAB-01 | jq '.config'
 
-# Compare local config with API state
+# Compare local import file with current API state
 wifimgr import api site US-LAB-01 compare
 
-# Include secrets (PSK, RADIUS) - redacted by default
+# Include secrets (PSK, RADIUS) — redacted by default
 wifimgr import api site US-LAB-01 secrets save
 
-# Import from specific API
-wifimgr import api site US-LAB-01 target mist-prod save
+# Import from specific API (needed when the site name exists in multiple APIs)
+wifimgr import api site api mist-prod US-LAB-01 save
+
+# Write to a custom path
+wifimgr import api site US-LAB-01 save file import/custom.json
 ```
 
 ### Import from PDF
