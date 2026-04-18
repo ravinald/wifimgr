@@ -252,6 +252,86 @@ func TestDeriveClientState(t *testing.T) {
 	}
 }
 
+func TestCompareMACs(t *testing.T) {
+	tests := []struct {
+		a, b string
+		want int
+	}{
+		// Same byte value, different formats: equal.
+		{"aa:bb:cc:dd:ee:ff", "aabb.ccdd.eeff", 0},
+		{"00:11:22:33:44:55", "00-11-22-33-44-55", 0},
+		// Byte-order comparisons.
+		{"00:11:22:33:44:54", "00:11:22:33:44:55", -1},
+		{"10:00:00:00:00:00", "02:00:00:00:00:00", 1},
+		// Unparseable sorts before valid.
+		{"not-a-mac", "00:00:00:00:00:00", -1},
+	}
+	for _, tt := range tests {
+		got := compareMACs(tt.a, tt.b)
+		// Normalize to -1/0/1 for comparison.
+		switch {
+		case got < 0:
+			got = -1
+		case got > 0:
+			got = 1
+		}
+		if got != tt.want {
+			t.Errorf("compareMACs(%q, %q) = %d, want %d", tt.a, tt.b, got, tt.want)
+		}
+	}
+}
+
+func TestSortWirelessRows(t *testing.T) {
+	rows := []formatter.GenericTableData{
+		{"ssid": "Guest", "mac": "10:00:00:00:00:00"},
+		{"ssid": "Corp", "mac": "00:11:22:33:44:55"},
+		{"ssid": "Corp", "mac": "00:11:22:33:44:54"}, // earlier MAC, same SSID → first
+		{"ssid": "Guest", "mac": "aa-bb-cc-dd-ee-ff"}, // different format, sorts by bytes
+		{"ssid": "Corp", "mac": "aabb.ccdd.eeff"},     // Cisco format
+	}
+	sortWirelessRows(rows)
+
+	wantOrder := [][2]string{
+		{"Corp", "00:11:22:33:44:54"},
+		{"Corp", "00:11:22:33:44:55"},
+		{"Corp", "aabb.ccdd.eeff"},
+		{"Guest", "10:00:00:00:00:00"},
+		{"Guest", "aa-bb-cc-dd-ee-ff"},
+	}
+	for i, want := range wantOrder {
+		gotSSID, _ := rows[i]["ssid"].(string)
+		gotMAC, _ := rows[i]["mac"].(string)
+		if gotSSID != want[0] || gotMAC != want[1] {
+			t.Errorf("row %d = (%q,%q), want (%q,%q)", i, gotSSID, gotMAC, want[0], want[1])
+		}
+	}
+}
+
+func TestSortWiredRows(t *testing.T) {
+	rows := []formatter.GenericTableData{
+		{"switch_name": "sw-b", "port": "5", "mac": "00:11:22:33:44:55"},
+		{"switch_name": "sw-a", "port": "5", "mac": "00:11:22:33:44:55"},
+		{"switch_name": "sw-a", "port": "1", "mac": "00:11:22:33:44:55"},
+		{"switch_name": "sw-a", "port": "5", "mac": "00:11:22:33:44:54"}, // earlier MAC, tie broken by MAC
+	}
+	sortWiredRows(rows)
+
+	wantOrder := [][3]string{
+		{"sw-a", "1", "00:11:22:33:44:55"},
+		{"sw-a", "5", "00:11:22:33:44:54"},
+		{"sw-a", "5", "00:11:22:33:44:55"},
+		{"sw-b", "5", "00:11:22:33:44:55"},
+	}
+	for i, want := range wantOrder {
+		gotSw, _ := rows[i]["switch_name"].(string)
+		gotPort, _ := rows[i]["port"].(string)
+		gotMAC, _ := rows[i]["mac"].(string)
+		if gotSw != want[0] || gotPort != want[1] || gotMAC != want[2] {
+			t.Errorf("row %d = (%q,%q,%q), want (%q,%q,%q)", i, gotSw, gotPort, gotMAC, want[0], want[1], want[2])
+		}
+	}
+}
+
 func TestIsOnlineStatus(t *testing.T) {
 	tests := []struct {
 		in   string
