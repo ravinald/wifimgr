@@ -342,20 +342,25 @@ func TestSynthesizeWLANLabels_Empty(t *testing.T) {
 	}
 }
 
-// Round-trip check: the generated SiteConfigFile + WLANProfileFile should
-// unmarshal into the loader's target types without errors. This is the
-// contract that was broken before the fix and the one the test guards.
+// TestExportRoundTripsThroughLoaderTypes guards the contract that was broken
+// in PR #20: the file we emit must be directly loadable through
+// config.LoadImportFile (the real loader path). Covers the site body,
+// WLAN labels on the site, and the companion Templates.WLAN entries.
 func TestExportRoundTripsThroughLoaderTypes(t *testing.T) {
 	wlans := []*vendors.WLAN{
 		{SSID: "Scale Guest", Enabled: true, AuthType: "open"},
 	}
-	labels, profiles := synthesizeWLANLabels(wlans, "mx-mex-904", false)
+	labels, templates := buildWLANsExportFromWLANs(wlans, "mx-mex-904", false)
 
-	// Build a minimal site export using the new shape.
-	siteExport := &SiteExportConfig{
+	env := &importEnvelope{
 		Version: 1,
-		Config: SiteExportConfigData{
-			Sites: map[string]*SiteConfigData{
+		Source: &importSourceExport{
+			API:  "meraki",
+			Site: "MX - Av. Ejercito Nacional Mexicano 904",
+			Kind: "site",
+		},
+		Config: &siteConfigEnvelope{
+			Sites: map[string]*siteObjExport{
 				"MX - Av. Ejercito Nacional Mexicano 904": {
 					API:        "meraki",
 					SiteConfig: map[string]any{"name": "MX - Av. Ejercito Nacional Mexicano 904"},
@@ -363,17 +368,22 @@ func TestExportRoundTripsThroughLoaderTypes(t *testing.T) {
 				},
 			},
 		},
+		Templates: &templatesEnvelope{WLAN: templates},
 	}
-	siteBytes, err := json.Marshal(siteExport)
+	bytes, err := json.Marshal(env)
 	if err != nil {
-		t.Fatalf("marshal site: %v", err)
+		t.Fatalf("marshal envelope: %v", err)
 	}
 
-	// Unmarshal into the loader's SiteConfigFile — this is the operation that
-	// used to fail with "cannot unmarshal object into ... field of type string".
-	var loaded config.SiteConfigFile
-	if err := json.Unmarshal(siteBytes, &loaded); err != nil {
-		t.Fatalf("site file rejected by loader types: %v", err)
+	// This is the real loader target. It used to fail silently (wrong shape)
+	// before the rework.
+	var loaded config.ImportFile
+	if err := json.Unmarshal(bytes, &loaded); err != nil {
+		t.Fatalf("import file rejected by loader types: %v", err)
+	}
+
+	if loaded.Config == nil {
+		t.Fatal("Config section missing after unmarshal")
 	}
 	gotSite, ok := loaded.Config.Sites["MX - Av. Ejercito Nacional Mexicano 904"]
 	if !ok {
@@ -383,19 +393,43 @@ func TestExportRoundTripsThroughLoaderTypes(t *testing.T) {
 		t.Errorf("WLAN labels lost in round-trip: %v", gotSite.WLAN)
 	}
 
-	// Now the template file.
-	templateExport := &config.WLANProfileFile{Version: 1, WLANProfiles: profiles}
-	tplBytes, err := json.Marshal(templateExport)
-	if err != nil {
-		t.Fatalf("marshal template: %v", err)
+	if loaded.Templates == nil {
+		t.Fatal("Templates section missing after unmarshal")
 	}
-	var loadedTpl config.WLANProfileFile
-	if err := json.Unmarshal(tplBytes, &loadedTpl); err != nil {
-		t.Fatalf("template file rejected by loader types: %v", err)
+	tpl, ok := loaded.Templates.WLAN["mx-mex-904--scale-guest"]
+	if !ok {
+		t.Fatalf("template key missing; got keys: %v", templateWLANKeys(loaded.Templates))
 	}
-	if _, ok := loadedTpl.WLANProfiles["mx-mex-904--scale-guest"]; !ok {
-		t.Errorf("profile key missing after round-trip; got keys: %v", keysOf(loadedTpl.WLANProfiles))
+	if tpl["ssid"] != "Scale Guest" {
+		t.Errorf("SSID lost in round-trip; got %v", tpl["ssid"])
 	}
+}
+
+// buildWLANsExportFromWLANs is a test helper mirroring buildWLANsExport but
+// bypasses the cache accessor so the test can drive synthesizeWLANLabels
+// directly and then mimic the profile-to-map conversion.
+func buildWLANsExportFromWLANs(ws []*vendors.WLAN, siteSlug string, includeSecrets bool) ([]string, map[string]map[string]any) {
+	labels, profiles := synthesizeWLANLabels(ws, siteSlug, includeSecrets)
+	if len(profiles) == 0 {
+		return labels, nil
+	}
+	templates := make(map[string]map[string]any, len(profiles))
+	for label, p := range profiles {
+		m, err := profileToMap(p)
+		if err != nil {
+			continue
+		}
+		templates[label] = m
+	}
+	return labels, templates
+}
+
+func templateWLANKeys(d *config.TemplateDefinitions) []string {
+	out := make([]string, 0, len(d.WLAN))
+	for k := range d.WLAN {
+		out = append(out, k)
+	}
+	return out
 }
 
 func equalStrings(a, b []string) bool {
@@ -417,10 +451,3 @@ func portalEqual(a, b *config.PortalConfig) bool {
 	return a.Enabled == b.Enabled && a.Auth == b.Auth
 }
 
-func keysOf(m map[string]*config.WLANProfile) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
-}

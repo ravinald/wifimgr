@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ravinald/jsondiff/pkg/jsondiff"
 	"github.com/spf13/cobra"
@@ -69,11 +70,11 @@ With Explicit API (when site exists in multiple APIs):
 
 With Custom Output File:
   wifimgr import api site US-SFO-LAB save file custom.json
-  wifimgr import api site US-SFO-LAB save file sites/lab.json
+  wifimgr import api site US-SFO-LAB save file import/lab.json
   wifimgr import api site US-SFO-LAB save file /tmp/site.json
 
 Combined Options:
-  wifimgr import api site api mist-prod US-SFO-LAB save file sites/sfo.json
+  wifimgr import api site api mist-prod US-SFO-LAB save file import/sfo.json
   wifimgr import api site US-SFO-LAB type wlans secrets save
   wifimgr import api site US-SFO-LAB | jq '.config'
 
@@ -88,21 +89,21 @@ Arguments:
                    - switch    Switch configurations only
                    - gateway   Gateway/firewall configurations only
   secrets        Optional. Include sensitive data (PSK, RADIUS secrets) - redacted by default
-  compare        Optional. Compare API state with existing config file (using jsondiff)
-  save           Optional. Write to config file (default: print to STDOUT)
+  compare        Optional. Compare API state with existing import file (using jsondiff)
+  save           Optional. Write to import file (default: print to STDOUT)
   file           Optional. Keyword followed by output filename (relative to config_dir or absolute)
 
 What it Does:
   1. Retrieves site configuration from the specified API cache
   2. Optionally filters to specific scope (wlans, profiles, ap, switch, gateway)
   3. Redacts secrets by default (use 'secrets' to include)
-  4. Prints to STDOUT or saves to file if 'save' specified
-  5. With 'compare': shows diff between API and existing local config
+  4. Prints to STDOUT or saves to a single import file if 'save' specified
+  5. With 'compare': shows diff between API and existing local import file
 
 Output Location:
   Without 'save': Prints JSON to STDOUT
-  With 'save' (no file): ~/.config/wifimgr/<api-name>/sites/<site-name>.json
-  With 'save file': ~/.config/wifimgr/<filename> (relative) or <filename> (absolute)`,
+  With 'save' (no file): <config_dir>/import/<site-slug>_<api>.json
+  With 'save file': <config_dir>/<filename> (relative) or <filename> (absolute)`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		// Allow "help" as a special keyword
 		for _, arg := range args {
@@ -252,128 +253,86 @@ func runImportAPISite(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Determine the API label to use
 	apiLabel := site.SourceAPI
-
 	logger.Infof("Importing site '%s' from API '%s' (scope: %s, save: %v)", siteName, apiLabel, parsed.scope, parsed.saveMode)
 
-	// Build the export data (site config + companion WLAN template)
-	exportData, templateData, err := buildSiteExportData(cacheAccessor, site, parsed.scope, parsed.includeSecrets)
+	// Build the combined ImportFile envelope (site config + site-local WLAN
+	// templates live side-by-side so the file self-describes).
+	exportData, err := buildSiteExportData(cacheAccessor, site, parsed.scope, parsed.includeSecrets)
 	if err != nil {
 		return fmt.Errorf("failed to build export data: %w", err)
 	}
 
-	// Determine output paths for both files. The site path follows the
-	// operator's --output if provided; the template path is derived from it
-	// so both files live in a predictable layout.
 	configDir := viper.GetString("files.config_dir")
-	sitePath := resolveSiteOutputPath(parsed.outputFile, configDir, apiLabel, siteName)
-	templatePath := resolveTemplateOutputPath(sitePath, configDir, apiLabel, siteName)
+	outputPath := resolveImportOutputPath(parsed.outputFile, configDir, apiLabel, site.Name)
 
-	// Non-save modes (STDOUT preview, compare) only operate on the site
-	// document today — templates are only materialized when saving.
 	if parsed.compareMode {
 		if exportData == nil {
-			return fmt.Errorf("compare is not supported with scope %q", parsed.scope)
+			return fmt.Errorf("nothing to compare for scope %q", parsed.scope)
 		}
-		existingData, fileExists := loadExistingConfig(sitePath)
-		return compareSiteConfig(exportData, existingData, fileExists, sitePath, siteName)
+		existingData, fileExists := loadExistingImport(outputPath)
+		return compareImportFile(exportData, existingData, fileExists, outputPath, siteName)
 	}
 
 	if !parsed.saveMode {
-		switch {
-		case exportData != nil:
-			jsonData, err := json.MarshalIndent(exportData, "", "  ")
-			if err != nil {
-				return fmt.Errorf("failed to marshal data: %w", err)
-			}
-			fmt.Println(string(jsonData))
-		case templateData != nil:
-			jsonData, err := json.MarshalIndent(templateData, "", "  ")
-			if err != nil {
-				return fmt.Errorf("failed to marshal template data: %w", err)
-			}
-			fmt.Println(string(jsonData))
+		if exportData == nil {
+			fmt.Println("{}")
+			return nil
 		}
+		jsonData, err := json.MarshalIndent(exportData, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal data: %w", err)
+		}
+		fmt.Println(string(jsonData))
 		return nil
 	}
 
-	// Save mode: write whichever files the scope produced, confirming any
-	// overwrites first.
-	if exportData != nil {
-		if _, exists := loadExistingConfig(sitePath); exists {
-			if !confirmOverwrite(sitePath) {
-				fmt.Println("Import cancelled")
-				return nil
-			}
-		}
-		if err := writeSiteConfig(sitePath, exportData); err != nil {
-			return fmt.Errorf("failed to write site config: %w", err)
+	// Save mode
+	if exportData == nil {
+		fmt.Println("Nothing to export")
+		return nil
+	}
+	if _, exists := loadExistingImport(outputPath); exists {
+		if !confirmOverwrite(outputPath) {
+			fmt.Println("Import cancelled")
+			return nil
 		}
 	}
-
-	if templateData != nil {
-		if _, err := os.Stat(templatePath); err == nil {
-			if !confirmOverwrite(templatePath) {
-				fmt.Println("Template import cancelled")
-				return nil
-			}
-		}
-		if err := writeWLANTemplateFile(templatePath, templateData); err != nil {
-			return fmt.Errorf("failed to write WLAN template: %w", err)
-		}
+	if err := writeImportFile(outputPath, exportData); err != nil {
+		return fmt.Errorf("failed to write import file: %w", err)
 	}
 
-	printActivationHint(sitePath, templatePath, exportData != nil, templateData != nil, configDir)
+	printActivationHint(outputPath, configDir)
 	return nil
 }
 
-// resolveSiteOutputPath picks the on-disk location for the site config file.
-// Respects an explicit --output, falls back to <configDir>/<api>/sites/<name>.json.
-func resolveSiteOutputPath(outputFile, configDir, apiLabel, siteName string) string {
+// resolveImportOutputPath picks the on-disk location for the import file.
+// Respects an explicit `file` argument; otherwise falls back to the
+// convention <configDir>/import/<site-slug>_<api>.json.
+func resolveImportOutputPath(outputFile, configDir, apiLabel, siteName string) string {
 	if outputFile != "" {
 		if filepath.IsAbs(outputFile) {
 			return outputFile
 		}
 		return filepath.Join(configDir, outputFile)
 	}
-	return filepath.Join(xdg.GetConfigDir(), apiLabel, "sites", siteName+".json")
-}
-
-// resolveTemplateOutputPath mirrors the site path into the companion template
-// directory. When the site path lives under `.../sites/...`, the template goes
-// to the same relative path with `/sites/` swapped for `/wlans/`. Otherwise it
-// falls back to `<configDir>/<api>/wlans/<site-name>.json`.
-func resolveTemplateOutputPath(sitePath, configDir, apiLabel, siteName string) string {
-	if strings.Contains(sitePath, string(os.PathSeparator)+"sites"+string(os.PathSeparator)) {
-		return strings.Replace(sitePath, string(os.PathSeparator)+"sites"+string(os.PathSeparator), string(os.PathSeparator)+"wlans"+string(os.PathSeparator), 1)
+	baseDir := configDir
+	if baseDir == "" {
+		baseDir = xdg.GetConfigDir()
 	}
-	return filepath.Join(xdg.GetConfigDir(), apiLabel, "wlans", siteName+".json")
+	return filepath.Join(baseDir, "import", fmt.Sprintf("%s_%s.json", slug(siteName), apiLabel))
 }
 
 // printActivationHint tells the operator exactly what to add to the main
-// config, using paths relative to config_dir so the message matches what they
-// type into `files.site_configs` / `files.templates`.
-func printActivationHint(sitePath, templatePath string, wroteSite, wroteTemplate bool, configDir string) {
-	relSite := relativeFromConfigDir(sitePath, configDir)
-	relTemplate := relativeFromConfigDir(templatePath, configDir)
-
-	switch {
-	case wroteSite && wroteTemplate:
-		fmt.Printf("Wrote site config:    %s\n", sitePath)
-		fmt.Printf("Wrote WLAN template:  %s\n", templatePath)
-		fmt.Printf("\nTo activate, add to your wifimgr-config.json:\n")
-		fmt.Printf("  \"files\": {\n")
-		fmt.Printf("    \"site_configs\": [ ..., %q ],\n", relSite)
-		fmt.Printf("    \"templates\":    [ ..., %q ]\n", relTemplate)
-		fmt.Printf("  }\n")
-	case wroteSite:
-		fmt.Printf("Exported site configuration to: %s\n", sitePath)
-		fmt.Printf("\nTo activate, add to files.site_configs: %q\n", relSite)
-	case wroteTemplate:
-		fmt.Printf("Exported WLAN template to: %s\n", templatePath)
-		fmt.Printf("\nTo activate, add to files.templates: %q\n", relTemplate)
-	}
+// config, using a path relative to config_dir so the message matches what they
+// type into `files.imports`.
+func printActivationHint(outputPath, configDir string) {
+	rel := relativeFromConfigDir(outputPath, configDir)
+	fmt.Printf("Wrote import file: %s\n", outputPath)
+	fmt.Printf("\nTo activate, add to your wifimgr-config.json:\n")
+	fmt.Printf("  \"files\": {\n")
+	fmt.Printf("    \"imports\": [ ..., %q ]\n", rel)
+	fmt.Printf("  }\n")
 }
 
 // relativeFromConfigDir returns path rendered relative to configDir when
@@ -388,81 +347,94 @@ func relativeFromConfigDir(path, configDir string) string {
 	return path
 }
 
-// writeWLANTemplateFile serializes a WLANProfileFile to disk, creating the
-// parent directory if needed. Mirrors writeSiteConfig so file permissions and
-// directory modes stay consistent between the pair.
-func writeWLANTemplateFile(path string, file *config.WLANProfileFile) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0750); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-	data, err := json.MarshalIndent(file, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal template: %w", err)
-	}
-	if err := os.WriteFile(path, data, 0600); err != nil { // #nosec G304 G703 -- path from operator-controlled config
-		return fmt.Errorf("failed to write template file: %w", err)
-	}
-	return nil
+// importEnvelope mirrors config.ImportFile for serialization. We keep a local
+// type because devices are emitted as raw maps (to preserve all vendor-specific
+// fields verbatim), but the on-disk JSON is still valid for loading through
+// config.LoadImportFile — unknown fields are dropped during unmarshal.
+type importEnvelope struct {
+	Version   int                 `json:"version"`
+	Source    *importSourceExport `json:"source,omitempty"`
+	Config    *siteConfigEnvelope `json:"config,omitempty"`
+	Templates *templatesEnvelope  `json:"templates,omitempty"`
 }
 
-// SiteExportConfig represents the exported site configuration structure
-type SiteExportConfig struct {
-	Version int                  `json:"version"`
-	Config  SiteExportConfigData `json:"config"`
+// importSourceExport mirrors config.ImportSource but lives in cmd/ so we don't
+// have to export the "zero time means don't emit" trick from the config side.
+type importSourceExport struct {
+	API        string    `json:"api,omitempty"`
+	Site       string    `json:"site,omitempty"`
+	SiteID     string    `json:"site_id,omitempty"`
+	Kind       string    `json:"kind,omitempty"`
+	ImportedAt time.Time `json:"imported_at,omitempty"`
 }
 
-// SiteExportConfigData wraps the sites map
-type SiteExportConfigData struct {
-	Sites map[string]*SiteConfigData `json:"sites"`
+type siteConfigEnvelope struct {
+	Sites map[string]*siteObjExport `json:"sites"`
 }
 
-// SiteConfigData represents the configuration data for a single site.
-// The shape matches config.SiteConfigObj so exported files load back through
-// the same path as hand-written site configs.
-type SiteConfigData struct {
+// siteObjExport mirrors config.SiteConfigObj. We keep SiteConfig and device
+// bodies as loose maps here so vendor-specific fields round-trip without
+// requiring us to enumerate every field on the typed struct.
+type siteObjExport struct {
 	API        string                       `json:"api,omitempty"`
 	SiteConfig map[string]any               `json:"site_config"`
-	Devices    *DevicesConfig               `json:"devices,omitempty"`
-	WLAN       []string                     `json:"wlan,omitempty"`     // template labels; definitions live in the companion wlan_profiles file
-	Profiles   config.SiteConfigObjProfiles `json:"profiles,omitempty"` // device/radio/wlan template label refs (device-profile export not yet migrated)
+	Profiles   config.SiteConfigObjProfiles `json:"profiles,omitempty"`
+	WLAN       []string                     `json:"wlan,omitempty"`
+	Devices    *devicesExport               `json:"devices,omitempty"`
 }
 
-// DevicesConfig holds device configurations by type
-type DevicesConfig struct {
+type devicesExport struct {
 	AP      map[string]map[string]any `json:"ap,omitempty"`
 	Switch  map[string]map[string]any `json:"switch,omitempty"`
 	Gateway map[string]map[string]any `json:"gateway,omitempty"`
 }
 
-// buildSiteExportData builds both halves of an import: the site config file
-// and, when WLANs are in scope, the companion WLAN template file. Either can
-// be nil depending on scope — `wlans`-only returns a nil *SiteExportConfig,
-// device-type scopes return a nil *config.WLANProfileFile.
-func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.SiteInfo, scope ImportScope, includeSecrets bool) (*SiteExportConfig, *config.WLANProfileFile, error) {
+type templatesEnvelope struct {
+	WLAN   map[string]map[string]any `json:"wlan,omitempty"`
+	Radio  map[string]map[string]any `json:"radio,omitempty"`
+	Device map[string]map[string]any `json:"device,omitempty"`
+}
+
+// buildSiteExportData builds an ImportFile-shaped envelope containing both
+// the site config and the companion WLAN templates used by that site. Returns
+// nil when the scope produces nothing to emit.
+func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.SiteInfo, scope ImportScope, includeSecrets bool) (*importEnvelope, error) {
 	siteSlug := slug(site.Name)
 
-	// WLANs always processed first so label references land on the site entry.
+	// WLANs always processed first so label references are ready to attach.
 	var wlanLabels []string
-	var wlanProfiles map[string]*config.WLANProfile
+	var wlanTemplates map[string]map[string]any
 	if scope == ScopeFull || scope == ScopeWLANs {
-		wlanLabels, wlanProfiles = buildWLANsExport(cacheAccessor, site.ID, siteSlug, includeSecrets)
+		wlanLabels, wlanTemplates = buildWLANsExport(cacheAccessor, site.ID, siteSlug, includeSecrets)
 	}
 
-	var templateFile *config.WLANProfileFile
-	if len(wlanProfiles) > 0 {
-		templateFile = &config.WLANProfileFile{
-			Version:      1,
-			WLANProfiles: wlanProfiles,
-		}
+	env := &importEnvelope{
+		Version: 1,
+		Source: &importSourceExport{
+			API:        site.SourceAPI,
+			Site:       site.Name,
+			SiteID:     site.ID,
+			Kind:       "site",
+			ImportedAt: time.Now().UTC(),
+		},
 	}
 
-	// `wlans` scope emits only the template file.
+	if len(wlanTemplates) > 0 {
+		env.Templates = &templatesEnvelope{WLAN: wlanTemplates}
+	}
+
+	// `wlans` scope emits only the templates section — no site body.
 	if scope == ScopeWLANs {
-		return nil, templateFile, nil
+		if env.Templates == nil {
+			return nil, nil
+		}
+		// Drop the site-oriented source kind since the file only carries
+		// templates in this scope.
+		env.Source.Kind = "wlans"
+		return env, nil
 	}
 
-	siteData := &SiteConfigData{
+	siteBody := &siteObjExport{
 		API: site.SourceAPI,
 		SiteConfig: map[string]any{
 			"name":         site.Name,
@@ -474,7 +446,7 @@ func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.Sit
 	}
 
 	if site.Latitude != 0 || site.Longitude != 0 {
-		siteData.SiteConfig["latlng"] = map[string]float64{
+		siteBody.SiteConfig["latlng"] = map[string]float64{
 			"lat": site.Latitude,
 			"lng": site.Longitude,
 		}
@@ -485,33 +457,22 @@ func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.Sit
 		if err != nil {
 			logging.Warnf("Failed to build devices export: %v", err)
 		} else {
-			siteData.Devices = devices
+			siteBody.Devices = devices
 		}
 	}
 
 	if len(wlanLabels) > 0 {
-		siteData.WLAN = wlanLabels
+		siteBody.WLAN = wlanLabels
 	}
 
-	// NOTE: buildProfilesExport still returns the old `[]map[string]any` shape
-	// and is a stale code path for Mist device-profile imports. Migrating it to
-	// label-and-file form is tracked separately; today it's a no-op for Meraki
-	// (which has no device-profile concept) and harmlessly empty for most Mist
-	// sites that rely on org-level profiles.
-	_ = scope // placeholder for when the profile export path is migrated
-
-	return &SiteExportConfig{
-		Version: 1,
-		Config: SiteExportConfigData{
-			Sites: map[string]*SiteConfigData{
-				site.Name: siteData,
-			},
-		},
-	}, templateFile, nil
+	env.Config = &siteConfigEnvelope{
+		Sites: map[string]*siteObjExport{site.Name: siteBody},
+	}
+	return env, nil
 }
 
-func buildDevicesExport(cacheAccessor *vendors.CacheAccessor, siteID string, sourceVendor string, scope ImportScope) (*DevicesConfig, error) {
-	devices := &DevicesConfig{
+func buildDevicesExport(cacheAccessor *vendors.CacheAccessor, siteID string, sourceVendor string, scope ImportScope) (*devicesExport, error) {
+	devices := &devicesExport{
 		AP:      make(map[string]map[string]any),
 		Switch:  make(map[string]map[string]any),
 		Gateway: make(map[string]map[string]any),
@@ -754,10 +715,39 @@ func buildDevicesExport(cacheAccessor *vendors.CacheAccessor, siteID string, sou
 }
 
 // buildWLANsExport converts vendor-normalized WLANs for a site into the
-// Mist-canonical pair of (label list, label→profile map). Thin wrapper around
-// the accessor so the transformation logic stays testable.
-func buildWLANsExport(cacheAccessor *vendors.CacheAccessor, siteID, siteSlug string, includeSecrets bool) ([]string, map[string]*config.WLANProfile) {
-	return synthesizeWLANLabels(cacheAccessor.GetWLANsBySite(siteID), siteSlug, includeSecrets)
+// Mist-canonical pair of (label list, label→template body map). The template
+// body is the JSON shape of a WLANProfile rendered back to a raw map so it
+// drops straight into the Templates.WLAN section of the ImportFile envelope.
+func buildWLANsExport(cacheAccessor *vendors.CacheAccessor, siteID, siteSlug string, includeSecrets bool) ([]string, map[string]map[string]any) {
+	labels, profiles := synthesizeWLANLabels(cacheAccessor.GetWLANsBySite(siteID), siteSlug, includeSecrets)
+	if len(profiles) == 0 {
+		return labels, nil
+	}
+	templates := make(map[string]map[string]any, len(profiles))
+	for label, p := range profiles {
+		m, err := profileToMap(p)
+		if err != nil {
+			logging.Warnf("Failed to serialize WLAN profile %q: %v", label, err)
+			continue
+		}
+		templates[label] = m
+	}
+	return labels, templates
+}
+
+// profileToMap renders a WLANProfile as a loose map so it fits the
+// TemplateDefinitions shape (map[string]map[string]any). Done via JSON
+// round-trip to preserve omitempty semantics.
+func profileToMap(p *config.WLANProfile) (map[string]any, error) {
+	data, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // synthesizeWLANLabels is the pure half of buildWLANsExport: given a slice of
@@ -1003,29 +993,31 @@ func slug(s string) string {
 	return strings.TrimRight(out, "-")
 }
 
-func loadExistingConfig(path string) (*SiteExportConfig, bool) {
+// loadExistingImport reads an import file already on disk, returning nil when
+// absent or unreadable. Used by the compare flow.
+func loadExistingImport(path string) (*importEnvelope, bool) {
 	data, err := os.ReadFile(path) // #nosec G304 -- path from operator-controlled config
 	if err != nil {
 		return nil, false
 	}
 
-	var config SiteExportConfig
-	if err := json.Unmarshal(data, &config); err != nil {
-		logging.Warnf("Failed to parse existing config: %v", err)
+	var env importEnvelope
+	if err := json.Unmarshal(data, &env); err != nil {
+		logging.Warnf("Failed to parse existing import file: %v", err)
 		return nil, false
 	}
 
-	return &config, true
+	return &env, true
 }
 
-func compareSiteConfig(exportData, existingData *SiteExportConfig, fileExists bool, outputPath, siteName string) error {
+// compareImportFile prints a jsondiff-formatted diff of the existing file
+// against the freshly-built export. Writes the file if none exists yet.
+func compareImportFile(exportData, existingData *importEnvelope, fileExists bool, outputPath, siteName string) error {
 	if !fileExists {
-		// No existing file - just export
-		fmt.Printf("No existing config at %s, exporting...\n", outputPath)
-		return writeSiteConfig(outputPath, exportData)
+		fmt.Printf("No existing import file at %s, exporting...\n", outputPath)
+		return writeImportFile(outputPath, exportData)
 	}
 
-	// Convert to JSON for comparison
 	exportJSON, err := json.MarshalIndent(exportData, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal export data: %w", err)
@@ -1036,7 +1028,6 @@ func compareSiteConfig(exportData, existingData *SiteExportConfig, fileExists bo
 		return fmt.Errorf("failed to marshal existing data: %w", err)
 	}
 
-	// Create diff
 	opts := jsondiff.DiffOptions{
 		ContextLines: 3,
 		SortJSON:     true,
@@ -1052,10 +1043,9 @@ func compareSiteConfig(exportData, existingData *SiteExportConfig, fileExists bo
 		return nil
 	}
 
-	// Enhance and format diffs
 	diffs = jsondiff.EnhanceDiffsWithInlineChanges(diffs)
 	formatter := jsondiff.NewFormatter(nil)
-	formatter.SetMarkers("Local Config", "API Cache", "Both")
+	formatter.SetMarkers("Local Import", "API Cache", "Both")
 	output := formatter.Format(diffs)
 
 	fmt.Printf("\nConfiguration differences for site '%s':\n", siteName)
@@ -1064,20 +1054,18 @@ func compareSiteConfig(exportData, existingData *SiteExportConfig, fileExists bo
 	return nil
 }
 
-func writeSiteConfig(path string, data *SiteExportConfig) error {
-	// Ensure directory exists
+// writeImportFile writes the envelope to disk, creating parent directories.
+func writeImportFile(path string, env *importEnvelope) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Marshal with indentation
-	jsonData, err := json.MarshalIndent(data, "", "  ")
+	jsonData, err := json.MarshalIndent(env, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal data: %w", err)
 	}
 
-	// Write file
 	if err := os.WriteFile(path, jsonData, 0600); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
