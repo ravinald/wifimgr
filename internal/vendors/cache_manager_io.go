@@ -11,7 +11,13 @@ import (
 // FetchDeviceConfig fetches a single device's config from the API and updates the cache.
 // This is used for on-demand config fetching, especially for Meraki where bulk fetches are expensive.
 // Returns the fetched config or nil if the config service is not available.
+//
+// Holds the per-label mutex across the read-modify-write of the cache file.
 func (c *CacheManager) FetchDeviceConfig(ctx context.Context, apiLabel, deviceType, mac string) (any, error) {
+	lock := c.labelLock(apiLabel)
+	lock.Lock()
+	defer lock.Unlock()
+
 	normalizedMAC := NormalizeMAC(mac)
 
 	client, err := c.registry.GetClient(apiLabel)
@@ -92,9 +98,10 @@ func (c *CacheManager) FetchDeviceConfig(ctx context.Context, apiLabel, deviceTy
 		return nil, fmt.Errorf("failed to fetch %s config for %s: %w", deviceType, mac, err)
 	}
 
-	// Save updated cache
+	// Save updated cache. Uses the locked variant because the per-label
+	// mutex is already held by this function.
 	if fetchedConfig {
-		if saveErr := c.SaveAPICache(cache); saveErr != nil {
+		if saveErr := c.saveAPICacheLocked(cache); saveErr != nil {
 			logging.Warnf("[cache] Failed to save updated cache after fetching config: %v", saveErr)
 			// Don't fail the operation, we still have the config
 		} else {

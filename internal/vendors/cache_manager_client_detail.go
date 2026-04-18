@@ -24,7 +24,14 @@ func (c *CacheManager) LookupClientDetail(apiLabel, mac string) (*ClientDetail, 
 // persists. Records are keyed by NormalizeMAC(r.MAC). Existing entries for
 // the same MAC are overwritten. Returns the newest FetchedAt observed across
 // the saved records so the caller can surface freshness to the user.
+//
+// Holds the per-label mutex across the read-modify-write so a concurrent
+// refresh can't silently clobber records written here (or vice versa).
 func (c *CacheManager) SaveClientDetail(apiLabel string, records []*ClientDetail) (time.Time, error) {
+	lock := c.labelLock(apiLabel)
+	lock.Lock()
+	defer lock.Unlock()
+
 	cache, err := c.GetAPICache(apiLabel)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("load cache for %s: %w", apiLabel, err)
@@ -47,7 +54,7 @@ func (c *CacheManager) SaveClientDetail(apiLabel string, records []*ClientDetail
 		}
 	}
 
-	if err := c.SaveAPICache(cache); err != nil {
+	if err := c.saveAPICacheLocked(cache); err != nil {
 		return time.Time{}, fmt.Errorf("persist cache for %s: %w", apiLabel, err)
 	}
 	return newest, nil

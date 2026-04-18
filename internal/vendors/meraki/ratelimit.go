@@ -2,12 +2,14 @@ package meraki
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/ravinald/wifimgr/internal/logging"
+	"github.com/ravinald/wifimgr/internal/vendors"
 )
 
 // RateLimiter implements a token bucket rate limiter for Meraki API calls.
@@ -132,12 +134,20 @@ func ParseRetryAfter(resp *http.Response) time.Duration {
 }
 
 // Is429Error checks if the error indicates a rate limit (429) response.
-// This works with the Meraki SDK error format.
+//
+// Deprecated: use errors.As against *vendors.RateLimitError instead. This
+// shim remains for call sites that haven't migrated yet and for the
+// narrow case of legacy error strings that predate ClassifyError.
 func Is429Error(err error) bool {
 	if err == nil {
 		return false
 	}
-	// The Meraki SDK returns errors with status codes in the error message
+	var rl *vendors.RateLimitError
+	if errors.As(err, &rl) {
+		return true
+	}
+	// Legacy string-match fallback for errors that haven't gone through
+	// ClassifyError yet.
 	errStr := err.Error()
 	return contains(errStr, "429") || contains(errStr, "Too Many Requests")
 }
@@ -175,17 +185,50 @@ func NewRetryState(config *RetryConfig) *RetryState {
 }
 
 // ShouldRetry determines if the operation should be retried.
+//
+// Uses errors.As against the wifimgr error taxonomy so that retries are
+// driven by the *type* of failure rather than by string matching. Authn
+// errors and non-retryable transport errors return false immediately —
+// retrying a 401 or a 400 wastes the budget and mistakes the signal.
 func (s *RetryState) ShouldRetry(err error) bool {
 	if err == nil {
 		return false
 	}
-
-	// Check if we've exceeded max retries
 	if s.Attempt >= s.Config.MaxRetries {
 		return false
 	}
 
-	// Check if it's a 429 error and we should retry on 429
+	// Non-retryable: authN/authZ, explicit non-retryable transport, 4xx
+	// NotFoundError. Return without consuming a retry.
+	var authErr *vendors.AuthError
+	if errors.As(err, &authErr) {
+		return false
+	}
+	var notFound *vendors.NotFoundError
+	if errors.As(err, &notFound) {
+		return false
+	}
+	var tErr *vendors.TransportError
+	if errors.As(err, &tErr) && !tErr.Retryable {
+		return false
+	}
+
+	// Retryable: 429 (always, if configured), 5xx, retryable transport.
+	var rl *vendors.RateLimitError
+	if s.Config.RetryOn429 && errors.As(err, &rl) {
+		return true
+	}
+	var sErr *vendors.ServerError
+	if errors.As(err, &sErr) {
+		return true
+	}
+	if errors.As(err, &tErr) && tErr.Retryable {
+		return true
+	}
+
+	// Backward-compat: errors that haven't been classified yet (raw SDK
+	// errors from un-migrated call sites). Fall back to the legacy string
+	// match so we don't regress the pre-taxonomy behaviour.
 	if s.Config.RetryOn429 && Is429Error(err) {
 		return true
 	}

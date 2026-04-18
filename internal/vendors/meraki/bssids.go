@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-resty/resty/v2"
 	meraki "github.com/meraki/dashboard-api-go/v5/sdk"
 
 	"github.com/ravinald/wifimgr/internal/logging"
@@ -38,20 +39,22 @@ func (s *bssidsService) List(ctx context.Context) ([]*vendors.BSSIDEntry, error)
 			}
 		}
 
+		var httpResp *resty.Response
 		if s.suppressOutput {
 			restore := suppressStdout()
-			resp, _, err = s.dashboard.Wireless.GetOrganizationWirelessSSIDsStatusesByDevice(s.orgID, params)
+			resp, httpResp, err = s.dashboard.Wireless.GetOrganizationWirelessSSIDsStatusesByDevice(s.orgID, params)
 			restore()
 		} else {
-			resp, _, err = s.dashboard.Wireless.GetOrganizationWirelessSSIDsStatusesByDevice(s.orgID, params)
+			resp, httpResp, err = s.dashboard.Wireless.GetOrganizationWirelessSSIDsStatusesByDevice(s.orgID, params)
 		}
+		err = ClassifyError(s.orgID, "GetOrganizationWirelessSSIDsStatusesByDevice", httpResp, err)
 		if err == nil {
 			break
 		}
 
 		if !retryState.ShouldRetry(err) {
 			logging.Debugf("[meraki] Failed to get BSSIDs: %v", err)
-			return nil, fmt.Errorf("failed to get BSSIDs: %w", err)
+			return nil, err
 		}
 
 		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {

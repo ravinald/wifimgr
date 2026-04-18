@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	meraki "github.com/meraki/dashboard-api-go/v5/sdk"
 
 	"github.com/ravinald/wifimgr/internal/logging"
@@ -108,18 +109,20 @@ func (s *clientDetailService) macsOnBand(ctx context.Context, networkID, band st
 		}
 
 		var err error
+		var httpResp *resty.Response
 		if s.suppressOutput {
 			restore := suppressStdout()
-			response, _, err = s.dashboard.Wireless.GetNetworkWirelessClientsConnectionStats(networkID, params)
+			response, httpResp, err = s.dashboard.Wireless.GetNetworkWirelessClientsConnectionStats(networkID, params)
 			restore()
 		} else {
-			response, _, err = s.dashboard.Wireless.GetNetworkWirelessClientsConnectionStats(networkID, params)
+			response, httpResp, err = s.dashboard.Wireless.GetNetworkWirelessClientsConnectionStats(networkID, params)
 		}
+		err = ClassifyError(s.orgID, "GetNetworkWirelessClientsConnectionStats", httpResp, err)
 		if err == nil {
 			break
 		}
 		if !retryState.ShouldRetry(err) {
-			return nil, fmt.Errorf("connection stats fetch failed: %w", err)
+			return nil, err
 		}
 		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {
 			return nil, fmt.Errorf("retry wait failed: %w", waitErr)

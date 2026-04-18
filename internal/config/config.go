@@ -31,6 +31,10 @@ func LoadConfig(filename string) (*Config, error) {
 
 	var cfg Config
 	decoder := json.NewDecoder(file)
+	// Strict decode catches field typos at load time instead of letting them
+	// silently drop. Viper's bind path (LoadViperConfig) is the primary
+	// config reader; this path is hit by the compatibility shim in root.go.
+	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -161,6 +165,11 @@ func LoadSiteConfig(configDir string, filename string) (*SiteConfigFile, error) 
 		}
 
 		var siteObj SiteConfigObj
+		// Not using DisallowUnknownFields here: real imported site files
+		// carry vendor-snapshot fields (serial, model, site_id, map_id_v2)
+		// that aren't part of the canonical APConfig / SwitchConfig shape
+		// but are harmless provenance. Strict decode is applied at the
+		// outer ImportFile / wifimgr-config.json envelopes instead.
 		if err := json.Unmarshal(valueBytes, &siteObj); err != nil {
 			return nil, fmt.Errorf("failed to parse site data for key %s: %w", key, err)
 		}

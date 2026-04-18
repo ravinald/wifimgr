@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-resty/resty/v2"
 	meraki "github.com/meraki/dashboard-api-go/v5/sdk"
 
 	"github.com/ravinald/wifimgr/internal/logging"
@@ -48,14 +49,19 @@ func (s *devicesService) List(ctx context.Context, siteID, deviceType string) ([
 		}
 
 		var resp *meraki.ResponseOrganizationsGetOrganizationDevices
+		var httpResp *resty.Response
 		if s.suppressOutput {
 			restore := suppressStdout()
-			resp, _, err = s.dashboard.Organizations.GetOrganizationDevices(s.orgID, params)
+			resp, httpResp, err = s.dashboard.Organizations.GetOrganizationDevices(s.orgID, params)
 			restore()
 		} else {
-			resp, _, err = s.dashboard.Organizations.GetOrganizationDevices(s.orgID, params)
+			resp, httpResp, err = s.dashboard.Organizations.GetOrganizationDevices(s.orgID, params)
 		}
 		devices = resp
+
+		// Classify transport failures once at the boundary. Everything
+		// upstream reads the wifimgr taxonomy via errors.As.
+		err = ClassifyError(s.orgID, "GetOrganizationDevices", httpResp, err)
 
 		if err == nil {
 			break
@@ -63,7 +69,7 @@ func (s *devicesService) List(ctx context.Context, siteID, deviceType string) ([
 
 		if !retryState.ShouldRetry(err) {
 			logging.Debugf("[meraki] Failed to get devices: %v", err)
-			return nil, fmt.Errorf("failed to get devices: %w", err)
+			return nil, err
 		}
 
 		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {
@@ -105,13 +111,15 @@ func (s *devicesService) ByMAC(ctx context.Context, mac string) (*vendors.Device
 			}
 		}
 
-		devices, _, err = s.dashboard.Organizations.GetOrganizationDevices(s.orgID, params)
+		var httpResp *resty.Response
+		devices, httpResp, err = s.dashboard.Organizations.GetOrganizationDevices(s.orgID, params)
+		err = ClassifyError(s.orgID, "GetOrganizationDevices", httpResp, err)
 		if err == nil {
 			break
 		}
 
 		if !retryState.ShouldRetry(err) {
-			return nil, fmt.Errorf("failed to get devices: %w", err)
+			return nil, err
 		}
 
 		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {
@@ -147,13 +155,15 @@ func (s *devicesService) Get(ctx context.Context, _, deviceID string) (*vendors.
 			}
 		}
 
-		device, _, err = s.dashboard.Devices.GetDevice(deviceID)
+		var httpResp *resty.Response
+		device, httpResp, err = s.dashboard.Devices.GetDevice(deviceID)
+		err = ClassifyError(s.orgID, "GetDevice", httpResp, err)
 		if err == nil {
 			break
 		}
 
 		if !retryState.ShouldRetry(err) {
-			return nil, fmt.Errorf("failed to get device %s: %w", deviceID, err)
+			return nil, err
 		}
 
 		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {
@@ -208,13 +218,15 @@ func (s *devicesService) Update(ctx context.Context, _, deviceID string, device 
 			}
 		}
 
-		updatedDevice, _, err = s.dashboard.Devices.UpdateDevice(deviceID, request)
+		var httpResp *resty.Response
+		updatedDevice, httpResp, err = s.dashboard.Devices.UpdateDevice(deviceID, request)
+		err = ClassifyError(s.orgID, "UpdateDevice", httpResp, err)
 		if err == nil {
 			break
 		}
 
 		if !retryState.ShouldRetry(err) {
-			return nil, fmt.Errorf("failed to update device %s: %w", deviceID, err)
+			return nil, err
 		}
 
 		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {
