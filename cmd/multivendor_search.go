@@ -215,29 +215,34 @@ func isOnlineStatus(s string) bool {
 	return strings.EqualFold(s, "online")
 }
 
-// deriveClientState picks the State value for a wireless search row based on
-// on-air evidence rather than the vendor's own recency flag. The rule:
+// deriveClientState picks the State value for a wireless search row.
+// Meraki's `status` field is the canonical source — it's what the Meraki
+// dashboard and the official API examples use. We apply exactly one override:
+// when Meraki claims `Online` but the per-API ClientDetail cache has been
+// populated (`refresh client` / `refresh all` has run) AND we still have no
+// Band evidence for this MAC, the Online claim isn't substantiated by any
+// recent on-air activity, so we report Offline instead.
 //
-//   - Band populated (either live from the primary response or from the
-//     per-site ClientDetail cache) → "Online". We have concrete evidence
-//     the client generated connection-stats events recently.
-//   - Band empty → "Offline". No evidence; don't assert liveness.
+// Override conditions (all must hold):
 //
-// When the per-API ClientDetail cache is completely empty (pre-refresh
-// fresh install), fall back to the vendor-supplied status so the table
-// isn't misleading on first use. The first `refresh client site <name>` or
-// `refresh all` populates the cache and the band-derived rule takes over.
+//   - Cache has at least one ClientDetail record (so a "no evidence" finding
+//     is meaningful — we've actually looked for this MAC, not just never
+//     refreshed).
+//   - Meraki says `Online`.
+//   - Band is empty after all enrichment paths.
+//
+// In every other case — Offline per Meraki, Band present, or fresh install
+// with an empty cache — the vendor's own status flows through untouched.
 func deriveClientState(client *vendors.WirelessClient, cache *vendors.APICache) string {
 	if client == nil {
 		return ""
 	}
-	if !hasClientDetailCache(cache) {
-		return client.Status // fall back to vendor's native status pre-refresh
+	if hasClientDetailCache(cache) &&
+		strings.EqualFold(client.Status, "online") &&
+		client.Band == "" {
+		return "Offline"
 	}
-	if client.Band != "" {
-		return "Online"
-	}
-	return "Offline"
+	return client.Status
 }
 
 // hasClientDetailCache returns true if the per-API cache holds at least one

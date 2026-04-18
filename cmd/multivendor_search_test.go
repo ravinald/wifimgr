@@ -189,34 +189,52 @@ func TestDeriveClientState(t *testing.T) {
 		want   string
 	}{
 		{
-			name:   "band populated → Online regardless of native status",
-			client: &vendors.WirelessClient{Band: "5", Status: "Offline"},
+			name:   "Meraki Online + Band present → Online (canonical, substantiated)",
+			client: &vendors.WirelessClient{Band: "5", Status: "Online"},
 			cache:  populatedCache,
 			want:   "Online",
 		},
 		{
-			name:   "band empty + cache populated → Offline even if native says Online",
+			name:   "Meraki Online + Band empty + cache populated → Offline (override)",
 			client: &vendors.WirelessClient{Band: "", Status: "Online"},
 			cache:  populatedCache,
 			want:   "Offline",
 		},
 		{
-			name:   "fresh install: no cache → fall back to native Online",
+			name:   "Meraki Offline + Band empty → Offline (unchanged)",
+			client: &vendors.WirelessClient{Band: "", Status: "Offline"},
+			cache:  populatedCache,
+			want:   "Offline",
+		},
+		{
+			name:   "Meraki Offline + Band present → Offline (canonical wins over stale Band)",
+			client: &vendors.WirelessClient{Band: "5", Status: "Offline"},
+			cache:  populatedCache,
+			want:   "Offline",
+		},
+		{
+			name:   "fresh install: empty cache + Online + no Band → Online (no override)",
 			client: &vendors.WirelessClient{Band: "", Status: "Online"},
 			cache:  emptyCache,
 			want:   "Online",
 		},
 		{
-			name:   "fresh install: no cache → fall back to native Offline",
+			name:   "fresh install: empty cache + Offline → Offline",
 			client: &vendors.WirelessClient{Band: "", Status: "Offline"},
 			cache:  emptyCache,
 			want:   "Offline",
 		},
 		{
-			name:   "nil cache behaves like empty cache",
+			name:   "nil cache behaves like empty cache (no override)",
 			client: &vendors.WirelessClient{Band: "", Status: "Online"},
 			cache:  nil,
 			want:   "Online",
+		},
+		{
+			name:   "case-insensitive status match for override",
+			client: &vendors.WirelessClient{Band: "", Status: "online"},
+			cache:  populatedCache,
+			want:   "Offline",
 		},
 		{
 			name:   "nil client returns empty string",
