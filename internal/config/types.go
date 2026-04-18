@@ -29,7 +29,8 @@ type Config struct {
 type Files struct {
 	ConfigDir     string   `json:"config_dir"`
 	SiteConfigs   []string `json:"site_configs"`
-	Templates     []string `json:"templates,omitempty"` // Template files (radio, wlan, device)
+	Templates     []string `json:"templates,omitempty"` // Hand-authored template files (radio, wlan, device)
+	Imports       []string `json:"imports,omitempty"`   // Files produced by `wifimgr import ...`; each carries optional Config + Templates sections.
 	Cache         string   `json:"cache"`
 	Inventory     string   `json:"inventory"`
 	LogFile       string   `json:"log_file"`
@@ -120,18 +121,6 @@ type RadioBandConfig struct {
 	PowerMax  int   `json:"power_max,omitempty"` // Max power for auto (dBm)
 	Bandwidth int   `json:"bandwidth,omitempty"` // Channel width (20/40/80/160)
 	Channels  []int `json:"channels,omitempty"`  // Allowed channel list
-}
-
-// WLANProfileFile represents a WLAN profile file schema
-type WLANProfileFile struct {
-	Version      int                     `json:"version"`
-	WLANProfiles map[string]*WLANProfile `json:"wlan_profiles"`
-}
-
-// RadioProfileFile represents a radio profile file schema
-type RadioProfileFile struct {
-	Version       int                      `json:"version"`
-	RadioProfiles map[string]*RadioProfile `json:"radio_profiles"`
 }
 
 // SiteConfigObjProfiles declares which templates a site uses
