@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"net"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -174,6 +177,8 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 		return nil
 	}
 
+	sortWirelessRows(allResults)
+
 	columns := buildWirelessSearchColumns(siteID, len(targetAPIs), showDetail)
 
 	// Create table config
@@ -202,6 +207,56 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 	}
 
 	return nil
+}
+
+// compareMACs returns -1, 0, or 1 comparing two MAC strings in their natural
+// byte order via net.ParseMAC. Unparseable input yields a nil byte slice,
+// which sorts before any valid address — tolerable for our use case (vendor
+// APIs consistently return parseable MACs; a corrupt one bubbling to the top
+// is better than a silent panic).
+func compareMACs(a, b string) int {
+	ai, _ := net.ParseMAC(a)
+	bi, _ := net.ParseMAC(b)
+	return bytes.Compare(ai, bi)
+}
+
+// sortWirelessRows orders the wireless search table by SSID ascending, then
+// MAC byte-order. Stable sort so rows that tie on both keep their vendor
+// response order (useful when a site has clients on multiple APs on the
+// same SSID).
+func sortWirelessRows(rows []formatter.GenericTableData) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		si, _ := rows[i]["ssid"].(string)
+		sj, _ := rows[j]["ssid"].(string)
+		if si != sj {
+			return si < sj
+		}
+		mi, _ := rows[i]["mac"].(string)
+		mj, _ := rows[j]["mac"].(string)
+		return compareMACs(mi, mj) < 0
+	})
+}
+
+// sortWiredRows orders the wired search table by Switch, Port, MAC. Port is
+// compared as a string today — Meraki exposes it as a string and numeric
+// comparison would need per-vendor parsing (stacked ports use formats like
+// "1/1/24"). Lexical order is good enough for readability.
+func sortWiredRows(rows []formatter.GenericTableData) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		si, _ := rows[i]["switch_name"].(string)
+		sj, _ := rows[j]["switch_name"].(string)
+		if si != sj {
+			return si < sj
+		}
+		pi, _ := rows[i]["port"].(string)
+		pj, _ := rows[j]["port"].(string)
+		if pi != pj {
+			return pi < pj
+		}
+		mi, _ := rows[i]["mac"].(string)
+		mj, _ := rows[j]["mac"].(string)
+		return compareMACs(mi, mj) < 0
+	})
 }
 
 // isOnlineStatus reports whether a vendor-supplied status string represents a
@@ -354,6 +409,8 @@ func searchWiredMultiVendor(ctx context.Context, searchText, siteID, format stri
 		fmt.Printf("No clients found matching '%s'\n", searchText)
 		return nil
 	}
+
+	sortWiredRows(allResults)
 
 	columns := buildWiredSearchColumns(siteID, len(targetAPIs), false)
 
