@@ -1,11 +1,22 @@
 package cmd
 
 import (
+	"sync"
 	"testing"
+
+	"github.com/spf13/viper"
 
 	"github.com/ravinald/wifimgr/internal/formatter"
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
+
+// resetSortExtractorCache clears the process-wide extractor cache so a
+// test setting Viper config gets a fresh compile instead of a prior test's
+// cached extractor. Used only in tests that manipulate display.sort.* keys.
+func resetSortExtractorCache() {
+	extractorCache = sync.Map{}
+	warnedKeys = sync.Map{}
+}
 
 func columnFields(cols []formatter.TableColumn) []string {
 	out := make([]string, 0, len(cols))
@@ -282,27 +293,102 @@ func TestCompareMACs(t *testing.T) {
 }
 
 func TestSortWirelessRows(t *testing.T) {
+	// Seed includes AP names with embedded integers — the specific case
+	// natural.Less was introduced to handle. Lexical sort would put
+	// "ap10-2" before "ap2-2"; natural sort orders them 1, 2, 10 as a
+	// human reads them.
 	rows := []formatter.GenericTableData{
-		{"ssid": "Guest", "mac": "10:00:00:00:00:00"},
-		{"ssid": "Corp", "mac": "00:11:22:33:44:55"},
-		{"ssid": "Corp", "mac": "00:11:22:33:44:54"}, // earlier MAC, same SSID → first
-		{"ssid": "Guest", "mac": "aa-bb-cc-dd-ee-ff"}, // different format, sorts by bytes
-		{"ssid": "Corp", "mac": "aabb.ccdd.eeff"},     // Cisco format
+		{"ssid": "Guest", "ap_name": "ap3-1", "mac": "10:00:00:00:00:00"},
+		{"ssid": "Corp", "ap_name": "ap10-2", "mac": "00:11:22:33:44:55"},
+		{"ssid": "Corp", "ap_name": "ap2-2", "mac": "00:11:22:33:44:55"},  // lexically after "ap10-2", naturally before
+		{"ssid": "Corp", "ap_name": "ap1-1", "mac": "00:11:22:33:44:54"},
+		{"ssid": "Corp", "ap_name": "ap1-1", "mac": "00:11:22:33:44:55"},  // same SSID+AP, later MAC
+		{"ssid": "Guest", "ap_name": "ap1-1", "mac": "aa-bb-cc-dd-ee-ff"},
+		{"ssid": "Corp", "ap_name": "", "mac": "aabb.ccdd.eeff"}, // empty AP sorts first within SSID
 	}
 	sortWirelessRows(rows)
 
-	wantOrder := [][2]string{
-		{"Corp", "00:11:22:33:44:54"},
-		{"Corp", "00:11:22:33:44:55"},
-		{"Corp", "aabb.ccdd.eeff"},
-		{"Guest", "10:00:00:00:00:00"},
-		{"Guest", "aa-bb-cc-dd-ee-ff"},
+	wantOrder := [][3]string{
+		{"Corp", "", "aabb.ccdd.eeff"},
+		{"Corp", "ap1-1", "00:11:22:33:44:54"},
+		{"Corp", "ap1-1", "00:11:22:33:44:55"},
+		{"Corp", "ap2-2", "00:11:22:33:44:55"},
+		{"Corp", "ap10-2", "00:11:22:33:44:55"}, // natural sort: 2 < 10
+		{"Guest", "ap1-1", "aa-bb-cc-dd-ee-ff"},
+		{"Guest", "ap3-1", "10:00:00:00:00:00"},
 	}
 	for i, want := range wantOrder {
 		gotSSID, _ := rows[i]["ssid"].(string)
+		gotAP, _ := rows[i]["ap_name"].(string)
 		gotMAC, _ := rows[i]["mac"].(string)
-		if gotSSID != want[0] || gotMAC != want[1] {
-			t.Errorf("row %d = (%q,%q), want (%q,%q)", i, gotSSID, gotMAC, want[0], want[1])
+		if gotSSID != want[0] || gotAP != want[1] || gotMAC != want[2] {
+			t.Errorf("row %d = (%q,%q,%q), want (%q,%q,%q)",
+				i, gotSSID, gotAP, gotMAC, want[0], want[1], want[2])
+		}
+	}
+}
+
+// TestSortWirelessRows_ConfiguredFloorTrailing exercises the full
+// sortWirelessRows path with a display.sort.ap_name config set — the
+// MX-904 user case. Confirms rows get grouped by floor (trailing segment)
+// rather than by AP number (leading segment).
+func TestSortWirelessRows_ConfiguredFloorTrailing(t *testing.T) {
+	viper.Set("display.sort.ap_name", map[string]any{
+		"pattern": `^ap(?P<num>\d+)-(?P<floor>\d+)$`,
+		"keys":    []string{"floor", "num"},
+	})
+	t.Cleanup(func() {
+		viper.Set("display.sort.ap_name", nil)
+		resetSortExtractorCache()
+	})
+	resetSortExtractorCache()
+
+	rows := []formatter.GenericTableData{
+		{"ssid": "Scale", "ap_name": "ap2-16", "mac": "00:11:22:33:44:55"},
+		{"ssid": "Scale", "ap_name": "ap1-15", "mac": "00:11:22:33:44:55"},
+		{"ssid": "Scale", "ap_name": "ap10-15", "mac": "00:11:22:33:44:55"},
+		{"ssid": "Scale", "ap_name": "ap2-15", "mac": "00:11:22:33:44:55"},
+		{"ssid": "Scale", "ap_name": "ap1-16", "mac": "00:11:22:33:44:55"},
+	}
+	sortWirelessRows(rows)
+
+	// Floor 15 cluster first (ap1, ap2, ap10), then floor 16 cluster.
+	wantAPs := []string{"ap1-15", "ap2-15", "ap10-15", "ap1-16", "ap2-16"}
+	for i, want := range wantAPs {
+		got, _ := rows[i]["ap_name"].(string)
+		if got != want {
+			t.Errorf("row %d ap_name = %q, want %q", i, got, want)
+		}
+	}
+}
+
+// TestSortWirelessRows_ConfiguredInvalidPatternFallsBack: an unparseable
+// regex in config must not crash. The extractor errors, the warning fires
+// once, and the sort falls back to the default natural-name order.
+func TestSortWirelessRows_ConfiguredInvalidPatternFallsBack(t *testing.T) {
+	viper.Set("display.sort.ap_name", map[string]any{
+		"pattern": "[",
+		"keys":    []string{"anything"},
+	})
+	t.Cleanup(func() {
+		viper.Set("display.sort.ap_name", nil)
+		resetSortExtractorCache()
+	})
+	resetSortExtractorCache()
+
+	rows := []formatter.GenericTableData{
+		{"ssid": "Scale", "ap_name": "ap10-15", "mac": "00:11:22:33:44:55"},
+		{"ssid": "Scale", "ap_name": "ap2-15", "mac": "00:11:22:33:44:55"},
+		{"ssid": "Scale", "ap_name": "ap1-15", "mac": "00:11:22:33:44:55"},
+	}
+	sortWirelessRows(rows)
+
+	// Natural fallback: ap1, ap2, ap10 (by leading number).
+	wantAPs := []string{"ap1-15", "ap2-15", "ap10-15"}
+	for i, want := range wantAPs {
+		got, _ := rows[i]["ap_name"].(string)
+		if got != want {
+			t.Errorf("row %d ap_name = %q, want %q", i, got, want)
 		}
 	}
 }

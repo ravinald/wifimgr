@@ -551,3 +551,98 @@ func SomeFunction() {
 - **Better Defaults**: Comprehensive default values via Viper
 - **Type Safety**: Strong typing with `GetString()`, `GetInt()`, etc.
 - **Environment Integration**: Automatic environment variable support
+
+## Search Output Sort
+
+The `wifimgr search wireless` and `wifimgr search wired` tables sort by
+SSID/switch name, then AP/switch hostname, then client MAC. The default
+hostname tier is a natural-string sort, which groups `ap1-*, ap2-*, ap10-*`
+correctly but treats the hostname as a single opaque token.
+
+When your AP or switch names encode physical metadata (floor, building, pod),
+you can pull individual fields out and sort by them instead. Define a regex
+with named capture groups and list which groups to sort by, in priority
+order.
+
+### Minimal example
+
+APs named `apX-F` where `F` is the floor:
+
+```json
+{
+  "display": {
+    "sort": {
+      "ap_name": {
+        "pattern": "^ap(?P<num>\\d+)-(?P<floor>\\d+)$",
+        "keys": ["floor", "num"]
+      }
+    }
+  }
+}
+```
+
+With this config:
+- `ap1-15, ap2-15, ap3-15, ap4-15` all cluster on floor 15
+- then `ap1-16, ap2-16, ap3-16, ap4-16` cluster on floor 16
+
+Without this config, the natural sort gives `ap1-15, ap1-16, ap2-15, ap2-16, ...`
+(AP-number major, floor minor), which is harder to scan when you're asking
+"who's on floor 15 right now?"
+
+### Multi-key example
+
+For a building-floor-AP naming scheme like `A-1-ap01`:
+
+```json
+{
+  "display": {
+    "sort": {
+      "ap_name": {
+        "pattern": "^(?P<building>[A-Z]+)-(?P<floor>\\d+)-ap(?P<num>\\d+)$",
+        "keys": ["building", "floor", "num"]
+      }
+    }
+  }
+}
+```
+
+Buildings cluster first, floors within each building, APs within each floor.
+`keys` can reference as many or as few named groups as you want, in any
+priority order. The textual position in the regex doesn't have to match
+the sort priority.
+
+### Switch sort
+
+The same shape applies under `display.sort.switch_name` for the wired search:
+
+```json
+{
+  "display": {
+    "sort": {
+      "switch_name": {
+        "pattern": "^sw(?P<num>\\d+)-(?P<floor>\\d+)$",
+        "keys": ["floor", "num"]
+      }
+    }
+  }
+}
+```
+
+### Rules and caveats
+
+- **Regex escaping**: these are JSON strings, so backslashes need to be
+  doubled. `\d` in the regex becomes `\\d` in the JSON file.
+- **Engine**: Go RE2. Named groups use `(?P<name>...)`. No lookaround,
+  no backreferences.
+- **Numeric vs string segments**: a captured group parses as an integer
+  if it's pure digits, otherwise stays a string. Integer segments compare
+  numerically, so `num=10` sorts after `num=9`, not between `num=1` and
+  `num=2`. String segments compare naturally.
+- **Names that don't match**: AP names that don't match the pattern sort
+  after matching names, using natural string order within the unmatched
+  bucket. That keeps outliers visually obvious.
+- **Invalid config**: an unparseable regex or a `keys` entry that doesn't
+  name a capture group warns once in the log and falls back to the default
+  natural sort. wifimgr never crashes on bad sort config.
+- **No config**: omit the `sort` block (or either of its sub-keys) to keep
+  the default. The feature is opt-in.
