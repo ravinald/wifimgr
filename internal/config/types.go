@@ -164,6 +164,26 @@ type Display struct {
 	APs       DisplayFormat            `json:"aps"`
 	Inventory DisplayFormat            `json:"inventory"`
 	Commands  map[string]CommandFormat `json:"commands"`
+	Sort      *SortConfig              `json:"sort,omitempty"` // Optional custom sort for search output
+}
+
+// SortConfig lets operators override the default AP/switch name sort used
+// by the search commands. Each sub-field is independent; omitting one keeps
+// the natural-string default for that column. See docs/configuration.md.
+type SortConfig struct {
+	APName     *SortKeySpec `json:"ap_name,omitempty"`
+	SwitchName *SortKeySpec `json:"switch_name,omitempty"`
+}
+
+// SortKeySpec describes how to extract sort keys from a device name using a
+// Go regexp with named capture groups. Keys lists the group names in
+// priority order (first key is the most significant). Values are compared
+// numerically when they parse as int, otherwise naturally as strings.
+// Names that don't match the pattern sort after matching names using
+// natural string order on the full name.
+type SortKeySpec struct {
+	Pattern string   `json:"pattern"` // Go RE2 regex; use (?P<name>...) for named groups
+	Keys    []string `json:"keys"`    // Named groups to use, in priority order
 }
 
 // DisplayFormat represents format settings for a specific category (legacy format)

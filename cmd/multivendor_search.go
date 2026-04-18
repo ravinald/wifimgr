@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/maruel/natural"
 	"golang.org/x/term"
 
 	"github.com/ravinald/wifimgr/internal/formatter"
@@ -220,16 +221,28 @@ func compareMACs(a, b string) int {
 	return bytes.Compare(ai, bi)
 }
 
-// sortWirelessRows orders the wireless search table by SSID ascending, then
-// MAC byte-order. Stable sort so rows that tie on both keep their vendor
-// response order (useful when a site has clients on multiple APs on the
-// same SSID).
+// sortWirelessRows orders the wireless search table by SSID, then AP name,
+// then client MAC byte-order. SSID uses natural.Less so SSIDs with trailing
+// digits ("guest-1", "guest-10") order sensibly. AP name goes through the
+// configurable name extractor from display.sort.ap_name — operators whose
+// hostnames encode floor / building / AP number can group by those
+// instead of by leading characters. Absent config, AP name falls back to
+// natural.Less on the full hostname. Stable sort so rows that tie on all
+// three keep their vendor response order.
 func sortWirelessRows(rows []formatter.GenericTableData) {
+	apExtractor := configuredAPNameExtractor()
 	sort.SliceStable(rows, func(i, j int) bool {
 		si, _ := rows[i]["ssid"].(string)
 		sj, _ := rows[j]["ssid"].(string)
 		if si != sj {
-			return si < sj
+			return natural.Less(si, sj)
+		}
+		ai, _ := rows[i]["ap_name"].(string)
+		aj, _ := rows[j]["ap_name"].(string)
+		if ai != aj {
+			if cmp := compareByConfiguredName(apExtractor, ai, aj); cmp != 0 {
+				return cmp < 0
+			}
 		}
 		mi, _ := rows[i]["mac"].(string)
 		mj, _ := rows[j]["mac"].(string)
@@ -237,21 +250,26 @@ func sortWirelessRows(rows []formatter.GenericTableData) {
 	})
 }
 
-// sortWiredRows orders the wired search table by Switch, Port, MAC. Port is
-// compared as a string today — Meraki exposes it as a string and numeric
-// comparison would need per-vendor parsing (stacked ports use formats like
-// "1/1/24"). Lexical order is good enough for readability.
+// sortWiredRows orders the wired search table by Switch, Port, MAC.
+// Switch name goes through the configurable name extractor from
+// display.sort.switch_name (absent config, falls back to natural.Less).
+// Port uses natural.Less so stacked formats like "1/1/2" sort before
+// "1/1/10"; the old lexical sort would have put "10" before "2". MAC
+// is byte-order on the parsed form.
 func sortWiredRows(rows []formatter.GenericTableData) {
+	swExtractor := configuredSwitchNameExtractor()
 	sort.SliceStable(rows, func(i, j int) bool {
 		si, _ := rows[i]["switch_name"].(string)
 		sj, _ := rows[j]["switch_name"].(string)
 		if si != sj {
-			return si < sj
+			if cmp := compareByConfiguredName(swExtractor, si, sj); cmp != 0 {
+				return cmp < 0
+			}
 		}
 		pi, _ := rows[i]["port"].(string)
 		pj, _ := rows[j]["port"].(string)
 		if pi != pj {
-			return pi < pj
+			return natural.Less(pi, pj)
 		}
 		mi, _ := rows[i]["mac"].(string)
 		mj, _ := rows[j]["mac"].(string)
