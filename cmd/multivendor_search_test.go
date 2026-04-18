@@ -175,6 +175,83 @@ func TestBuildWirelessSearchColumns_SiteFilter(t *testing.T) {
 	}
 }
 
+func TestDeriveClientState(t *testing.T) {
+	populatedCache := &vendors.APICache{}
+	populatedCache.ClientDetail = map[string]*vendors.ClientDetail{
+		"aabbccddeeff": {MAC: "aabbccddeeff", Band: "5"},
+	}
+	emptyCache := &vendors.APICache{}
+
+	tests := []struct {
+		name   string
+		client *vendors.WirelessClient
+		cache  *vendors.APICache
+		want   string
+	}{
+		{
+			name:   "Meraki Online + Band present → Online (canonical, substantiated)",
+			client: &vendors.WirelessClient{Band: "5", Status: "Online"},
+			cache:  populatedCache,
+			want:   "Online",
+		},
+		{
+			name:   "Meraki Online + Band empty + cache populated → Offline (override)",
+			client: &vendors.WirelessClient{Band: "", Status: "Online"},
+			cache:  populatedCache,
+			want:   "Offline",
+		},
+		{
+			name:   "Meraki Offline + Band empty → Offline (unchanged)",
+			client: &vendors.WirelessClient{Band: "", Status: "Offline"},
+			cache:  populatedCache,
+			want:   "Offline",
+		},
+		{
+			name:   "Meraki Offline + Band present → Offline (canonical wins over stale Band)",
+			client: &vendors.WirelessClient{Band: "5", Status: "Offline"},
+			cache:  populatedCache,
+			want:   "Offline",
+		},
+		{
+			name:   "fresh install: empty cache + Online + no Band → Online (no override)",
+			client: &vendors.WirelessClient{Band: "", Status: "Online"},
+			cache:  emptyCache,
+			want:   "Online",
+		},
+		{
+			name:   "fresh install: empty cache + Offline → Offline",
+			client: &vendors.WirelessClient{Band: "", Status: "Offline"},
+			cache:  emptyCache,
+			want:   "Offline",
+		},
+		{
+			name:   "nil cache behaves like empty cache (no override)",
+			client: &vendors.WirelessClient{Band: "", Status: "Online"},
+			cache:  nil,
+			want:   "Online",
+		},
+		{
+			name:   "case-insensitive status match for override",
+			client: &vendors.WirelessClient{Band: "", Status: "online"},
+			cache:  populatedCache,
+			want:   "Offline",
+		},
+		{
+			name:   "nil client returns empty string",
+			client: nil,
+			cache:  populatedCache,
+			want:   "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := deriveClientState(tt.client, tt.cache); got != tt.want {
+				t.Errorf("deriveClientState = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsOnlineStatus(t *testing.T) {
 	tests := []struct {
 		in   string
