@@ -3,15 +3,6 @@ Copyright © 2025 Ravi Pina <ravi@pina.org>
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-	http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 */
 package cmd
 
@@ -22,20 +13,29 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// refreshCacheCmd represents the refresh cache command
-var refreshCacheCmd = &cobra.Command{
-	Use:   "cache [api-name]",
-	Short: "Refresh cache from API(s)",
-	Long: `Refresh the local cache by fetching data from configured API(s).
+// refreshDeviceCmd represents `refresh device` — the former `refresh cache`.
+// Renamed because the tool now persists two distinct caches (device-level
+// infrastructure data here, plus per-client detail populated by
+// `refresh client`). Calling both "cache" made the subcommand labels
+// ambiguous; "device" reflects what this command actually refreshes:
+// sites, inventory, device configs, WLANs, and statuses.
+var refreshDeviceCmd = &cobra.Command{
+	Use:   "device [api-name]",
+	Short: "Refresh device-level cache (sites, inventory, configs, WLANs, statuses)",
+	Long: `Refresh the per-API device-level cache: sites, inventory, device configs,
+WLANs, and statuses.
 
 When multiple APIs are configured:
   - Without api-name: Refreshes all APIs in parallel
   - With api-name: Refreshes only the specified API
 
+Per-client detail (e.g. Meraki connected band) is NOT touched by this
+command — use 'refresh client site <name>' or 'refresh all' for that.
+
 Examples:
-  wifimgr refresh cache                    # Refresh all APIs
-  wifimgr refresh cache mist-prod          # Refresh mist-prod only
-  wifimgr refresh cache meraki-corp        # Refresh meraki-corp only`,
+  wifimgr refresh device                    # Refresh all APIs
+  wifimgr refresh device mist-prod          # Refresh mist-prod only
+  wifimgr refresh device meraki-corp        # Refresh meraki-corp only`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		// Allow "help" as a special keyword
 		for _, arg := range args {
@@ -48,14 +48,14 @@ Examples:
 		}
 		return nil
 	},
-	RunE: runRefreshCache,
+	RunE: runRefreshDevice,
 }
 
 func init() {
-	refreshCmd.AddCommand(refreshCacheCmd)
+	refreshCmd.AddCommand(refreshDeviceCmd)
 }
 
-func runRefreshCache(cmd *cobra.Command, args []string) error {
+func runRefreshDevice(cmd *cobra.Command, args []string) error {
 	// Check for help keyword in positional arguments
 	for _, arg := range args {
 		if strings.ToLower(arg) == "help" {
@@ -70,7 +70,7 @@ func runRefreshCache(cmd *cobra.Command, args []string) error {
 	return runMultiVendorRefresh()
 }
 
-// runMultiVendorRefresh handles cache refresh for multi-vendor mode.
+// runMultiVendorRefresh handles device-level cache refresh for multi-vendor mode.
 func runMultiVendorRefresh() error {
 	cacheMgr := GetCacheManager()
 	if cacheMgr == nil {
@@ -96,14 +96,14 @@ func runMultiVendorRefresh() error {
 
 	if apiFlag != "" {
 		// Single API refresh
-		fmt.Printf("Refreshing cache for %s...\n", apiFlag)
+		fmt.Printf("Refreshing device cache for %s...\n", apiFlag)
 		if err := cacheMgr.RefreshAPI(ctx, apiFlag); err != nil {
 			return fmt.Errorf("failed to refresh %s: %w", apiFlag, err)
 		}
 		fmt.Printf("Successfully refreshed %s\n", apiFlag)
 	} else {
 		// Parallel refresh of all APIs
-		fmt.Printf("Refreshing cache for %d APIs...\n", len(targetAPIs))
+		fmt.Printf("Refreshing device cache for %d APIs...\n", len(targetAPIs))
 
 		errors := cacheMgr.RefreshAllAPIs(ctx)
 

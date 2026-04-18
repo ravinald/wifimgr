@@ -515,8 +515,8 @@ Output shows cache state per API: `ok`, `stale`, `corrupted`, or `missing`.
 
 Refresh the cache manually:
 ```bash
-wifimgr refresh cache              # Refresh all APIs
-wifimgr refresh cache mist-prod    # Refresh specific API
+wifimgr refresh device              # Refresh all APIs
+wifimgr refresh device mist-prod    # Refresh specific API
 ```
 
 **Cache Age Tracking:**
