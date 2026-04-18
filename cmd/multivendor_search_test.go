@@ -175,6 +175,65 @@ func TestBuildWirelessSearchColumns_SiteFilter(t *testing.T) {
 	}
 }
 
+func TestDeriveClientState(t *testing.T) {
+	populatedCache := &vendors.APICache{}
+	populatedCache.ClientDetail = map[string]*vendors.ClientDetail{
+		"aabbccddeeff": {MAC: "aabbccddeeff", Band: "5"},
+	}
+	emptyCache := &vendors.APICache{}
+
+	tests := []struct {
+		name   string
+		client *vendors.WirelessClient
+		cache  *vendors.APICache
+		want   string
+	}{
+		{
+			name:   "band populated → Online regardless of native status",
+			client: &vendors.WirelessClient{Band: "5", Status: "Offline"},
+			cache:  populatedCache,
+			want:   "Online",
+		},
+		{
+			name:   "band empty + cache populated → Offline even if native says Online",
+			client: &vendors.WirelessClient{Band: "", Status: "Online"},
+			cache:  populatedCache,
+			want:   "Offline",
+		},
+		{
+			name:   "fresh install: no cache → fall back to native Online",
+			client: &vendors.WirelessClient{Band: "", Status: "Online"},
+			cache:  emptyCache,
+			want:   "Online",
+		},
+		{
+			name:   "fresh install: no cache → fall back to native Offline",
+			client: &vendors.WirelessClient{Band: "", Status: "Offline"},
+			cache:  emptyCache,
+			want:   "Offline",
+		},
+		{
+			name:   "nil cache behaves like empty cache",
+			client: &vendors.WirelessClient{Band: "", Status: "Online"},
+			cache:  nil,
+			want:   "Online",
+		},
+		{
+			name:   "nil client returns empty string",
+			client: nil,
+			cache:  populatedCache,
+			want:   "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := deriveClientState(tt.client, tt.cache); got != tt.want {
+				t.Errorf("deriveClientState = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsOnlineStatus(t *testing.T) {
 	tests := []struct {
 		in   string

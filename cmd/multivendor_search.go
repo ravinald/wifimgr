@@ -128,6 +128,13 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 				}
 			}
 
+			// Re-derive State from Band evidence. Meraki's native Status
+			// reports recent visibility (client was seen in the last hour
+			// or so), not current association. Once the client-detail
+			// cache is populated, a non-empty Band is the authoritative
+			// "on-air in the last 24h" signal.
+			client.Status = deriveClientState(client, apiCache)
+
 			vendorName, _ := registry.GetVendor(apiLabel)
 			data := formatter.GenericTableData{
 				"mac":       client.MAC,
@@ -206,6 +213,38 @@ func isOnlineStatus(s string) bool {
 		return true // unknown state — don't hide the row
 	}
 	return strings.EqualFold(s, "online")
+}
+
+// deriveClientState picks the State value for a wireless search row based on
+// on-air evidence rather than the vendor's own recency flag. The rule:
+//
+//   - Band populated (either live from the primary response or from the
+//     per-site ClientDetail cache) → "Online". We have concrete evidence
+//     the client generated connection-stats events recently.
+//   - Band empty → "Offline". No evidence; don't assert liveness.
+//
+// When the per-API ClientDetail cache is completely empty (pre-refresh
+// fresh install), fall back to the vendor-supplied status so the table
+// isn't misleading on first use. The first `refresh client site <name>` or
+// `refresh all` populates the cache and the band-derived rule takes over.
+func deriveClientState(client *vendors.WirelessClient, cache *vendors.APICache) string {
+	if client == nil {
+		return ""
+	}
+	if !hasClientDetailCache(cache) {
+		return client.Status // fall back to vendor's native status pre-refresh
+	}
+	if client.Band != "" {
+		return "Online"
+	}
+	return "Offline"
+}
+
+// hasClientDetailCache returns true if the per-API cache holds at least one
+// ClientDetail record — used to gate the band-derived State rule. Safe
+// against nil cache.
+func hasClientDetailCache(cache *vendors.APICache) bool {
+	return cache != nil && len(cache.ClientDetail) > 0
 }
 
 // searchWiredMultiVendor searches for wired clients across multiple APIs.

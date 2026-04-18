@@ -313,8 +313,7 @@ Mist carries Band natively on the primary response so Mist sites populate
 without any cache dependency. Meraki relies on the cache; populate it with
 `wifimgr refresh client site <name>` or `wifimgr refresh all`.
 
-**`detail` and `extensive`** add the live `State` column (`Online` /
-`Offline`) and change which rows show:
+**`detail` and `extensive`** add the `State` column and change which rows show:
 
 ```bash
 # Populate the per-site client detail cache (Meraki only; one call per band).
@@ -343,12 +342,31 @@ client-detail cache (Band). After that, `refresh device` is a cheap refresh
 of device-level data and `refresh client site <name>` is for targeted Band
 updates.
 
-**Why Band may still be blank for some online clients.** Meraki's
-ConnectionStats endpoint only lists clients with connection events (auth,
-DHCP, etc.) during the lookback window (24 hours). Perfectly stable clients
-that haven't re-authed or renewed DHCP may not appear in Meraki's stats and
-therefore have no cached band. They're there on the air, just silent from
-Meraki's stats endpoint.
+**How State is determined.** The `State` column is derived from Band, not
+from Meraki's native `status` flag. The rule:
+
+- **Band present** (either live from the API or from the client-detail
+  cache) → `Online`. We have concrete evidence the client generated
+  connection-stats events recently.
+- **Band absent** → `Offline`. No evidence; we don't assert liveness.
+
+This is deliberate conservatism. Meraki's `status` flag reports recent
+visibility (client seen in the last hour or so), not current association,
+so a client can show "Online" there while being truly quiet on the air for
+a day or more. Using Band as the evidence ties the two signals together:
+if we don't have on-air evidence, we don't claim the client is live.
+
+Fresh-install fallback: before the first `refresh client site <name>` /
+`refresh all` runs, there's no cache to derive from — `State` then falls
+back to Meraki's native `status` so the table isn't misleading on first
+use. After the first refresh, the band-derived rule takes over.
+
+**Why Band (and therefore State) may still lag.** Meraki's ConnectionStats
+endpoint only lists clients with connection events (auth, DHCP, etc.) during
+the lookback window (24 hours). Stable clients with long-lived associations
+may not generate enough events to appear — they render as `Offline` because
+we have no evidence otherwise. Re-running `refresh client site <name>` on a
+schedule that matches your tolerance for staleness is the current workaround.
 
 ### Cost Estimation and Confirmations
 
