@@ -1332,13 +1332,36 @@ var (
 	currentAPILabel      string
 )
 
-// loadTemplatesFromConfig loads templates from the configured template files
+// loadTemplatesFromConfig builds the TemplateStore from every source
+// configured in the main config: hand-authored `files.templates` first,
+// then `files.imports` (whose Templates sections merge into the same
+// store). Later definitions win on label collision, matching the
+// existing multi-file merge behavior for template files.
 func loadTemplatesFromConfig(cfg *configPkg.Config) (*configPkg.TemplateStore, error) {
+	var store *configPkg.TemplateStore
 	if len(cfg.Files.Templates) == 0 {
-		return configPkg.NewTemplateStore(), nil
+		store = configPkg.NewTemplateStore()
+	} else {
+		loaded, err := configPkg.LoadTemplates(cfg.Files.Templates, cfg.Files.ConfigDir)
+		if err != nil {
+			return nil, err
+		}
+		store = loaded
 	}
 
-	return configPkg.LoadTemplates(cfg.Files.Templates, cfg.Files.ConfigDir)
+	for _, rel := range cfg.Files.Imports {
+		path := rel
+		if !filepath.IsAbs(path) && cfg.Files.ConfigDir != "" {
+			path = filepath.Join(cfg.Files.ConfigDir, rel)
+		}
+		imp, err := configPkg.LoadImportFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("load import file %s: %w", rel, err)
+		}
+		configPkg.MergeImportTemplates(store, imp)
+	}
+
+	return store, nil
 }
 
 // setTemplateStore sets the current template store for use by device updaters

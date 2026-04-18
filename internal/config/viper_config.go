@@ -257,6 +257,56 @@ func LoadAllConfigsViper(configFile string) ([]*SiteConfigFile, error) {
 		}
 	}
 
+	// Load `files.imports` — the output of `wifimgr import ...`. Each
+	// import file may carry a Config section (sites) and/or a Templates
+	// section; we dispatch each independently. Config.Sites flows into
+	// the same registry as files.site_configs so the rest of the tool
+	// doesn't need to know which file a given site came from. Templates
+	// flow into the shared store at apply time via
+	// cmd/apply.loadTemplatesFromConfig, which reads files.imports too.
+	importFiles := viper.GetStringSlice("files.imports")
+	for _, rel := range importFiles {
+		fullPath := filepath.Join(configDir, rel)
+		imp, err := LoadImportFile(fullPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load import file %s: %w", rel, err)
+		}
+		if imp.Config == nil {
+			continue
+		}
+		// Surface version mismatches the same way site_configs does.
+		if imp.Version != mainVersion {
+			if _, err := fmt.Fprintf(os.Stderr, "Warning: Version mismatch in import file %s: expected %d, got %d\n",
+				rel, mainVersion, imp.Version); err != nil {
+				return nil, fmt.Errorf("failed to write warning message: %w", err)
+			}
+		}
+
+		rawData, _ := os.ReadFile(fullPath) // #nosec G304 -- path from operator-controlled config
+		for siteName, siteObj := range imp.Config.Sites {
+			keyPath := []string{"config", "sites", siteName, "site_config"}
+			line := EstimateLineNumber(rawData, keyPath)
+
+			configName := siteObj.SiteConfig.Name
+			if configName == "" {
+				configName = siteName
+			}
+
+			duplicateTracker.CheckAndAdd("site_config", "", configName, rel, line)
+
+			lowerName := strings.ToLower(configName)
+			siteIndex.SiteToFile[lowerName] = rel
+			siteIndex.SiteToKey[lowerName] = siteName
+
+			siteConfigs = append(siteConfigs, &SiteConfigFile{
+				Version: imp.Version,
+				Config: SiteConfigWrapper{
+					Sites: map[string]SiteConfigObj{siteName: siteObj},
+				},
+			})
+		}
+	}
+
 	// Store site index globally
 	siteIndexMu.Lock()
 	globalSiteIndex = siteIndex
