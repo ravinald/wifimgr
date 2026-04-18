@@ -26,11 +26,6 @@ import (
 type nameSortExtractor struct {
 	re   *regexp.Regexp
 	keys []string
-
-	// warnOnce gates the "config invalid, falling back" warning to a single
-	// line per process, so a bad pattern doesn't flood the log during a
-	// sort of hundreds of rows.
-	warnOnce sync.Once
 }
 
 // sortSegment is one element of an extracted sort key. Numeric segments
