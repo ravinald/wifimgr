@@ -111,7 +111,7 @@ The local inventory configuration serves as a **mandatory allowlist and fail-saf
 ### How It Works
 
 **Write Operations** (apply, configure, assign, unassign):
-- A device must exist in **BOTH** the API inventory (devices in your Mist/Meraki account) **AND** the local inventory file
+- A device must exist in **BOTH** the API inventory (devices in your Mist/Meraki/Ubiquiti account) **AND** the local inventory file
 - If a device is only in the API but not allowlisted in your local inventory, write operations are blocked with a safety error
 - This provides a second layer of protection against unintended changes
 
@@ -167,7 +167,7 @@ If you try to modify a device that's not in your local inventory, you'll see an 
 SAFETY CHECK FAILED: Device aa:bb:cc:dd:ee:ff is not in inventory - refusing to update
 ```
 
-This means the device exists in your Mist/Meraki account but is not in your local `inventory.json` file. Add it to the appropriate list (ap, switch, or gateway) to allowlist it and enable write operations.
+This means the device exists in your Mist/Meraki/Ubiquiti account but is not in your local `inventory.json` file. Add it to the appropriate list (ap, switch, or gateway) to allowlist it and enable write operations.
 
 ## Command-Line Flags and Configuration
 
@@ -356,7 +356,7 @@ When encrypting WiFi passwords, use `encrypt psk` to validate against IEEE 802.1
 - Length: 8-63 characters
 - Characters: Printable ASCII only (codes 32-126)
 
-This ensures the PSK will be accepted by both Mist and Meraki platforms.
+This ensures the PSK will be accepted by Mist, Meraki, and Ubiquiti platforms.
 
 ## Viper Configuration System
 

@@ -8,7 +8,7 @@
 ## Features
 
 - **[Templates](templates.md)** - App-level configuration templates that expand into explicit device settings at apply time (not vendor-side profiles)
-- **[Multi-Vendor Support](multi-vendor/user-guide.md)** - Managing Mist and Meraki from a single config
+- **[Multi-Vendor Support](multi-vendor/user-guide.md)** - Managing Mist, Meraki, and Ubiquiti from a single config
   - [Configuration](multi-vendor/configuration.md) - Multi-API config model
   - [Commands](multi-vendor/commands.md) - How commands behave with `target`
 - **[NetBox Integration](netbox.md)** - Syncing inventory and site data with NetBox

@@ -85,6 +85,7 @@ import (
 	"github.com/ravinald/wifimgr/internal/vendors"
 	"github.com/ravinald/wifimgr/internal/vendors/meraki"
 	"github.com/ravinald/wifimgr/internal/vendors/mist"
+	"github.com/ravinald/wifimgr/internal/vendors/ubiquiti"
 	"github.com/ravinald/wifimgr/internal/xdg"
 )
 
@@ -117,6 +118,7 @@ func InitializeMultiVendor() error {
 	// Register vendor factories
 	apiRegistry.RegisterFactory("mist", createMistClient)
 	apiRegistry.RegisterFactory("meraki", createMerakiClient)
+	apiRegistry.RegisterFactory("ubiquiti", createUbiquitiClient)
 
 	// Build API configs from Viper (uses config package which applies env overrides)
 	apiConfigs, warnings := config.BuildAPIConfigsFromViper()
@@ -241,6 +243,19 @@ func SetAPITarget(target string) {
 	if target != "" {
 		apiFlag = target
 	}
+}
+
+// createUbiquitiClient creates a Ubiquiti vendor client from config.
+func createUbiquitiClient(config *vendors.APIConfig) (vendors.Client, error) {
+	apiKey := config.Credentials["site_manager_api_key"]
+	if apiKey == "" {
+		apiKey = config.Credentials["api_key"]
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("missing site_manager_api_key credential")
+	}
+
+	return ubiquiti.NewAdapter(apiKey, config.URL)
 }
 
 // SetGlobalVendorClient sets the global vendor client.

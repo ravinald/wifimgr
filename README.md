@@ -5,7 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/ravinald/wifimgr)](https://github.com/ravinald/wifimgr/releases)
 [![License](https://img.shields.io/github/license/ravinald/wifimgr)](LICENSE)
 
-A CLI tool for managing network infrastructure across Mist and Meraki using configuration-as-code.
+A CLI tool for managing network infrastructure across Mist, Meraki, and Ubiquiti using configuration-as-code.
 
 ## Install
 
@@ -34,7 +34,7 @@ wifimgr show api sites
 - **Apply** - Push device and WLAN configurations with diff preview and automatic backups. Expands app-level templates into explicit configs at apply time
 - **Import** - Bootstrap config files from current API state
 - **Refresh** - Sync local cache with API data and manage cache age/staleness
-- **Multi-vendor** - Manage both Mist and Meraki from a single config file
+- **Multi-vendor** - Manage Mist, Meraki, and Ubiquiti from a single config file
 
 ## Common Commands
 
@@ -63,7 +63,7 @@ wifimgr search wireless laptop target meraki-corp
 - **[Documentation Index](docs/README.md)** - Full documentation table of contents
 - **[User Guide](docs/user-guide.md)** - Complete command reference with examples
 - **[Configuration Guide](docs/configuration.md)** - API setup, tokens, and configuration
-- **[Multi-Vendor Setup](docs/multi-vendor/user-guide.md)** - Managing Mist and Meraki together
+- **[Multi-Vendor Setup](docs/multi-vendor/user-guide.md)** - Managing Mist, Meraki, and Ubiquiti together
 - **[CHANGELOG](CHANGELOG.md)** - Release notes and roadmap
 - **[Known Issues](docs/known-issues.md)** - Current limitations and workarounds
 

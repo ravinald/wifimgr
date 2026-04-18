@@ -2,7 +2,7 @@
 
 The configuration supports multiple API connections with user-defined labels, enabling scenarios like:
 - Multiple organizations within the same vendor (prod vs lab)
-- Multi-vendor environments (Mist and Meraki in different locations)
+- Multi-vendor environments (Mist, Meraki, and Ubiquiti in different locations)
 - Migration scenarios (old and new systems active simultaneously)
 - Testing/POC with mixed vendors at a physical site
 
@@ -40,6 +40,12 @@ API connections are defined with user-chosen labels in the main config file:
         "org_id": "L_123456789",
         "api_key": "..."
       }
+    },
+    "ubiquiti-corp": {
+      "vendor": "ubiquiti",
+      "credentials": {
+        "site_manager_api_key": "..."
+      }
     }
   },
   "files": {
@@ -53,7 +59,7 @@ API connections are defined with user-chosen labels in the main config file:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `vendor` | Yes | Vendor type: `mist`, `meraki` |
+| `vendor` | Yes | Vendor type: `mist`, `meraki`, `ubiquiti` |
 | `url` | No | API base URL (vendor default if omitted) |
 | `credentials` | Yes | Vendor-specific credentials object |
 | `rate_limit` | No | Requests per minute (vendor default if omitted) |
@@ -89,6 +95,8 @@ All vendors use the same credential field names:
 **Mist example:** `org_id` is a UUID, `api_key` is a bearer token from the Mist dashboard.
 
 **Meraki example:** `org_id` is the organization ID (e.g., `L_123456789`), `api_key` is from the Meraki dashboard.
+
+**Ubiquiti note:** Uses `site_manager_api_key` instead of `org_id`/`api_key`. The API key is scoped to the account (no org_id concept). Also accepts `api_key` as a fallback credential name.
 
 ### Encrypted Credentials
 
