@@ -154,6 +154,13 @@ func applyVendorDefaults(config *vendors.APIConfig) {
 		if config.RateLimit == 0 || config.RateLimit > 10 {
 			config.RateLimit = 10
 		}
+	case "ubiquiti":
+		if config.URL == "" {
+			config.URL = "https://api.ui.com"
+		}
+		if config.RateLimit == 0 {
+			config.RateLimit = 166 // ~10,000 req/min
+		}
 	}
 
 	if config.ResultsLimit == 0 {
@@ -212,7 +219,6 @@ func decryptCredentials(config *vendors.APIConfig) []ValidationWarning {
 func validateCredentials(config *vendors.APIConfig) []ValidationWarning {
 	var warnings []ValidationWarning
 
-	// All vendors require org_id and api_key (normalized field names)
 	switch config.Vendor {
 	case "mist", "meraki":
 		if config.Credentials["org_id"] == "" {
@@ -227,6 +233,18 @@ func validateCredentials(config *vendors.APIConfig) []ValidationWarning {
 				Level:   "api",
 				API:     config.Label,
 				Message: fmt.Sprintf("API %q missing required credential 'api_key'", config.Label),
+			})
+		}
+	case "ubiquiti":
+		apiKey := config.Credentials["site_manager_api_key"]
+		if apiKey == "" {
+			apiKey = config.Credentials["api_key"]
+		}
+		if apiKey == "" {
+			warnings = append(warnings, ValidationWarning{
+				Level:   "api",
+				API:     config.Label,
+				Message: fmt.Sprintf("API %q missing required credential 'site_manager_api_key'", config.Label),
 			})
 		}
 	}
