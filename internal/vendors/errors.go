@@ -1,6 +1,133 @@
 package vendors
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
+
+// --- API transport / classification taxonomy ---------------------------------
+//
+// These types are the wifimgr-level classification of errors coming back from
+// a vendor API. Adapters classify once at the SDK boundary (e.g.
+// internal/vendors/meraki/classify.go); everything upstream reads the taxonomy
+// via errors.As. Domain-level typed errors (SiteNotFoundError,
+// DeviceNotFoundError) are separate concerns and sit above this layer —
+// they're returned when a lookup can't find a resource by canonical name,
+// not when the HTTP call itself came back 404.
+//
+// Shape rules:
+//   - Each type embeds the APILabel so batch callers (RefreshAllAPIs) can
+//     attribute failures.
+//   - Retryable transport errors live under TransportError with Retryable=true.
+//   - Non-retryable errors get their own type (AuthError, NotFoundError).
+//   - All types carry a UserMessage() for cmd/ to render.
+
+// TransportError represents a generic vendor transport failure — a network
+// problem, a non-classified HTTP error, or something the adapter couldn't
+// identify. Retryable indicates whether the retry loop should try again.
+type TransportError struct {
+	APILabel  string // Registry label of the API that failed
+	Op        string // Adapter operation, e.g. "GetOrganizationDevices"
+	Status    int    // HTTP status; 0 when the failure was before a response
+	Retryable bool
+	Err       error
+}
+
+func (e *TransportError) Error() string {
+	if e.Status != 0 {
+		return fmt.Sprintf("%s: %s: status %d: %v", e.APILabel, e.Op, e.Status, e.Err)
+	}
+	return fmt.Sprintf("%s: %s: %v", e.APILabel, e.Op, e.Err)
+}
+
+func (e *TransportError) Unwrap() error { return e.Err }
+
+func (e *TransportError) UserMessage() string {
+	if e.Status != 0 {
+		return fmt.Sprintf("%s: %s failed with HTTP %d. Retry with -d for details.",
+			e.APILabel, e.Op, e.Status)
+	}
+	return fmt.Sprintf("%s: %s failed: %v", e.APILabel, e.Op, e.Err)
+}
+
+// AuthError indicates the API rejected the request because of credentials
+// (401 Unauthorized) or permissions (403 Forbidden). Never retryable;
+// retrying with the same token would produce the same failure.
+type AuthError struct {
+	APILabel string
+	Reason   string
+	Status   int // 401 or 403
+}
+
+func (e *AuthError) Error() string {
+	return fmt.Sprintf("%s: authentication failed (HTTP %d): %s", e.APILabel, e.Status, e.Reason)
+}
+
+func (e *AuthError) UserMessage() string {
+	action := "Check that your API token is set and unexpired."
+	if e.Status == 403 {
+		action = "Check that your API token has permission for this operation."
+	}
+	return fmt.Sprintf(`%s: %s
+
+%s
+If you use encrypted credentials, ensure WIFIMGR_PASSWORD is set.`,
+		e.APILabel, e.Error(), action)
+}
+
+// RateLimitError indicates the API threw a 429. RetryAfter is parsed from
+// the Retry-After header when the vendor provides one; zero means "use
+// exponential backoff at caller's discretion."
+type RateLimitError struct {
+	APILabel   string
+	RetryAfter time.Duration
+}
+
+func (e *RateLimitError) Error() string {
+	if e.RetryAfter > 0 {
+		return fmt.Sprintf("%s: rate limited (retry after %v)", e.APILabel, e.RetryAfter)
+	}
+	return fmt.Sprintf("%s: rate limited", e.APILabel)
+}
+
+func (e *RateLimitError) UserMessage() string { return e.Error() }
+
+// ServerError indicates a 5xx. Always retryable; the caller (RetryState)
+// decides whether we've exhausted the budget.
+type ServerError struct {
+	APILabel string
+	Status   int
+	Err      error
+}
+
+func (e *ServerError) Error() string {
+	return fmt.Sprintf("%s: vendor returned HTTP %d: %v", e.APILabel, e.Status, e.Err)
+}
+
+func (e *ServerError) Unwrap() error { return e.Err }
+
+func (e *ServerError) UserMessage() string {
+	return fmt.Sprintf("%s: vendor API is returning %d. This is usually transient — try again in a moment.",
+		e.APILabel, e.Status)
+}
+
+// NotFoundError is the transport-level 404. Distinct from SiteNotFoundError
+// (domain-level "I looked in my cache and this name doesn't exist"). A
+// transport 404 means "the vendor told me this URL doesn't exist" — usually
+// an adapter bug (wrong endpoint) or stale state (resource was deleted).
+type NotFoundError struct {
+	APILabel string
+	Resource string // human-readable resource identifier, e.g. "device Q2XX-XXXX"
+}
+
+func (e *NotFoundError) Error() string {
+	return fmt.Sprintf("%s: not found: %s", e.APILabel, e.Resource)
+}
+
+func (e *NotFoundError) UserMessage() string {
+	return fmt.Sprintf("%s: %s no longer exists in the vendor. Refresh the cache (wifimgr refresh device) and retry.",
+		e.APILabel, e.Resource)
+}
 
 // SiteNotFoundError indicates a site name doesn't exist in the API.
 type SiteNotFoundError struct {

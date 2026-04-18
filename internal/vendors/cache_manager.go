@@ -17,6 +17,12 @@ type CacheManager struct {
 	registry *APIClientRegistry
 	index    *CrossAPIIndex
 	mu       sync.RWMutex
+
+	// labelMus gives each apiLabel its own mutex so concurrent save/refresh
+	// for different APIs don't serialize, while save/refresh for the same
+	// API is strictly ordered. Combined with WriteFileAtomic this makes
+	// in-process concurrent refreshes safe.
+	labelMus sync.Map // map[string]*sync.Mutex
 }
 
 // RefreshOptions controls the behavior of cache refresh operations.
@@ -102,8 +108,29 @@ func (c *CacheManager) GetAPICache(apiLabel string) (*APICache, error) {
 	return cache, nil
 }
 
-// SaveAPICache saves a single API's cache file.
+// labelLock returns the per-label mutex, creating it on first use. All
+// save/refresh operations for a given apiLabel must hold this mutex.
+func (c *CacheManager) labelLock(apiLabel string) *sync.Mutex {
+	if m, ok := c.labelMus.Load(apiLabel); ok {
+		return m.(*sync.Mutex)
+	}
+	m, _ := c.labelMus.LoadOrStore(apiLabel, &sync.Mutex{})
+	return m.(*sync.Mutex)
+}
+
+// SaveAPICache saves a single API's cache file. Safe to call concurrently
+// from different goroutines; invocations for the same apiLabel are
+// serialized via the per-label mutex.
 func (c *CacheManager) SaveAPICache(cache *APICache) error {
+	lock := c.labelLock(cache.APILabel)
+	lock.Lock()
+	defer lock.Unlock()
+	return c.saveAPICacheLocked(cache)
+}
+
+// saveAPICacheLocked writes the cache assuming the caller already holds the
+// per-label lock. Internal use only.
+func (c *CacheManager) saveAPICacheLocked(cache *APICache) error {
 	cache.UpdateItemCounts()
 	cache.RebuildSiteIndex()
 
@@ -115,7 +142,7 @@ func (c *CacheManager) SaveAPICache(cache *APICache) error {
 		return fmt.Errorf("failed to marshal cache: %w", err)
 	}
 
-	if err := os.WriteFile(cachePath, data, 0644); err != nil {
+	if err := helpers.WriteFileAtomic(cachePath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write cache: %w", err)
 	}
 

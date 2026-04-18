@@ -102,6 +102,10 @@ func runMultiVendorClientDetailRefresh() error {
 		total := 0
 		errCount := 0
 		for i := range cache.Sites.Info {
+			if err := globalContext.Err(); err != nil {
+				fmt.Printf("  [%s] cancelled after %d/%d sites\n", apiLabel, i, len(cache.Sites.Info))
+				return err
+			}
 			site := &cache.Sites.Info[i]
 			records, err := svc.FetchSiteClientDetail(globalContext, site.ID)
 			if err != nil {

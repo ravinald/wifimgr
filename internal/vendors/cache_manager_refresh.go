@@ -16,7 +16,17 @@ func (c *CacheManager) RefreshAPI(ctx context.Context, apiLabel string) error {
 }
 
 // RefreshAPIWithOptions refreshes a single API's cache with configurable options.
+//
+// The per-label mutex is held for the entire refresh so that a concurrent
+// save (or a concurrent refresh for the same apiLabel) cannot interleave
+// and silently clobber results. Combined with WriteFileAtomic, this makes
+// in-process concurrent refreshes safe; cross-process concurrency relies
+// on the atomic rename for last-writer-wins semantics.
 func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel string, opts RefreshOptions) error {
+	lock := c.labelLock(apiLabel)
+	lock.Lock()
+	defer lock.Unlock()
+
 	logging.Debugf("[cache] Starting refresh for API %s (fetchConfigs=%v)", apiLabel, opts.FetchDeviceConfigs)
 
 	client, err := c.registry.GetClient(apiLabel)
@@ -305,8 +315,9 @@ func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel strin
 	fmt.Printf("  [%s] Complete in %dms\n", apiLabel, cache.Meta.RefreshDurationMs)
 	logging.Debugf("[cache] Refresh complete for %s in %dms", apiLabel, cache.Meta.RefreshDurationMs)
 
-	// Save cache
-	if err := c.SaveAPICache(cache); err != nil {
+	// Save cache. Use the locked variant because this function already holds
+	// the per-label mutex — calling SaveAPICache would deadlock.
+	if err := c.saveAPICacheLocked(cache); err != nil {
 		logging.Debugf("[cache] Failed to save cache for %s: %v", apiLabel, err)
 		return err
 	}

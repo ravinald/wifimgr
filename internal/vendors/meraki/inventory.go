@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-resty/resty/v2"
 	meraki "github.com/meraki/dashboard-api-go/v5/sdk"
 
 	"github.com/ravinald/wifimgr/internal/logging"
@@ -46,14 +47,16 @@ func (s *inventoryService) List(ctx context.Context, deviceType string) ([]*vend
 		}
 
 		var resp *meraki.ResponseOrganizationsGetOrganizationDevices
+		var httpResp *resty.Response
 		if s.suppressOutput {
 			restore := suppressStdout()
-			resp, _, err = s.dashboard.Organizations.GetOrganizationDevices(s.orgID, params)
+			resp, httpResp, err = s.dashboard.Organizations.GetOrganizationDevices(s.orgID, params)
 			restore()
 		} else {
-			resp, _, err = s.dashboard.Organizations.GetOrganizationDevices(s.orgID, params)
+			resp, httpResp, err = s.dashboard.Organizations.GetOrganizationDevices(s.orgID, params)
 		}
 		devices = resp
+		err = ClassifyError(s.orgID, "GetOrganizationDevices", httpResp, err)
 
 		if err == nil {
 			break
@@ -61,7 +64,7 @@ func (s *inventoryService) List(ctx context.Context, deviceType string) ([]*vend
 
 		if !retryState.ShouldRetry(err) {
 			logging.Debugf("[meraki] Failed to get devices: %v", err)
-			return nil, fmt.Errorf("failed to get devices: %w", err)
+			return nil, err
 		}
 
 		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {
@@ -104,13 +107,15 @@ func (s *inventoryService) ByMAC(ctx context.Context, mac string) (*vendors.Inve
 			}
 		}
 
-		devices, _, err = s.dashboard.Organizations.GetOrganizationDevices(s.orgID, params)
+		var httpResp *resty.Response
+		devices, httpResp, err = s.dashboard.Organizations.GetOrganizationDevices(s.orgID, params)
+		err = ClassifyError(s.orgID, "GetOrganizationDevices", httpResp, err)
 		if err == nil {
 			break
 		}
 
 		if !retryState.ShouldRetry(err) {
-			return nil, fmt.Errorf("failed to get devices: %w", err)
+			return nil, err
 		}
 
 		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {

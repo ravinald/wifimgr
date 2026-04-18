@@ -2,8 +2,11 @@ package vendors
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -117,6 +120,68 @@ func TestCacheManager_SaveAndLoadAPICache(t *testing.T) {
 	// Verify site index was rebuilt
 	if _, ok := loaded.SiteIndex.ByName["US-LAB-01"]; !ok {
 		t.Error("site index not rebuilt")
+	}
+
+	// Verify no orphan temp files remain from the atomic write.
+	apisDir := filepath.Join(tmpDir, "apis")
+	entries, err := os.ReadDir(apisDir)
+	if err != nil {
+		t.Fatalf("ReadDir(%s): %v", apisDir, err)
+	}
+	for _, e := range entries {
+		if strings.Contains(e.Name(), ".tmp-") {
+			t.Errorf("orphan temp file in cache dir: %s", e.Name())
+		}
+	}
+}
+
+// TestCacheManager_ConcurrentSave exercises the per-label mutex on
+// SaveAPICache. Without it, N goroutines racing on os.Rename could leave
+// one write silently lost (races on the temp-rename step are atomic, but
+// two concurrent full refreshes for the same label would overlap their
+// marshal+write+metadata steps and produce metadata for a different file
+// than the one actually persisted). Run under -race; the test also checks
+// that no temp-files are left behind.
+func TestCacheManager_ConcurrentSave(t *testing.T) {
+	tmpDir := t.TempDir()
+	cm := NewCacheManager(tmpDir, NewAPIClientRegistry())
+	if err := cm.Initialize(); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	const N = 16
+	var wg sync.WaitGroup
+	wg.Add(N)
+	for i := range N {
+		go func(i int) {
+			defer wg.Done()
+			cache := NewAPICache("race-api", "mist", "org-1")
+			cache.Sites.Info = []SiteInfo{
+				{ID: fmt.Sprintf("site-%03d", i), Name: fmt.Sprintf("US-LAB-%03d", i)},
+			}
+			if err := cm.SaveAPICache(cache); err != nil {
+				t.Errorf("goroutine %d: SaveAPICache: %v", i, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	loaded, err := cm.GetAPICache("race-api")
+	if err != nil {
+		t.Fatalf("GetAPICache: %v", err)
+	}
+	if len(loaded.Sites.Info) != 1 {
+		t.Errorf("want exactly 1 site after concurrent saves (last-writer-wins), got %d", len(loaded.Sites.Info))
+	}
+
+	entries, err := os.ReadDir(filepath.Join(tmpDir, "apis"))
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	for _, e := range entries {
+		if strings.Contains(e.Name(), ".tmp-") {
+			t.Errorf("orphan temp file after concurrent saves: %s", e.Name())
+		}
 	}
 }
 
