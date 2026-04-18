@@ -128,6 +128,13 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 				}
 			}
 
+			// Re-derive State from Band evidence. Meraki's native Status
+			// reports recent visibility (client was seen in the last hour
+			// or so), not current association. Once the client-detail
+			// cache is populated, a non-empty Band is the authoritative
+			// "on-air in the last 24h" signal.
+			client.Status = deriveClientState(client, apiCache)
+
 			vendorName, _ := registry.GetVendor(apiLabel)
 			data := formatter.GenericTableData{
 				"mac":       client.MAC,
@@ -206,6 +213,43 @@ func isOnlineStatus(s string) bool {
 		return true // unknown state — don't hide the row
 	}
 	return strings.EqualFold(s, "online")
+}
+
+// deriveClientState picks the State value for a wireless search row.
+// Meraki's `status` field is the canonical source — it's what the Meraki
+// dashboard and the official API examples use. We apply exactly one override:
+// when Meraki claims `Online` but the per-API ClientDetail cache has been
+// populated (`refresh client` / `refresh all` has run) AND we still have no
+// Band evidence for this MAC, the Online claim isn't substantiated by any
+// recent on-air activity, so we report Offline instead.
+//
+// Override conditions (all must hold):
+//
+//   - Cache has at least one ClientDetail record (so a "no evidence" finding
+//     is meaningful — we've actually looked for this MAC, not just never
+//     refreshed).
+//   - Meraki says `Online`.
+//   - Band is empty after all enrichment paths.
+//
+// In every other case — Offline per Meraki, Band present, or fresh install
+// with an empty cache — the vendor's own status flows through untouched.
+func deriveClientState(client *vendors.WirelessClient, cache *vendors.APICache) string {
+	if client == nil {
+		return ""
+	}
+	if hasClientDetailCache(cache) &&
+		strings.EqualFold(client.Status, "online") &&
+		client.Band == "" {
+		return "Offline"
+	}
+	return client.Status
+}
+
+// hasClientDetailCache returns true if the per-API cache holds at least one
+// ClientDetail record — used to gate the band-derived State rule. Safe
+// against nil cache.
+func hasClientDetailCache(cache *vendors.APICache) bool {
+	return cache != nil && len(cache.ClientDetail) > 0
 }
 
 // searchWiredMultiVendor searches for wired clients across multiple APIs.
