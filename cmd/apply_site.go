@@ -17,66 +17,12 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/ravinald/wifimgr/cmd/apply"
+	"github.com/ravinald/wifimgr/internal/cmdutils"
 )
-
-// containsHelpArg checks if "help" is present in the arguments
-func containsHelpArg(args []string) bool {
-	for _, arg := range args {
-		if strings.ToLower(arg) == "help" {
-			return true
-		}
-	}
-	return false
-}
-
-// applyOptions holds parsed optional arguments for apply commands
-type applyOptions struct {
-	diffMode  bool
-	splitDiff bool
-	noRefresh bool
-	force     bool
-}
-
-// parseApplyOptions parses optional positional arguments (diff, split, no-refresh, force)
-func parseApplyOptions(args []string) applyOptions {
-	opts := applyOptions{}
-	for _, arg := range args {
-		switch strings.ToLower(arg) {
-		case "diff":
-			opts.diffMode = true
-		case "split":
-			opts.splitDiff = true
-		case "no-refresh":
-			opts.noRefresh = true
-		case "force":
-			opts.force = true
-		}
-	}
-	return opts
-}
-
-// validApplyOptions are the allowed optional positional arguments
-var validApplyOptions = map[string]bool{
-	"diff":       true,
-	"split":      true,
-	"no-refresh": true,
-	"force":      true,
-}
-
-// validateApplyOptions checks that all optional args are valid
-func validateApplyOptions(args []string) error {
-	for _, arg := range args {
-		if !validApplyOptions[strings.ToLower(arg)] {
-			return fmt.Errorf("unexpected argument: %s (valid options: diff, split, no-refresh, force)", arg)
-		}
-	}
-	return nil
-}
 
 // applySiteCmd represents the "apply site" command
 var applySiteCmd = &cobra.Command{
@@ -104,23 +50,23 @@ Examples:
   wifimgr apply site US-SFO-LAB ap diff split  - Show side-by-side diff
   wifimgr apply site US-SFO-LAB ap no-refresh  - Apply using cached data`,
 	Args: func(cmd *cobra.Command, args []string) error {
-		if containsHelpArg(args) {
+		if cmdutils.ContainsHelp(args) {
 			return nil
 		}
 		if len(args) < 2 || len(args) > 5 {
 			return fmt.Errorf("accepts 2-5 arg(s), received %d", len(args))
 		}
-		return validateApplyOptions(args[2:])
+		return cmdutils.ValidateApplyOptions(args[2:])
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if containsHelpArg(args) {
+		if cmdutils.ContainsHelp(args) {
 			return cmd.Help()
 		}
 
 		siteName := args[0]
 		deviceType := args[1]
-		opts := parseApplyOptions(args[2:])
-		force := opts.force
+		opts := cmdutils.ParseApplyOptions(args[2:])
+		force := opts.Force
 
 		// Validate device type
 		validTypes := map[string]bool{
@@ -144,7 +90,7 @@ Examples:
 		fmt.Printf("Applying to site '%s' via API '%s'\n", siteName, apiLabel)
 
 		// Refresh API cache unless no-refresh is specified
-		if !opts.noRefresh {
+		if !opts.NoRefresh {
 			if err := RefreshAPICacheForApply(globalContext, apiLabel); err != nil {
 				return err
 			}
@@ -161,10 +107,10 @@ Examples:
 
 		// Create args for legacy handler
 		legacyArgs := []string{siteName, deviceType}
-		if opts.diffMode {
+		if opts.DiffMode {
 			legacyArgs = append(legacyArgs, "diff")
 		}
-		if opts.splitDiff {
+		if opts.SplitDiff {
 			legacyArgs = append(legacyArgs, "split")
 		}
 
@@ -185,22 +131,22 @@ Options:
   split       - Use side-by-side diff format (requires diff)
   no-refresh  - Skip cache refresh (use existing cache data)`,
 	Args: func(cmd *cobra.Command, args []string) error {
-		if containsHelpArg(args) {
+		if cmdutils.ContainsHelp(args) {
 			return nil
 		}
 		if len(args) < 1 || len(args) > 4 {
 			return fmt.Errorf("accepts 1-4 arg(s), received %d", len(args))
 		}
-		return validateApplyOptions(args[1:])
+		return cmdutils.ValidateApplyOptions(args[1:])
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if containsHelpArg(args) {
+		if cmdutils.ContainsHelp(args) {
 			return cmd.Help()
 		}
 
 		siteName := args[0]
-		opts := parseApplyOptions(args[1:])
-		force := opts.force
+		opts := cmdutils.ParseApplyOptions(args[1:])
+		force := opts.Force
 
 		apiLabel, err := ValidateMultiVendorApply(globalContext, siteName, nil)
 		if err != nil {
@@ -211,7 +157,7 @@ Options:
 		}
 		fmt.Printf("Applying AP config to site '%s' via API '%s'\n", siteName, apiLabel)
 
-		if !opts.noRefresh {
+		if !opts.NoRefresh {
 			if err := RefreshAPICacheForApply(globalContext, apiLabel); err != nil {
 				return err
 			}
@@ -225,10 +171,10 @@ Options:
 		}
 
 		legacyArgs := []string{siteName, "ap"}
-		if opts.diffMode {
+		if opts.DiffMode {
 			legacyArgs = append(legacyArgs, "diff")
 		}
-		if opts.splitDiff {
+		if opts.SplitDiff {
 			legacyArgs = append(legacyArgs, "split")
 		}
 
@@ -244,22 +190,22 @@ var applySwitchCmd = &cobra.Command{
 NOTE: Switch configuration is not yet supported. This command is a placeholder
 for a future release. Currently only AP configuration is supported.`,
 	Args: func(cmd *cobra.Command, args []string) error {
-		if containsHelpArg(args) {
+		if cmdutils.ContainsHelp(args) {
 			return nil
 		}
 		if len(args) < 1 || len(args) > 4 {
 			return fmt.Errorf("accepts 1-4 arg(s), received %d", len(args))
 		}
-		return validateApplyOptions(args[1:])
+		return cmdutils.ValidateApplyOptions(args[1:])
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if containsHelpArg(args) {
+		if cmdutils.ContainsHelp(args) {
 			return cmd.Help()
 		}
 
 		siteName := args[0]
-		opts := parseApplyOptions(args[1:])
-		force := opts.force
+		opts := cmdutils.ParseApplyOptions(args[1:])
+		force := opts.Force
 
 		apiLabel, err := ValidateMultiVendorApply(globalContext, siteName, nil)
 		if err != nil {
@@ -270,7 +216,7 @@ for a future release. Currently only AP configuration is supported.`,
 		}
 		fmt.Printf("Applying switch config to site '%s' via API '%s'\n", siteName, apiLabel)
 
-		if !opts.noRefresh {
+		if !opts.NoRefresh {
 			if err := RefreshAPICacheForApply(globalContext, apiLabel); err != nil {
 				return err
 			}
@@ -284,10 +230,10 @@ for a future release. Currently only AP configuration is supported.`,
 		}
 
 		legacyArgs := []string{siteName, "switch"}
-		if opts.diffMode {
+		if opts.DiffMode {
 			legacyArgs = append(legacyArgs, "diff")
 		}
-		if opts.splitDiff {
+		if opts.SplitDiff {
 			legacyArgs = append(legacyArgs, "split")
 		}
 
@@ -303,22 +249,22 @@ var applyGatewayCmd = &cobra.Command{
 NOTE: Gateway configuration is not yet supported. This command is a placeholder
 for a future release. Currently only AP configuration is supported.`,
 	Args: func(cmd *cobra.Command, args []string) error {
-		if containsHelpArg(args) {
+		if cmdutils.ContainsHelp(args) {
 			return nil
 		}
 		if len(args) < 1 || len(args) > 4 {
 			return fmt.Errorf("accepts 1-4 arg(s), received %d", len(args))
 		}
-		return validateApplyOptions(args[1:])
+		return cmdutils.ValidateApplyOptions(args[1:])
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if containsHelpArg(args) {
+		if cmdutils.ContainsHelp(args) {
 			return cmd.Help()
 		}
 
 		siteName := args[0]
-		opts := parseApplyOptions(args[1:])
-		force := opts.force
+		opts := cmdutils.ParseApplyOptions(args[1:])
+		force := opts.Force
 
 		apiLabel, err := ValidateMultiVendorApply(globalContext, siteName, nil)
 		if err != nil {
@@ -329,7 +275,7 @@ for a future release. Currently only AP configuration is supported.`,
 		}
 		fmt.Printf("Applying gateway config to site '%s' via API '%s'\n", siteName, apiLabel)
 
-		if !opts.noRefresh {
+		if !opts.NoRefresh {
 			if err := RefreshAPICacheForApply(globalContext, apiLabel); err != nil {
 				return err
 			}
@@ -343,10 +289,10 @@ for a future release. Currently only AP configuration is supported.`,
 		}
 
 		legacyArgs := []string{siteName, "gateway"}
-		if opts.diffMode {
+		if opts.DiffMode {
 			legacyArgs = append(legacyArgs, "diff")
 		}
-		if opts.splitDiff {
+		if opts.SplitDiff {
 			legacyArgs = append(legacyArgs, "split")
 		}
 
@@ -371,22 +317,22 @@ Options:
   split       - Use side-by-side diff format (requires diff)
   no-refresh  - Skip cache refresh (use existing cache data)`,
 	Args: func(cmd *cobra.Command, args []string) error {
-		if containsHelpArg(args) {
+		if cmdutils.ContainsHelp(args) {
 			return nil
 		}
 		if len(args) < 1 || len(args) > 4 {
 			return fmt.Errorf("accepts 1-4 arg(s), received %d", len(args))
 		}
-		return validateApplyOptions(args[1:])
+		return cmdutils.ValidateApplyOptions(args[1:])
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if containsHelpArg(args) {
+		if cmdutils.ContainsHelp(args) {
 			return cmd.Help()
 		}
 
 		siteName := args[0]
-		opts := parseApplyOptions(args[1:])
-		force := opts.force
+		opts := cmdutils.ParseApplyOptions(args[1:])
+		force := opts.Force
 
 		apiLabel, err := ValidateMultiVendorApply(globalContext, siteName, nil)
 		if err != nil {
@@ -397,17 +343,17 @@ Options:
 		}
 		fmt.Printf("Applying all configs to site '%s' via API '%s'\n", siteName, apiLabel)
 
-		if !opts.noRefresh {
+		if !opts.NoRefresh {
 			if err := RefreshAPICacheForApply(globalContext, apiLabel); err != nil {
 				return err
 			}
 		}
 
 		legacyArgs := []string{siteName, "all"}
-		if opts.diffMode {
+		if opts.DiffMode {
 			legacyArgs = append(legacyArgs, "diff")
 		}
-		if opts.splitDiff {
+		if opts.SplitDiff {
 			legacyArgs = append(legacyArgs, "split")
 		}
 

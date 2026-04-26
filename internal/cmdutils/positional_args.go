@@ -48,7 +48,7 @@ func ParseShowArgs(args []string) (*ParsedShowArgs, error) {
 			if result.SiteName != "" {
 				return nil, fmt.Errorf("site specified multiple times")
 			}
-			result.SiteName = stripQuotes(args[i+1])
+			result.SiteName = StripQuotes(args[i+1])
 			i++ // Skip the site name
 
 		case "target":
@@ -58,7 +58,7 @@ func ParseShowArgs(args []string) (*ParsedShowArgs, error) {
 			if result.Target != "" {
 				return nil, fmt.Errorf("target specified multiple times")
 			}
-			result.Target = stripQuotes(args[i+1])
+			result.Target = StripQuotes(args[i+1])
 			i++ // Skip the API label
 
 		case "essid":
@@ -68,7 +68,7 @@ func ParseShowArgs(args []string) (*ParsedShowArgs, error) {
 			if result.ESSIDName != "" {
 				return nil, fmt.Errorf("essid specified multiple times")
 			}
-			result.ESSIDName = stripQuotes(args[i+1])
+			result.ESSIDName = StripQuotes(args[i+1])
 			i++ // Skip the SSID name
 
 		case "sort":
@@ -213,9 +213,10 @@ func ParseApplyArgs(args []string) (*ParsedApplyArgs, error) {
 	return result, nil
 }
 
-// stripQuotes removes surrounding double quotes from a value.
-// The shell normally handles quote stripping, but this provides a defensive fallback.
-func stripQuotes(s string) string {
+// StripQuotes removes surrounding double quotes from a value.
+// The shell normally handles quote stripping, but this provides a defensive
+// fallback for values forwarded from scripts that pass quotes through verbatim.
+func StripQuotes(s string) string {
 	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
 		return s[1 : len(s)-1]
 	}
