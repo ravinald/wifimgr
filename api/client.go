@@ -123,9 +123,6 @@ type Client interface {
 	GetSwitchConfig(ctx context.Context, siteID, deviceID string) (*SwitchConfig, error)
 	GetGatewayConfig(ctx context.Context, siteID, deviceID string) (*GatewayConfig, error)
 	BatchGetDeviceConfigs(ctx context.Context, devices []DeviceInfo) (map[string]*DeviceConfig, map[string]error)
-
-	// Generic API data fetching
-	fetchAPIData(ctx context.Context, path string) (interface{}, error)
 }
 
 // Config holds API credentials and options

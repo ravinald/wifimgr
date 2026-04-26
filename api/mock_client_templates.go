@@ -2,66 +2,7 @@ package api
 
 import (
 	"context"
-	"strings"
 )
-
-// fetchAPIData performs a generic GET request and returns raw interface{} data
-func (m *MockClient) fetchAPIData(ctx context.Context, path string) (interface{}, error) {
-	m.logRequest("GET", path, nil)
-
-	// Mock API call with rate limiting
-	if m.rateLimiter != nil {
-		if err := m.rateLimiter.Wait(ctx); err != nil {
-			return nil, err
-		}
-	}
-
-	// Return mock data based on the endpoint
-	switch {
-	case strings.Contains(path, "/rftemplates"):
-		return []interface{}{
-			map[string]interface{}{
-				"id":     "rf-template-1",
-				"name":   "Mock RF Template",
-				"org_id": "mock-org-id",
-			},
-		}, nil
-	case strings.Contains(path, "/gatewaytemplates"):
-		return []interface{}{
-			map[string]interface{}{
-				"id":     "gw-template-1",
-				"name":   "Mock Gateway Template",
-				"org_id": "mock-org-id",
-			},
-		}, nil
-	case strings.Contains(path, "/templates"):
-		return []interface{}{
-			map[string]interface{}{
-				"id":     "wlan-template-1",
-				"name":   "Mock WLAN Template",
-				"org_id": "mock-org-id",
-			},
-		}, nil
-	case strings.Contains(path, "/networks"):
-		return []interface{}{
-			map[string]interface{}{
-				"id":     "network-1",
-				"name":   "Mock Network",
-				"org_id": "mock-org-id",
-			},
-		}, nil
-	case strings.Contains(path, "/wlans"):
-		return []interface{}{
-			map[string]interface{}{
-				"id":     "wlan-1",
-				"ssid":   "Mock WLAN",
-				"org_id": "mock-org-id",
-			},
-		}, nil
-	default:
-		return []interface{}{}, nil
-	}
-}
 
 // GetRFTemplates returns mock RF templates
 func (m *MockClient) GetRFTemplates(_ context.Context, orgID string) ([]MistRFTemplate, error) {
