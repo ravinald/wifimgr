@@ -286,7 +286,7 @@ func (p *GenericTablePrinter) generateDefaultColumnsFromData() []TableColumn {
 - **Alphabetical Sorting**: Remaining fields are sorted alphabetically for predictable output
 - **Raw Field Names**: Uses the actual JSON field names as column titles, making it easy to understand the data structure
 - **Boolean Detection**: Examines actual values across all items to accurately detect boolean fields
-- **Zero Configuration**: Works automatically without any configuration, making the system more robust
+- **Zero Configuration**: Works automatically without any configuration; new fields render without setup
 
 **Example**: If your data contains varying fields across items:
 ```json
@@ -303,7 +303,7 @@ The auto-generated columns would be:
 4. `model` (common field, shown fourth)
 5. `firmware` (alphabetically sorted, shown last)
 
-This ensures tables always display all available data even without configuration, making the system more robust and developer-friendly.
+This ensures tables display all available data even without configuration; new fields require no code changes.
 
 ### Field Resolution
 
@@ -448,7 +448,7 @@ The table formatter supports three different width behaviors for columns:
 
 **Use Cases:**
 - **`width = -1`**: Critical fields that should never be truncated (e.g., device names, IDs)
-- **`width = 0`**: Fields that can be scaled for better terminal utilization (e.g., descriptions, addresses)
+- **`width = 0`**: Fields that scale to fill terminal width (e.g., descriptions, addresses)
 - **`width > 0`**: Fields with specific formatting requirements (e.g., MAC addresses, timestamps)
 
 ## Symbol Integration
@@ -483,7 +483,7 @@ The table formatter supports a sophisticated conditional row coloring system tha
 
 ### Architecture Overview
 
-The system works through a **prefix-based marker approach** that integrates seamlessly with the table formatter's existing color detection and background shading logic:
+The system works through a **prefix-based marker approach** that fits into the table formatter's existing color detection and background shading logic:
 
 1. **Data Preparation Phase**: Content is marked with special prefixes during data preparation
 2. **Width Calculation Phase**: Prefixes are stripped for accurate column width calculation

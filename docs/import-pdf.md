@@ -300,7 +300,7 @@ US-OAK-PER-3-1     1/5/20       auto/9/20    disabled
 
 ### Libraries
 - **PDF Parsing**: `github.com/ledongthuc/pdf` (chosen over UniPDF due to licensing)
-- **Text Extraction**: Multiple methods for robust extraction
+- **Text Extraction**: Multiple extraction methods with fallbacks
   - Content stream text extraction
   - GetPlainText() for direct text access
   - Handles both concatenated and spaced text variations

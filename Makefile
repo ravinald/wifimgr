@@ -1,4 +1,4 @@
-.PHONY: build test test-coverage clean lint vet fmt all version check security
+.PHONY: build test test-coverage clean lint vet fmt all version check security vuln release-snapshot
 .PHONY: test-api test-internal test-cmd test-shell test-client test-mock-client test-ap
 .PHONY: test-vendors test-vendors-registry test-vendors-cache test-vendors-errors test-vendors-mock
 
@@ -22,6 +22,9 @@ GIT_COMMIT = $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 # Build flags - inject version info into cmd package
 LDFLAGS=-ldflags "-w -s -X github.com/ravinald/wifimgr/cmd.Version=$(VERSION) -X github.com/ravinald/wifimgr/cmd.BuildTime=$(BUILD_TIME) -X github.com/ravinald/wifimgr/cmd.GitCommit=$(GIT_COMMIT)"
 
+# Common run command (binary + default config path)
+RUN_CMD = ./$(BINARY_NAME) -config config/wifimgr-config.json
+
 all: build
 
 # Show version information
@@ -31,9 +34,6 @@ version:
 	@echo "Git Commit: $(GIT_COMMIT)"
 
 build:
-	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) .
-
-build-optimized:
 	$(GOBUILD) $(LDFLAGS) -o $(BINARY_NAME) .
 
 test:
@@ -149,6 +149,14 @@ security:
 	gosec ./...
 	govulncheck ./...
 
+# Vulnerability scan only (subset of `security`)
+vuln:
+	govulncheck ./...
+
+# Local goreleaser dry-run; produces dist/ without publishing or signing
+release-snapshot:
+	goreleaser release --snapshot --clean
+
 dependencies:
 	$(GOMOD) tidy
 	$(GOMOD) download
@@ -168,23 +176,23 @@ build-all: clean dependencies
 
 # Run the application with the default configuration
 run:
-	./$(BINARY_NAME) -config config/wifimgr-config.json
-	
+	$(RUN_CMD)
+
 # Run with debug level info
 run-debug:
-	./$(BINARY_NAME) -config config/wifimgr-config.json -d -debug-level info
-	
+	$(RUN_CMD) -d -debug-level info
+
 # Run with all debug information
 run-debug-all:
-	./$(BINARY_NAME) -config config/wifimgr-config.json -d -debug-level all
-	
+	$(RUN_CMD) -d -debug-level all
+
 # Run in dry-run mode (no actual API changes)
 run-dry-run:
-	./$(BINARY_NAME) -config config/wifimgr-config.json -dry-run
+	$(RUN_CMD) -dry-run
 
 # Run in dry-run mode with debug information
 run-dry-run-debug:
-	./$(BINARY_NAME) -config config/wifimgr-config.json -dry-run -d -debug-level info
+	$(RUN_CMD) -dry-run -d -debug-level info
 
 # Install golangci-lint if not already installed
 install-lint:
