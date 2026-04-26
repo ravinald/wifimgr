@@ -4,7 +4,7 @@ This package provides utilities for generating, storing, and verifying file hash
 
 ## Overview
 
-The `filehash` package implements a robust file integrity verification system using SHA-256 hashing. It allows tracking file modifications, validating file contents, and managing metadata for any file type.
+The `filehash` package implements file integrity verification with SHA-256 hashing. It tracks file modifications, validates file contents, and manages `.meta` sidecars for any file type.
 
 ## Key Components
 

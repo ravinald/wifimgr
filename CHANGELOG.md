@@ -20,7 +20,7 @@ All notable changes to wifimgr are documented in this file.
 
 ## [0.1.0] - 2026-02-02
 
-This is the initial public release of wifimgr, providing comprehensive network infrastructure management for Mist and Meraki platforms.
+Initial public release of wifimgr, with Mist and Meraki management from a single CLI.
 
 ### Major Features
 
@@ -47,7 +47,7 @@ This is the initial public release of wifimgr, providing comprehensive network i
   - Vendor-layer cache management (`cache_manager.go`, `cache_manager_refresh.go`)
   - Device and site accessors (`cache_accessor_devices.go`, `cache_accessor_sites.go`)
 - All modules maintained at <500 lines for readability and maintainability
-- 100% backward compatible - existing cache files work without migration
+- Existing cache files work without migration
 
 #### Cache Management
 - **Age tracking** - Cache stores `LastRefresh` timestamp and refresh duration
