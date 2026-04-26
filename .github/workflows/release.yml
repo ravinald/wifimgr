@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 jobs:
   release:
@@ -23,6 +24,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
 
       - name: Run tests before release
         run: go test -v -race ./...
