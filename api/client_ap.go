@@ -24,7 +24,7 @@ func (c *mistClient) GetAP(ctx context.Context, siteID, apIdentifier string) (*A
 			// Convert the raw map to a UnifiedDevice
 			device, err := ConvertFromRawMap(ap)
 			if err != nil {
-				return nil, fmt.Errorf("failed to convert AP data: %v", err)
+				return nil, fmt.Errorf("api: GetAP convert failed: %w", err)
 			}
 			// Convert to AP
 			aps := ConvertToAPSlice([]UnifiedDevice{*device})
@@ -70,7 +70,7 @@ func (c *mistClient) GetAP(ctx context.Context, siteID, apIdentifier string) (*A
 				// Convert the raw map to a UnifiedDevice
 				device, err := ConvertFromRawMap(apData)
 				if err != nil {
-					return nil, fmt.Errorf("failed to convert AP data: %v", err)
+					return nil, fmt.Errorf("api: GetAP convert failed: %w", err)
 				}
 				// Convert to AP
 				apList := ConvertToAPSlice([]UnifiedDevice{*device})
