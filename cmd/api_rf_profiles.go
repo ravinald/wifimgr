@@ -18,7 +18,6 @@ package cmd
 import (
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -52,15 +51,7 @@ Examples:
   wifimgr show api rf-profiles json                  - Show all profiles in JSON format
   wifimgr show api rf-profiles csv                   - Show all profiles in CSV format
   wifimgr show api rf-profiles no-resolve            - Show all profiles without field resolution`,
-	Args: func(cmd *cobra.Command, args []string) error {
-		// Allow "help" as a special keyword
-		for _, arg := range args {
-			if strings.ToLower(arg) == "help" {
-				return nil
-			}
-		}
-		return nil
-	},
+	Args: cmdutils.ValidateShowAPArgs,
 	RunE: runShowAPIRFProfiles,
 }
 
@@ -69,11 +60,8 @@ func init() {
 }
 
 func runShowAPIRFProfiles(cmd *cobra.Command, args []string) error {
-	// Check for help keyword in positional arguments
-	for _, arg := range args {
-		if strings.ToLower(arg) == "help" {
-			return cmd.Help()
-		}
+	if cmdutils.ContainsHelp(args) {
+		return cmd.Help()
 	}
 
 	logger := logging.GetLogger()
@@ -86,32 +74,14 @@ func runShowAPIRFProfiles(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Parse arguments
-	var profileFilter string
-	var siteFilter string
-	format := "table"
-	noResolve := false
-
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch arg {
-		case "json":
-			format = "json"
-		case "csv":
-			format = "csv"
-		case "no-resolve":
-			noResolve = true
-		case "site":
-			if i+1 < len(args) {
-				i++
-				siteFilter = args[i]
-			}
-		default:
-			if profileFilter == "" {
-				profileFilter = arg
-			}
-		}
+	parsed, err := cmdutils.ParseShowArgs(args)
+	if err != nil {
+		return err
 	}
+	profileFilter := parsed.Filter
+	siteFilter := parsed.SiteName
+	format := parsed.Format
+	noResolve := parsed.NoResolve
 
 	// Get all RF profiles
 	profiles := cacheAccessor.GetAllRFTemplates()
