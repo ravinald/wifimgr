@@ -173,7 +173,7 @@ This means the device exists in your Mist/Meraki/Ubiquiti account but is not in 
 
 ### Simplified Flag Structure
 
-With the Cobra migration, the CLI now uses a **simplified flag structure** that leverages Viper for configuration management:
+With the Cobra migration, the CLI uses a **simplified flag structure** backed by Viper for configuration management:
 
 **Global Flags (Available on all commands):**
 - `-d, --debug` - Enable debug mode and debug-level logging
