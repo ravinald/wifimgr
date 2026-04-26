@@ -17,9 +17,10 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/ravinald/wifimgr/internal/cmdutils"
 )
 
 // wiredCmd represents the wired command
@@ -52,11 +53,8 @@ Examples:
   wifimgr search wired john json                                           # Search and show as JSON
   wifimgr search wired laptop target mist-prod                             # Search only in mist-prod`,
 	Args: func(cmd *cobra.Command, args []string) error {
-		// Allow "help" as a special keyword
-		for _, arg := range args {
-			if strings.ToLower(arg) == "help" {
-				return nil
-			}
+		if cmdutils.ContainsHelp(args) {
+			return nil
 		}
 		if len(args) > 7 {
 			return fmt.Errorf("accepts up to 7 arg(s), received %d", len(args))
@@ -64,17 +62,14 @@ Examples:
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Check for help keyword in positional arguments
-		for _, arg := range args {
-			if strings.ToLower(arg) == "help" {
-				return cmd.Help()
-			}
+		if cmdutils.ContainsHelp(args) {
+			return cmd.Help()
 		}
-		parsed := parseSearchArgs(args)
-		if err := validateSearchArgs(parsed); err != nil {
+		parsed := cmdutils.ParseSearchArgs(args)
+		if err := cmdutils.ValidateSearchArgs(parsed); err != nil {
 			return err
 		}
-		return searchWiredMultiVendor(globalContext, parsed.searchText, parsed.siteID, parsed.format, parsed.force, parsed.noResolve, parsed.detail, parsed.extensive)
+		return searchWiredMultiVendor(globalContext, parsed.SearchText, parsed.SiteID, parsed.Format, parsed.Force, parsed.NoResolve, parsed.Detail, parsed.Extensive)
 	},
 }
 

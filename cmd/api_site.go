@@ -16,9 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/spf13/cobra"
 
 	"github.com/ravinald/wifimgr/internal/cmdutils"
@@ -48,85 +45,20 @@ Examples:
   wifimgr show api site SITE-NAME            - Show specific site by name
   wifimgr show api site json                 - Show all sites in JSON format
   wifimgr show api site target mist-prod     - Show sites from mist-prod only`,
-	Args: validateSiteArgs,
+	Args: cmdutils.ValidateShowAPArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Check for help keyword in positional arguments
-		for _, arg := range args {
-			if strings.ToLower(arg) == "help" {
-				return cmd.Help()
-			}
+		if cmdutils.ContainsHelp(args) {
+			return cmd.Help()
 		}
 
-		// Parse positional arguments using the utility
-		parsed, err := parseSiteArgs(args)
+		parsed, err := cmdutils.ParseShowArgs(args)
 		if err != nil {
 			return err
 		}
 
-		// Set API target from positional argument
 		SetAPITarget(parsed.Target)
-
 		return showSitesMultiVendor(globalContext, parsed)
 	},
-}
-
-// validateSiteArgs validates arguments for the show api site command
-func validateSiteArgs(_ *cobra.Command, args []string) error {
-	// Allow "help" as a special keyword
-	for _, arg := range args {
-		if strings.ToLower(arg) == "help" {
-			return nil
-		}
-	}
-	_, err := parseSiteArgs(args)
-	return err
-}
-
-// parseSiteArgs parses arguments specific to the site command
-func parseSiteArgs(args []string) (*cmdutils.ParsedShowArgs, error) {
-	result := &cmdutils.ParsedShowArgs{
-		Format: "table", // default format
-	}
-
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-
-		switch arg {
-		case "target":
-			if i+1 >= len(args) {
-				return nil, fmt.Errorf("'target' requires an API label")
-			}
-			if result.Target != "" {
-				return nil, fmt.Errorf("target specified multiple times")
-			}
-			result.Target = args[i+1]
-			i++ // Skip the API label
-
-		case "json", "csv":
-			if result.Format != "table" {
-				return nil, fmt.Errorf("format specified multiple times")
-			}
-			result.Format = arg
-
-		case "all":
-			result.ShowAll = true
-
-		default:
-			// Must be a site name filter
-			if result.Filter == "" {
-				result.Filter = arg
-			} else {
-				return nil, fmt.Errorf("unexpected argument: %s", arg)
-			}
-		}
-	}
-
-	// Validate combinations
-	if result.ShowAll && result.Format != "json" {
-		return nil, fmt.Errorf("'all' is only valid with json format")
-	}
-
-	return result, nil
 }
 
 func init() {

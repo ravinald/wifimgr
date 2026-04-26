@@ -28,21 +28,6 @@ import (
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
 
-// validateDeviceProfilesArgs validates arguments for the show api device-profiles command
-func validateDeviceProfilesArgs(_ *cobra.Command, args []string) error {
-	// Allow "help" as a special keyword
-	for _, arg := range args {
-		if strings.ToLower(arg) == "help" {
-			return nil
-		}
-	}
-	// Accept 0-2 arguments
-	if len(args) > 2 {
-		return fmt.Errorf("accepts at most 2 arg(s), received %d", len(args))
-	}
-	return nil
-}
-
 // apiDeviceProfilesCmd represents the "show api device-profiles" command
 var apiDeviceProfilesCmd = &cobra.Command{
 	Use:   "device-profiles [profile-name] [no-resolve]",
@@ -60,7 +45,7 @@ Examples:
   wifimgr show api device-profiles              - Show all device profiles in table format
   wifimgr show api device-profiles AP-Profile   - Show specific profile details in JSON format
   wifimgr show api device-profiles no-resolve   - Show all profiles without field resolution`,
-	Args: validateDeviceProfilesArgs,
+	Args: cmdutils.ValidateShowAPArgs,
 	RunE: runShowAPIDeviceProfiles,
 }
 
@@ -69,42 +54,28 @@ func init() {
 }
 
 func runShowAPIDeviceProfiles(cmd *cobra.Command, args []string) error {
-	// Check for help keyword in positional arguments
-	for _, arg := range args {
-		if strings.ToLower(arg) == "help" {
-			return cmd.Help()
-		}
+	if cmdutils.ContainsHelp(args) {
+		return cmd.Help()
 	}
 
 	logger := logging.GetLogger()
 	logger.Info("Executing show api device-profiles command")
 
-	// Get cache accessor
 	cacheAccessor, err := cmdutils.GetCacheAccessor()
 	if err != nil {
 		logger.WithError(err).Error("Failed to get cache accessor")
 		return err
 	}
 
-	// Check for no-resolve in arguments
-	noResolve := false
-	profileName := ""
-
-	for _, arg := range args {
-		if arg == "no-resolve" {
-			noResolve = true
-		} else if profileName == "" {
-			profileName = arg
-		}
+	parsed, err := cmdutils.ParseShowArgs(args)
+	if err != nil {
+		return err
 	}
 
-	// If profile name is provided, show specific profile details
-	if profileName != "" {
-		return showProfileDetails(cacheAccessor, profileName)
+	if parsed.Filter != "" {
+		return showProfileDetails(cacheAccessor, parsed.Filter)
 	}
-
-	// Otherwise, show all profiles in table format
-	return showAllProfiles(cacheAccessor, noResolve)
+	return showAllProfiles(cacheAccessor, parsed.NoResolve)
 }
 
 func showProfileDetails(cacheAccessor *vendors.CacheAccessor, profileName string) error {
