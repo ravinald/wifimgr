@@ -31,6 +31,25 @@ archives:
 checksum:
   name_template: 'checksums.txt'
 
+sboms:
+  - id: archive
+    artifacts: archive
+    documents:
+      - "{{ .ArtifactName }}.spdx.json"
+
+signs:
+  - id: cosign-keyless
+    cmd: cosign
+    certificate: '${artifact}.pem'
+    args:
+      - sign-blob
+      - '--output-certificate=${certificate}'
+      - '--output-signature=${signature}'
+      - '${artifact}'
+      - '--yes'
+    artifacts: checksum
+    output: true
+
 changelog:
   sort: asc
   filters:
