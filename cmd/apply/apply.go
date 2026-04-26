@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -399,22 +400,20 @@ func handleListBackupsCommand(cfg *config.Config, siteName string) error {
 	return nil
 }
 
-// handleCleanupBackupsCommand cleans up old backup files
+// handleCleanupBackupsCommand cleans up old backup files. The optional first
+// arg overrides backup.retention_days (default 30).
 func handleCleanupBackupsCommand(cfg *config.Config, args []string) error {
-	// Default from config, fallback to 30 days if not set
 	maxAgeDays := viper.GetInt("backup.retention_days")
 	if maxAgeDays == 0 {
 		maxAgeDays = 30
 	}
 
 	if len(args) > 0 {
-		if args[0] == "--days" && len(args) > 1 {
-			var err error
-			maxAgeDays, err = fmt.Sscanf(args[1], "%d", &maxAgeDays)
-			if err != nil {
-				return fmt.Errorf("invalid days value: %s", args[1])
-			}
+		n, err := strconv.Atoi(args[0])
+		if err != nil {
+			return fmt.Errorf("apply: cleanup-backups invalid days value %q: %w", args[0], err)
 		}
+		maxAgeDays = n
 	}
 
 	fmt.Printf("Cleaning up backups older than %d days...\n", maxAgeDays)

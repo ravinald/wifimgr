@@ -17,6 +17,8 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -26,41 +28,63 @@ import (
 
 // siteCmd represents the "set ap site" command
 var siteCmd = &cobra.Command{
-	Use:     "site <site-name>",
+	Use:     "site [site-name] [file <path>]",
 	Aliases: []string{"sites"},
 	Short:   "Assign access points to a site",
 	Long: `Assign access points to a specific site.
 
 Examples:
-  wifimgr set ap site US-SFO-LAB              - Interactively assign AP to site
-  wifimgr set ap site --file file.txt -s US-SFO-LAB - Assign APs from file`,
-	Args: cobra.RangeArgs(0, 1),
+  wifimgr set ap site                              - Interactive assignment
+  wifimgr set ap site US-SFO-LAB                   - Interactively assign APs to a site
+  wifimgr set ap site US-SFO-LAB file aps.txt      - Bulk-assign APs listed in aps.txt`,
+	Args: func(cmd *cobra.Command, args []string) error {
+		if cmdutils.ContainsHelp(args) {
+			return nil
+		}
+		if len(args) > 3 {
+			return fmt.Errorf("accepts at most 3 arg(s), received %d", len(args))
+		}
+		if len(args) >= 2 {
+			if strings.ToLower(args[1]) != "file" {
+				return fmt.Errorf("expected `file <path>` after site name, got %q", args[1])
+			}
+			if len(args) < 3 {
+				return fmt.Errorf("`file` keyword requires a path argument")
+			}
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Check for help keyword in positional arguments
 		if cmdutils.ContainsHelp(args) {
 			return cmd.Help()
 		}
 
-		// Check if file-based assignment is requested
-		if assignmentFile != "" {
-			site := targetSite
-			if site == "" && len(args) > 0 {
-				site = args[0]
-			}
-			if site == "" {
-				return fmt.Errorf("site name required for file-based assignment (use -s flag or provide as argument)")
-			}
-			return ap.AssignBulkAPsFromFile(globalContext, globalClient, globalConfig, assignmentFile, site)
+		var site, file string
+		if len(args) >= 1 {
+			site = args[0]
+		}
+		if len(args) == 3 {
+			file = args[2]
 		}
 
-		// Regular assignment
-		if len(args) == 0 {
-			// Interactive mode - let the handler prompt for site
-			return ap.AssignAP(globalContext, globalClient, globalConfig, "")
-		} else {
-			// Site name provided
-			return ap.AssignAP(globalContext, globalClient, globalConfig, args[0])
+		if assignmentFile != "" || targetSite != "" {
+			fmt.Fprintln(os.Stderr, "DEPRECATED: --file/--site flags will be removed in a future release; use `wifimgr set ap site <site> file <path>`")
+			if file == "" {
+				file = assignmentFile
+			}
+			if site == "" {
+				site = targetSite
+			}
 		}
+
+		if file != "" {
+			if site == "" {
+				return fmt.Errorf("site name required for file-based assignment")
+			}
+			return ap.AssignBulkAPsFromFile(globalContext, globalClient, globalConfig, file, site)
+		}
+
+		return ap.AssignAP(globalContext, globalClient, globalConfig, site)
 	},
 }
 
@@ -72,7 +96,8 @@ var (
 func init() {
 	apCmd.AddCommand(siteCmd)
 
-	// Add flags for file-based AP assignment
-	siteCmd.Flags().StringVar(&assignmentFile, "file", "", "File containing AP MACs to assign")
-	siteCmd.Flags().StringVarP(&targetSite, "site", "s", "", "Target site for bulk assignment")
+	// --file and --site/-s kept for one release for backward compatibility;
+	// emit a deprecation warning when used. Will be removed in the next minor.
+	siteCmd.Flags().StringVar(&assignmentFile, "file", "", "DEPRECATED: use `file <path>` positional")
+	siteCmd.Flags().StringVarP(&targetSite, "site", "s", "", "DEPRECATED: use site name as first positional")
 }
