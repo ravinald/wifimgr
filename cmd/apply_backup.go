@@ -17,12 +17,15 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/ravinald/wifimgr/cmd/apply"
+	"github.com/ravinald/wifimgr/internal/cmdutils"
 )
 
 // applyRollbackCmd represents the "apply rollback" command
@@ -109,32 +112,54 @@ Example:
 
 // applyCleanupBackupsCmd represents the "apply cleanup-backups" command
 var applyCleanupBackupsCmd = &cobra.Command{
-	Use:   "cleanup-backups",
+	Use:   "cleanup-backups [days]",
 	Short: "Remove old configuration backups",
 	Long: `Clean up configuration backups older than a specified number of days.
 
 Default retention period is configured in backup.retention_days (default: 30).
 
 Examples:
-  wifimgr apply cleanup-backups           - Remove backups older than configured retention
-  wifimgr apply cleanup-backups --days 7  - Remove backups older than 7 days`,
-	Args: cobra.NoArgs,
+  wifimgr apply cleanup-backups       - Remove backups older than configured retention
+  wifimgr apply cleanup-backups 7     - Remove backups older than 7 days`,
+	Args: func(cmd *cobra.Command, args []string) error {
+		if cmdutils.ContainsHelp(args) {
+			return nil
+		}
+		if len(args) > 1 {
+			return fmt.Errorf("accepts at most 1 arg(s), received %d", len(args))
+		}
+		if len(args) == 1 {
+			if _, err := strconv.Atoi(args[0]); err != nil {
+				return fmt.Errorf("days must be an integer, got %q", args[0])
+			}
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Get default from config
+		if cmdutils.ContainsHelp(args) {
+			return cmd.Help()
+		}
+
 		defaultDays := viper.GetInt("backup.retention_days")
 		if defaultDays == 0 {
 			defaultDays = 30
 		}
-
-		// Check if --days was explicitly provided
 		days := defaultDays
-		if cmd.Flags().Changed("days") {
+
+		flagSet := cmd.Flags().Changed("days")
+		positionalSet := len(args) == 1
+		if flagSet && positionalSet {
+			return fmt.Errorf("specify days as a positional argument or --days, not both")
+		}
+		switch {
+		case positionalSet:
+			days, _ = strconv.Atoi(args[0])
+		case flagSet:
+			fmt.Fprintln(os.Stderr, "DEPRECATED: --days will be removed in a future release; use `wifimgr apply cleanup-backups <days>`")
 			days, _ = cmd.Flags().GetInt("days")
 		}
 
-		// Create legacy args - always pass --days to let apply.go handle it
-		legacyArgs := []string{"placeholder", "cleanup-backups", "--days", fmt.Sprintf("%d", days)}
-
+		legacyArgs := []string{"placeholder", "cleanup-backups", strconv.Itoa(days)}
 		return apply.HandleCommand(globalContext, globalClient, globalConfig, legacyArgs, "", false)
 	},
 }
@@ -178,6 +203,7 @@ func init() {
 	applyCmd.AddCommand(applyCleanupBackupsCmd)
 	applyCmd.AddCommand(applyValidateBackupCmd)
 
-	// Add flags
-	applyCleanupBackupsCmd.Flags().Int("days", 30, "Remove backups older than this many days")
+	// --days kept for one release for backward compatibility; emits a
+	// deprecation warning when used. Will be removed in the next minor.
+	applyCleanupBackupsCmd.Flags().Int("days", 30, "DEPRECATED: use positional argument")
 }
