@@ -164,8 +164,8 @@ func (c *mistClient) handleErrorResponse(statusCode int, body []byte) error {
 		return c.statusCodeToError(statusCode)
 	}
 
-	// Return a detailed error message
-	return fmt.Errorf("API error [%d]: %s", statusCode, errMsg)
+	// Return a structured error so callers can errors.As it.
+	return &APIError{StatusCode: statusCode, Message: errMsg}
 }
 
 // extractErrorMessages extracts error messages from various API response formats
@@ -219,23 +219,24 @@ func formatErrorValue(val interface{}) string {
 	return ""
 }
 
-// statusCodeToError converts an HTTP status code to a specific error
+// statusCodeToError converts an HTTP status code to a specific error.
+// Returns sentinel errors that callers can match with errors.Is.
 func (c *mistClient) statusCodeToError(statusCode int) error {
 	switch statusCode {
 	case http.StatusUnauthorized:
-		return errors.New("unauthorized: invalid API token")
+		return ErrUnauthorized
 	case http.StatusForbidden:
-		return errors.New("forbidden: insufficient permissions")
+		return ErrForbidden
 	case http.StatusNotFound:
-		return errors.New("not found: resource does not exist")
+		return ErrNotFound
 	case http.StatusTooManyRequests:
-		return errors.New("rate limited: too many requests")
+		return ErrRateLimited
 	case http.StatusBadRequest:
-		return errors.New("bad request: invalid parameters")
+		return ErrBadRequest
 	case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable:
-		return fmt.Errorf("server error: service unavailable (%d)", statusCode)
+		return &APIError{StatusCode: statusCode, Message: "server error: service unavailable"}
 	default:
-		return fmt.Errorf("unexpected status code: %d", statusCode)
+		return &APIError{StatusCode: statusCode, Message: "unexpected status code"}
 	}
 }
 
@@ -364,11 +365,11 @@ func (c *mistClient) retryRequest(ctx context.Context, fn func() (int, error)) e
 
 	// If we get here, all retries failed
 	if lastErr != nil {
-		return fmt.Errorf("request failed after %d attempts: %w", c.maxRetries, lastErr)
+		return fmt.Errorf("api: retryRequest exhausted after %d attempts: %w", c.maxRetries, lastErr)
 	}
 
 	// This is the case where shouldRetry returned true but there was no error
-	return fmt.Errorf("request failed after %d attempts with status code %d", c.maxRetries, lastStatus)
+	return &APIError{StatusCode: lastStatus, Message: fmt.Sprintf("retryRequest exhausted after %d attempts", c.maxRetries)}
 }
 
 // calculateBackoff calculates the backoff duration for retries with exponential backoff and jitter

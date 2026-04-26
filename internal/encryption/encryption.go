@@ -28,11 +28,23 @@ const (
 
 var (
 	// ErrInvalidEncryptedData is returned when attempting to decrypt invalid data
-	ErrInvalidEncryptedData = errors.New("invalid encrypted data")
+	ErrInvalidEncryptedData = errors.New("encryption: invalid encrypted data")
 	// ErrInvalidPassword is returned when the password is invalid
-	ErrInvalidPassword = errors.New("invalid password")
+	ErrInvalidPassword = errors.New("encryption: invalid password")
 	// ErrNotEncrypted is returned when a token is not encrypted
-	ErrNotEncrypted = errors.New("token is not encrypted")
+	ErrNotEncrypted = errors.New("encryption: token is not encrypted")
+	// ErrInvalidAPIToken is returned when the user-supplied API token fails validation
+	// or when the user declines to retry after a failed validation.
+	ErrInvalidAPIToken = errors.New("encryption: invalid API token")
+	// ErrTokenDecryptFailed is returned when the encrypted token cannot be decrypted
+	// (wrong password and the user declined to retry or to enter a new token).
+	ErrTokenDecryptFailed = errors.New("encryption: unable to decrypt API token")
+	// ErrCannotEncryptInvalidToken is returned when ValidateAndEncryptToken is called
+	// with a token that fails validation.
+	ErrCannotEncryptInvalidToken = errors.New("encryption: cannot encrypt an invalid token")
+	// ErrTokenValidationNotImpl is returned by DefaultTokenValidator when no concrete
+	// validator has been wired in.
+	ErrTokenValidationNotImpl = errors.New("encryption: token validation not implemented")
 )
 
 // IsEncrypted checks if a token is encrypted

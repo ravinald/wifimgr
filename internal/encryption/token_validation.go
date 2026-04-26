@@ -2,7 +2,6 @@ package encryption
 
 import (
 	"context"
-	"errors"
 	"fmt"
 )
 
@@ -29,7 +28,7 @@ func (v *DefaultTokenValidator) ValidateToken(ctx context.Context, apiBaseURL, t
 	return &TokenValidationResult{
 		Valid:   false,
 		Message: "Token validation not implemented in this context",
-	}, errors.New("token validation not implemented")
+	}, ErrTokenValidationNotImpl
 }
 
 // ValidateAndEncryptToken validates a token and encrypts it if valid
@@ -42,7 +41,7 @@ func ValidateAndEncryptToken(ctx context.Context, validator TokenValidator, apiB
 
 	// If token is not valid, return early
 	if !result.Valid {
-		return "", result, errors.New("cannot encrypt an invalid token")
+		return "", result, ErrCannotEncryptInvalidToken
 	}
 
 	// Encrypt the token

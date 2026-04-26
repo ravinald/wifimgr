@@ -2,7 +2,6 @@ package encryption
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -129,7 +128,7 @@ func (tm *TokenManager) handleNoToken(ctx context.Context) error {
 		if strings.ToLower(response) == "y" {
 			return tm.handleNoToken(ctx)
 		} else {
-			return errors.New("invalid API token provided")
+			return ErrInvalidAPIToken
 		}
 	}
 
@@ -143,7 +142,7 @@ func (tm *TokenManager) handleNoToken(ctx context.Context) error {
 			return tm.handleNoToken(ctx)
 		}
 
-		return errors.New("invalid API token provided")
+		return ErrInvalidAPIToken
 	}
 
 	tm.IO.Println("API token validated successfully.")
@@ -208,7 +207,7 @@ func (tm *TokenManager) handleEncryptedToken(ctx context.Context, encryptedToken
 			return tm.handleNoToken(ctx)
 		}
 
-		return errors.New("unable to decrypt API token")
+		return ErrTokenDecryptFailed
 	}
 
 	// Now validate the decrypted token against the API
@@ -229,7 +228,7 @@ func (tm *TokenManager) handleEncryptedToken(ctx context.Context, encryptedToken
 			return tm.handleNoToken(ctx)
 		}
 
-		return errors.New("invalid API token")
+		return ErrInvalidAPIToken
 	}
 
 	// Token is valid, update the client with the decrypted token
@@ -278,7 +277,7 @@ func (tm *TokenManager) handlePlaintextToken(ctx context.Context, token string) 
 			return tm.handleNoToken(ctx)
 		}
 
-		return errors.New("invalid API token provided")
+		return ErrInvalidAPIToken
 	}
 
 	if !result.Valid {
@@ -293,7 +292,7 @@ func (tm *TokenManager) handlePlaintextToken(ctx context.Context, token string) 
 			return tm.handleNoToken(ctx)
 		}
 
-		return errors.New("invalid API token provided")
+		return ErrInvalidAPIToken
 	}
 
 	// Set org ID if not already set
