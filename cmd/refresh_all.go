@@ -8,9 +8,12 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/ravinald/wifimgr/internal/cmdutils"
 )
 
 // refreshAllCmd represents `refresh all` — a convenience command that runs
@@ -20,7 +23,7 @@ import (
 // remember which piece is cached where; new refresh types should wire into
 // this command when they land.
 var refreshAllCmd = &cobra.Command{
-	Use:   "all",
+	Use:   "all [api <api-label>] [site <site-name> [api <api-label>]]",
 	Short: "Refresh every cached data source (device cache + client detail)",
 	Long: `Runs every refresh subcommand in sequence:
 
@@ -32,15 +35,49 @@ Step 2 can be expensive on large Meraki orgs (roughly 3 API calls per site).
 Use 'refresh device' if you don't need client detail right now, or
 'refresh client site <name>' for a single site.
 
-When multiple APIs are configured:
-  - Without target: processes every API
-  - With target:    limits both steps to the specified API`,
+Forms:
+  refresh all                                     Refresh every API end to end.
+  refresh all api <api-label>                     Limit both steps to one API.
+  refresh all site <site-name>                    Refresh device cache + client
+                                                  detail for a single site only.
+  refresh all site <site-name> api <api-label>    Same, with API disambiguation.`,
 	Example: `  wifimgr refresh all
-  wifimgr refresh all target meraki-corp`,
+  wifimgr refresh all api meraki-corp
+  wifimgr refresh all site US-LAB-01
+  wifimgr refresh all site US-LAB-01 api meraki-corp`,
+	Args: func(_ *cobra.Command, args []string) error {
+		for _, arg := range args {
+			if strings.ToLower(arg) == "help" {
+				return nil
+			}
+		}
+		return nil
+	},
 	RunE: runRefreshAll,
 }
 
-func runRefreshAll(_ *cobra.Command, _ []string) error {
+func runRefreshAll(cmd *cobra.Command, args []string) error {
+	for _, arg := range args {
+		if strings.ToLower(arg) == "help" {
+			return cmd.Help()
+		}
+	}
+
+	parsed, err := cmdutils.ParseRefreshArgs(args, cmdutils.ParseRefreshOptions{
+		AllowSite: true,
+	})
+	if err != nil {
+		return err
+	}
+
+	if parsed.SiteName != "" {
+		return runMultiVendorRefreshAllSite(parsed.SiteName, parsed.APIName)
+	}
+
+	if parsed.APIName != "" {
+		apiFlag = parsed.APIName
+	}
+
 	if err := runMultiVendorRefresh(); err != nil {
 		return fmt.Errorf("cache refresh: %w", err)
 	}
@@ -48,6 +85,29 @@ func runRefreshAll(_ *cobra.Command, _ []string) error {
 	// Client detail runs after the cache refresh so the cache it iterates
 	// over is up-to-date.
 	return runMultiVendorClientDetailRefresh()
+}
+
+// runMultiVendorRefreshAllSite refreshes both the device cache and the
+// per-client detail for a single site. Used by `refresh all site <name>`.
+func runMultiVendorRefreshAllSite(siteName, apiName string) error {
+	cacheMgr := GetCacheManager()
+	if cacheMgr == nil {
+		return fmt.Errorf("cache manager not initialized")
+	}
+
+	site, err := resolveSiteForRefresh(siteName, apiName)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Refreshing device cache for %s (%s)...\n", site.Name, site.SourceAPI)
+	if err := cacheMgr.RefreshAPISite(globalContext, site.SourceAPI, site.ID); err != nil {
+		return fmt.Errorf("cache refresh: %s", formatRefreshError(err))
+	}
+
+	// Per-site client detail is a no-op for vendors without a ClientDetail
+	// service; the helper handles that gracefully.
+	return refreshClientDetailForSite(globalContext, site)
 }
 
 // runMultiVendorClientDetailRefresh iterates every API with a

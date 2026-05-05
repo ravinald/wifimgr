@@ -21,11 +21,20 @@ the local cache files.
 
 Use 'wifimgr refresh <subcommand> --help' for detailed information about
 each refresh operation.`,
-	Example: `  # Refresh the device-level cache (sites, inventory, configs, WLANs, ...)
+	Example: `  # Refresh the device-level cache for every configured API
   wifimgr refresh device
+
+  # Refresh just one API
+  wifimgr refresh device api meraki-corp
+
+  # Refresh just one site (skips the expensive per-device fetches for other sites)
+  wifimgr refresh device site US-LAB-01
 
   # Refresh everything we know how to cache, including per-client detail
   wifimgr refresh all
+
+  # Same, scoped to a single site
+  wifimgr refresh all site US-LAB-01
 
   # Populate per-client detail (e.g. Meraki connected band) for one site
   wifimgr refresh client site US-LAB-01`,

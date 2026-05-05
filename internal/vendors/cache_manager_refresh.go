@@ -15,6 +15,17 @@ func (c *CacheManager) RefreshAPI(ctx context.Context, apiLabel string) error {
 	return c.RefreshAPIWithOptions(ctx, apiLabel, RefreshOptions{FetchDeviceConfigs: true})
 }
 
+// RefreshAPISite refreshes a single API's cache but narrows the per-device
+// config fetches to devices in the named site. Org-scoped data is still
+// refreshed; per-device configs for other sites are copied forward from the
+// existing cache.
+func (c *CacheManager) RefreshAPISite(ctx context.Context, apiLabel, siteID string) error {
+	return c.RefreshAPIWithOptions(ctx, apiLabel, RefreshOptions{
+		FetchDeviceConfigs: true,
+		SiteID:             siteID,
+	})
+}
+
 // RefreshAPIWithOptions refreshes a single API's cache with configurable options.
 //
 // The per-label mutex is held for the entire refresh so that a concurrent
@@ -55,12 +66,30 @@ func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel strin
 		shouldFetchConfigs = true // Mist always fetches configs
 	}
 
-	logging.Debugf("[cache] Refreshing %s (vendor=%s, org=%s, fetchConfigs=%v)", apiLabel, config.Vendor, config.Credentials["org_id"], shouldFetchConfigs)
+	logging.Debugf("[cache] Refreshing %s (vendor=%s, org=%s, fetchConfigs=%v, siteID=%q)", apiLabel, config.Vendor, config.Credentials["org_id"], shouldFetchConfigs, opts.SiteID)
 
 	// Progress message: Starting API refresh
-	fmt.Printf("  [%s] Refreshing %s API...\n", apiLabel, config.Vendor)
+	if opts.SiteID != "" {
+		fmt.Printf("  [%s] Refreshing %s API (site %s)...\n", apiLabel, config.Vendor, opts.SiteID)
+	} else {
+		fmt.Printf("  [%s] Refreshing %s API...\n", apiLabel, config.Vendor)
+	}
 
 	startTime := time.Now()
+
+	// When a site filter is in play, load the existing cache so we can carry
+	// forward per-device configs for the sites we're not touching this pass.
+	// Best effort — a missing cache (first refresh ever) just means there's
+	// nothing to preserve, and the new cache will only have the target site's
+	// configs populated until a full refresh fills in the rest.
+	var existingCache *APICache
+	if opts.SiteID != "" {
+		if prior, err := c.GetAPICache(apiLabel); err == nil {
+			existingCache = prior
+		} else {
+			logging.Debugf("[cache] No prior cache for %s to merge from: %v", apiLabel, err)
+		}
+	}
 
 	// Create new cache
 	cache := NewAPICache(apiLabel, config.Vendor, config.Credentials["org_id"])
@@ -256,53 +285,107 @@ func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel strin
 
 			// Fetch AP configs
 			if len(cache.Inventory.AP) > 0 {
-				fmt.Printf("    Fetching AP configs...")
-				apConfigCount := 0
+				if opts.SiteID != "" {
+					fmt.Printf("    Fetching AP configs (site %s)...", opts.SiteID)
+				} else {
+					fmt.Printf("    Fetching AP configs...")
+				}
+				apConfigCount, apCarriedCount := 0, 0
 				for mac, item := range cache.Inventory.AP {
-					if item.ID != "" && item.SiteID != "" {
-						cfg, err := cfgSvc.GetAPConfig(ctx, item.SiteID, item.ID)
-						if err == nil && cfg != nil {
-							cache.Configs.AP[mac] = cfg
-							apConfigCount++
+					if item.ID == "" || item.SiteID == "" {
+						continue
+					}
+					if opts.SiteID != "" && item.SiteID != opts.SiteID {
+						if existingCache != nil {
+							if old, ok := existingCache.Configs.AP[mac]; ok && old != nil {
+								cache.Configs.AP[mac] = old
+								apCarriedCount++
+							}
 						}
+						continue
+					}
+					cfg, err := cfgSvc.GetAPConfig(ctx, item.SiteID, item.ID)
+					if err == nil && cfg != nil {
+						cache.Configs.AP[mac] = cfg
+						apConfigCount++
 					}
 				}
-				fmt.Printf(" %d configs\n", apConfigCount)
-				logging.Debugf("[cache] Fetched %d AP configs for %s", apConfigCount, apiLabel)
+				if apCarriedCount > 0 {
+					fmt.Printf(" %d fetched, %d preserved\n", apConfigCount, apCarriedCount)
+				} else {
+					fmt.Printf(" %d configs\n", apConfigCount)
+				}
+				logging.Debugf("[cache] Fetched %d AP configs (preserved %d) for %s", apConfigCount, apCarriedCount, apiLabel)
 			}
 
 			// Fetch Switch configs
 			if len(cache.Inventory.Switch) > 0 {
-				fmt.Printf("    Fetching switch configs...")
-				switchConfigCount := 0
+				if opts.SiteID != "" {
+					fmt.Printf("    Fetching switch configs (site %s)...", opts.SiteID)
+				} else {
+					fmt.Printf("    Fetching switch configs...")
+				}
+				switchConfigCount, switchCarriedCount := 0, 0
 				for mac, item := range cache.Inventory.Switch {
-					if item.ID != "" && item.SiteID != "" {
-						cfg, err := cfgSvc.GetSwitchConfig(ctx, item.SiteID, item.ID)
-						if err == nil && cfg != nil {
-							cache.Configs.Switch[mac] = cfg
-							switchConfigCount++
+					if item.ID == "" || item.SiteID == "" {
+						continue
+					}
+					if opts.SiteID != "" && item.SiteID != opts.SiteID {
+						if existingCache != nil {
+							if old, ok := existingCache.Configs.Switch[mac]; ok && old != nil {
+								cache.Configs.Switch[mac] = old
+								switchCarriedCount++
+							}
 						}
+						continue
+					}
+					cfg, err := cfgSvc.GetSwitchConfig(ctx, item.SiteID, item.ID)
+					if err == nil && cfg != nil {
+						cache.Configs.Switch[mac] = cfg
+						switchConfigCount++
 					}
 				}
-				fmt.Printf(" %d configs\n", switchConfigCount)
-				logging.Debugf("[cache] Fetched %d switch configs for %s", switchConfigCount, apiLabel)
+				if switchCarriedCount > 0 {
+					fmt.Printf(" %d fetched, %d preserved\n", switchConfigCount, switchCarriedCount)
+				} else {
+					fmt.Printf(" %d configs\n", switchConfigCount)
+				}
+				logging.Debugf("[cache] Fetched %d switch configs (preserved %d) for %s", switchConfigCount, switchCarriedCount, apiLabel)
 			}
 
 			// Fetch Gateway configs
 			if len(cache.Inventory.Gateway) > 0 {
-				fmt.Printf("    Fetching gateway configs...")
-				gatewayConfigCount := 0
+				if opts.SiteID != "" {
+					fmt.Printf("    Fetching gateway configs (site %s)...", opts.SiteID)
+				} else {
+					fmt.Printf("    Fetching gateway configs...")
+				}
+				gatewayConfigCount, gatewayCarriedCount := 0, 0
 				for mac, item := range cache.Inventory.Gateway {
-					if item.ID != "" && item.SiteID != "" {
-						cfg, err := cfgSvc.GetGatewayConfig(ctx, item.SiteID, item.ID)
-						if err == nil && cfg != nil {
-							cache.Configs.Gateway[mac] = cfg
-							gatewayConfigCount++
+					if item.ID == "" || item.SiteID == "" {
+						continue
+					}
+					if opts.SiteID != "" && item.SiteID != opts.SiteID {
+						if existingCache != nil {
+							if old, ok := existingCache.Configs.Gateway[mac]; ok && old != nil {
+								cache.Configs.Gateway[mac] = old
+								gatewayCarriedCount++
+							}
 						}
+						continue
+					}
+					cfg, err := cfgSvc.GetGatewayConfig(ctx, item.SiteID, item.ID)
+					if err == nil && cfg != nil {
+						cache.Configs.Gateway[mac] = cfg
+						gatewayConfigCount++
 					}
 				}
-				fmt.Printf(" %d configs\n", gatewayConfigCount)
-				logging.Debugf("[cache] Fetched %d gateway configs for %s", gatewayConfigCount, apiLabel)
+				if gatewayCarriedCount > 0 {
+					fmt.Printf(" %d fetched, %d preserved\n", gatewayConfigCount, gatewayCarriedCount)
+				} else {
+					fmt.Printf(" %d configs\n", gatewayConfigCount)
+				}
+				logging.Debugf("[cache] Fetched %d gateway configs (preserved %d) for %s", gatewayConfigCount, gatewayCarriedCount, apiLabel)
 			}
 		}
 	} else {
