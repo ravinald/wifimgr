@@ -7,6 +7,7 @@ you may not use this file except in compliance with the License.
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -37,7 +38,7 @@ single site. Mist returns band natively and is a no-op for this command.`,
 
 // refreshClientSiteCmd represents `refresh client site <site-name>`.
 var refreshClientSiteCmd = &cobra.Command{
-	Use:   "site <site-name> [target <api-label>]",
+	Use:   "site <site-name> [api <api-label>]",
 	Short: "Refresh per-client detail for a single site",
 	Long: `Populate the per-client detail cache for the named site.
 
@@ -47,10 +48,11 @@ to enrich the local cache.
 
 Arguments:
   site-name    Required. The site name. Typo suggestions are returned on miss.
-  target       Optional. Keyword followed by API label to override the API.`,
+  api          Optional. Keyword followed by API label to disambiguate when the
+               same site name exists in more than one configured API.`,
 	Example: `  wifimgr refresh client site US-LAB-01
   wifimgr refresh client site "MX - Av. Ejercito Nacional Mexicano 904"
-  wifimgr refresh client site US-LAB-01 target meraki-corp`,
+  wifimgr refresh client site US-LAB-01 api meraki-corp`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		for _, arg := range args {
 			if strings.ToLower(arg) == "help" {
@@ -65,47 +67,6 @@ Arguments:
 	RunE: runRefreshClientSite,
 }
 
-// refreshClientSiteArgs carries the parsed positional inputs for the command.
-type refreshClientSiteArgs struct {
-	siteName string
-	target   string
-}
-
-// parseRefreshClientSiteArgs recognizes either:
-//
-//	site <name> [target <api>]
-//	<name> [target <api>]
-//
-// The leading `site` keyword is optional — it reads naturally on the command
-// line and stays consistent with other `site <name>` positional patterns, but
-// dropping it is also common when the command already says `site` in the path.
-func parseRefreshClientSiteArgs(args []string) (*refreshClientSiteArgs, error) {
-	result := &refreshClientSiteArgs{}
-	i := 0
-	if i < len(args) && strings.EqualFold(args[i], "site") {
-		i++
-	}
-	if i >= len(args) {
-		return nil, fmt.Errorf("site name required")
-	}
-	result.siteName = args[i]
-	i++
-
-	for i < len(args) {
-		switch strings.ToLower(args[i]) {
-		case "target":
-			if i+1 >= len(args) {
-				return nil, fmt.Errorf("'target' requires an API label")
-			}
-			result.target = args[i+1]
-			i += 2
-		default:
-			return nil, fmt.Errorf("unexpected argument: %s", args[i])
-		}
-	}
-	return result, nil
-}
-
 func runRefreshClientSite(cmd *cobra.Command, args []string) error {
 	for _, arg := range args {
 		if strings.ToLower(arg) == "help" {
@@ -113,26 +74,43 @@ func runRefreshClientSite(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	parsed, err := parseRefreshClientSiteArgs(args)
+	parsed, err := cmdutils.ParseRefreshArgs(args, cmdutils.ParseRefreshOptions{
+		AllowSite:         true,
+		AllowImplicitSite: true,
+	})
+	if err != nil {
+		return err
+	}
+	if parsed.SiteName == "" {
+		return fmt.Errorf("site name required")
+	}
+
+	site, err := resolveSiteForRefresh(parsed.SiteName, parsed.APIName)
 	if err != nil {
 		return err
 	}
 
+	return refreshClientDetailForSite(globalContext, site)
+}
+
+// resolveSiteForRefresh looks up the named site, optionally constraining the
+// search to a specific API label. Used by every per-site refresh command.
+func resolveSiteForRefresh(siteName, apiLabel string) (*vendors.SiteInfo, error) {
 	cacheAccessor, err := cmdutils.GetCacheAccessor()
 	if err != nil {
-		return fmt.Errorf("failed to get cache accessor: %w", err)
+		return nil, fmt.Errorf("failed to get cache accessor: %w", err)
 	}
 
-	var site *vendors.SiteInfo
-	if parsed.target != "" {
-		site, err = cacheAccessor.GetSiteByNameAndAPI(parsed.siteName, parsed.target)
-	} else {
-		site, err = cacheAccessor.GetSiteByName(parsed.siteName)
+	if apiLabel != "" {
+		return cacheAccessor.GetSiteByNameAndAPI(siteName, apiLabel)
 	}
-	if err != nil {
-		return err // enriched with "did you mean?" suggestions by the accessor
-	}
+	return cacheAccessor.GetSiteByName(siteName)
+}
 
+// refreshClientDetailForSite fetches per-client detail for a single site and
+// merges it into the API's cache. No-op for vendors that don't expose a
+// ClientDetail service (today: everyone except Meraki).
+func refreshClientDetailForSite(ctx context.Context, site *vendors.SiteInfo) error {
 	apiLabel := site.SourceAPI
 
 	registry := GetAPIRegistry()
@@ -153,7 +131,7 @@ func runRefreshClientSite(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Refreshing client detail for %s (%s)…\n", site.Name, apiLabel)
 	start := time.Now()
-	records, err := svc.FetchSiteClientDetail(globalContext, site.ID)
+	records, err := svc.FetchSiteClientDetail(ctx, site.ID)
 	if err != nil {
 		return fmt.Errorf("fetch client detail: %w", err)
 	}
