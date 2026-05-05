@@ -61,7 +61,7 @@ func ParseRefreshArgs(args []string, opts ParseRefreshOptions) (*RefreshArgs, er
 			if result.APIName != "" {
 				return nil, fmt.Errorf("api specified multiple times")
 			}
-			result.APIName = stripQuotes(args[i+1])
+			result.APIName = StripQuotes(args[i+1])
 			i++
 
 		case "site":
@@ -74,7 +74,7 @@ func ParseRefreshArgs(args []string, opts ParseRefreshOptions) (*RefreshArgs, er
 			if result.SiteName != "" {
 				return nil, fmt.Errorf("site specified multiple times")
 			}
-			result.SiteName = stripQuotes(args[i+1])
+			result.SiteName = StripQuotes(args[i+1])
 			i++
 
 		case "target":
@@ -83,7 +83,7 @@ func ParseRefreshArgs(args []string, opts ParseRefreshOptions) (*RefreshArgs, er
 		default:
 			// At i==0 with AllowImplicitSite, the bare token is the site name.
 			if i == 0 && opts.AllowImplicitSite && opts.AllowSite {
-				result.SiteName = stripQuotes(arg)
+				result.SiteName = StripQuotes(arg)
 				continue
 			}
 			// Otherwise this is a migration error: the old `refresh device <api>`
