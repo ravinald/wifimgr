@@ -36,7 +36,9 @@ wifimgr show api ap target mist-prod
 | `show site <name>` | Show from all APIs with that name | Show from specific API |
 | `search wired <text>` | Search all APIs | Search specific API |
 | `search wireless <text>` | Search all APIs | Search specific API |
-| `refresh device` | Refresh all APIs (parallel) | Refresh specific API only |
+| `refresh device` | Refresh all APIs (parallel) | `api <label>` filters to one API; `site <name>` scopes per-device fetches to one site |
+| `refresh all` | `refresh device` + per-client detail | `api <label>` filters to one API; `site <name>` runs both steps for one site only |
+| `refresh client site <name>` | Refresh per-client detail for one site | `api <label>` disambiguates when site exists in multiple APIs |
 
 ### Write Commands
 
@@ -116,7 +118,7 @@ Rebuilt cross-API index
 ### Specific API Refresh
 
 ```
-$ wifimgr refresh device target mist-prod
+$ wifimgr refresh device api mist-prod
 
 Refreshing mist-prod...
   sites: done (12 sites)
@@ -127,6 +129,42 @@ Refreshing mist-prod...
 Refreshed mist-prod successfully
 Rebuilt cross-API index
 ```
+
+### Site-Scoped Refresh
+
+The `site <name>` form keeps the cheap org-scoped fetches (sites, inventory,
+templates, statuses, WLANs) but limits the expensive per-device config loops
+to devices that belong to the named site. Configs for devices in other sites
+are preserved from the prior cache, so the saved file is not a regression.
+
+This matters most on Meraki, where each device's config is its own API call.
+
+```
+$ wifimgr refresh device site US-LAB-01
+
+Refreshing device cache for US-LAB-01 (meraki-corp)...
+  [meraki-corp] Refreshing meraki API (site US-LAB-01)...
+    Fetching sites... 12 sites
+    Fetching APs... 156 devices
+    ...
+    Fetching AP configs (site US-LAB-01)... 8 fetched, 148 preserved
+  [meraki-corp] Complete in 2103ms
+Successfully refreshed meraki-corp for site US-LAB-01
+```
+
+If the same site name exists in more than one configured API, add `api <label>`:
+
+```
+$ wifimgr refresh device site US-LAB-01 api meraki-corp
+```
+
+The same `site <name>` form also works on `refresh all`, which additionally
+runs per-client detail for that site (a no-op for vendors without a
+ClientDetail service).
+
+> **Note:** the bare `refresh device <api-label>` form (no `api` keyword) and
+> the legacy `target <api-label>` keyword on `refresh client site` have both
+> been removed. Use `api <api-label>` everywhere.
 
 ### Implementation
 

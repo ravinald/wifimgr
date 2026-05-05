@@ -31,6 +31,14 @@ type RefreshOptions struct {
 	// For Meraki this is expensive due to per-device API calls.
 	// Default: false (only fetch on explicit refresh or initial cache creation)
 	FetchDeviceConfigs bool
+
+	// SiteID, when set, scopes per-device config fetches to devices that
+	// belong to that site. Org-scoped fetches (sites, inventory, statuses,
+	// templates, profiles, WLANs) still happen — they're cheap. Configs
+	// for devices in other sites are copied forward from the existing
+	// cache so the saved file isn't a regression. Useful on Meraki, where
+	// the per-device config endpoint is the expensive part of a refresh.
+	SiteID string
 }
 
 // NewCacheManager creates a new cache manager.

@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ravinald/wifimgr/internal/cmdutils"
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
 
@@ -54,31 +55,38 @@ func formatRefreshError(err error) string {
 // ambiguous; "device" reflects what this command actually refreshes:
 // sites, inventory, device configs, WLANs, and statuses.
 var refreshDeviceCmd = &cobra.Command{
-	Use:   "device [api-name]",
+	Use:   "device [api <api-label>] [site <site-name> [api <api-label>]]",
 	Short: "Refresh device-level cache (sites, inventory, configs, WLANs, statuses)",
 	Long: `Refresh the per-API device-level cache: sites, inventory, device configs,
 WLANs, and statuses.
 
-When multiple APIs are configured:
-  - Without api-name: Refreshes all APIs in parallel
-  - With api-name: Refreshes only the specified API
+Forms:
+  refresh device                          Refresh every configured API in parallel.
+  refresh device api <api-label>          Refresh only the named API.
+  refresh device site <site-name>         Refresh org-scoped data plus per-device
+                                          configs limited to the named site. The
+                                          API is auto-detected from the site name.
+  refresh device site <site-name> api <api-label>
+                                          Same, but disambiguates when the site
+                                          name exists in more than one API.
+
+The site-scoped form is intended for Meraki, where per-device config fetches
+dominate the cost of a refresh. Org-scoped data (sites, inventory, statuses,
+templates, profiles, WLANs) is still refreshed; configs for devices in
+*other* sites are preserved from the prior cache.
 
 Per-client detail (e.g. Meraki connected band) is NOT touched by this
-command — use 'refresh client site <name>' or 'refresh all' for that.
-
-Examples:
-  wifimgr refresh device                    # Refresh all APIs
-  wifimgr refresh device mist-prod          # Refresh mist-prod only
-  wifimgr refresh device meraki-corp        # Refresh meraki-corp only`,
+command — use 'refresh client site <name>' or 'refresh all' for that.`,
+	Example: `  wifimgr refresh device                              # all APIs
+  wifimgr refresh device api meraki-corp              # one API
+  wifimgr refresh device site US-LAB-01               # one site (auto-detect API)
+  wifimgr refresh device site US-LAB-01 api meraki-corp`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		// Allow "help" as a special keyword
 		for _, arg := range args {
 			if strings.ToLower(arg) == "help" {
 				return nil
 			}
-		}
-		if len(args) > 1 {
-			return fmt.Errorf("accepts at most 1 arg(s), received %d", len(args))
 		}
 		return nil
 	},
@@ -90,16 +98,25 @@ func init() {
 }
 
 func runRefreshDevice(cmd *cobra.Command, args []string) error {
-	// Check for help keyword in positional arguments
 	for _, arg := range args {
 		if strings.ToLower(arg) == "help" {
 			return cmd.Help()
 		}
 	}
 
-	// Check if API name was provided as positional argument
-	if len(args) > 0 && apiFlag == "" {
-		apiFlag = args[0]
+	parsed, err := cmdutils.ParseRefreshArgs(args, cmdutils.ParseRefreshOptions{
+		AllowSite: true,
+	})
+	if err != nil {
+		return err
+	}
+
+	if parsed.SiteName != "" {
+		return runMultiVendorRefreshSite(parsed.SiteName, parsed.APIName)
+	}
+
+	if parsed.APIName != "" {
+		apiFlag = parsed.APIName
 	}
 	return runMultiVendorRefresh()
 }
@@ -154,5 +171,27 @@ func runMultiVendorRefresh() error {
 		fmt.Println("Rebuilt cross-API index")
 	}
 
+	return nil
+}
+
+// runMultiVendorRefreshSite refreshes the device-level cache scoped to a
+// single site. Org-scoped data is still pulled in full; per-device config
+// loops are filtered to the named site only.
+func runMultiVendorRefreshSite(siteName, apiName string) error {
+	cacheMgr := GetCacheManager()
+	if cacheMgr == nil {
+		return fmt.Errorf("cache manager not initialized")
+	}
+
+	site, err := resolveSiteForRefresh(siteName, apiName)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Refreshing device cache for %s (%s)...\n", site.Name, site.SourceAPI)
+	if err := cacheMgr.RefreshAPISite(globalContext, site.SourceAPI, site.ID); err != nil {
+		return fmt.Errorf("failed to refresh %s: %s", site.SourceAPI, formatRefreshError(err))
+	}
+	fmt.Printf("Successfully refreshed %s for site %s\n", site.SourceAPI, site.Name)
 	return nil
 }
