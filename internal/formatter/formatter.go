@@ -191,7 +191,7 @@ func ExtractValue(data interface{}, jsonKey string) (string, bool) {
 	val := reflect.ValueOf(data)
 
 	// If it's a pointer, dereference it
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		if val.IsNil() {
 			return "", false
 		}
@@ -309,7 +309,7 @@ func extractStringValue(field reflect.Value) (string, bool) {
 	}
 
 	// Handle pointer types
-	if field.Kind() == reflect.Ptr {
+	if field.Kind() == reflect.Pointer {
 		if field.IsNil() {
 			return "", false
 		}
@@ -332,7 +332,7 @@ func formatFieldValue(field reflect.Value, inParentheses bool, jsonKey ...string
 	}
 
 	// Handle pointer types
-	if field.Kind() == reflect.Ptr {
+	if field.Kind() == reflect.Pointer {
 		if field.IsNil() {
 			return "", false
 		}
