@@ -74,12 +74,21 @@ func NewAdapter(apiKey, baseURL, orgID string, opts ...AdapterOption) (vendors.C
 	}
 
 	// Disable SDK's internal retry mechanism - we have our own rate limiting and retry logic
-	// This prevents the SDK from printing "MAX_RETRIES" debug output
+	// This prevents the SDK from printing "MAX_RETRIES" debug output.
+	//
+	// Jitter MUST be a positive duration: the SDK computes
+	//   time.Duration(rand.Int63n(int64(maxRetryJitter)))
+	// inside its retry path (api_client.go) and rand.Int63n panics on 0. The
+	// SDK still enters the backoff block once before the loop exits when a
+	// 429 — or some flaky-connection paths — come back, so a zero jitter
+	// crashes the whole process. 1ms is small enough to be invisible and
+	// avoids the panic entirely. See the user-reported crash on
+	// `wifimgr reset ap` against api.meraki.com under poor connectivity.
 	noRetries := 0
 	noDelay := time.Duration(0)
-	noJitter := time.Duration(0)
+	safeJitter := 1 * time.Millisecond
 	useRetryHeader := false
-	if err := dashboard.SetBackoff(&noRetries, &noDelay, &noJitter, &useRetryHeader); err != nil {
+	if err := dashboard.SetBackoff(&noRetries, &noDelay, &safeJitter, &useRetryHeader); err != nil {
 		logging.Debugf("[meraki] Failed to configure SDK backoff: %v", err)
 	}
 

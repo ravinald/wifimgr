@@ -58,19 +58,19 @@ func NewMockClientWithAllServices(vendor, orgID string) *MockClient {
 	}
 }
 
-func (m *MockClient) Sites() SitesService                 { return m.sitesService }
-func (m *MockClient) Inventory() InventoryService         { return m.inventoryService }
-func (m *MockClient) Devices() DevicesService             { return m.devicesService }
-func (m *MockClient) Search() SearchService               { return m.searchService }
-func (m *MockClient) Profiles() ProfilesService           { return m.profilesService }
-func (m *MockClient) Templates() TemplatesService         { return m.templatesService }
-func (m *MockClient) Configs() ConfigsService             { return m.configsService }
-func (m *MockClient) Statuses() StatusesService           { return m.statusesService }
-func (m *MockClient) WLANs() WLANsService                 { return m.wlansService }
-func (m *MockClient) BSSIDs() BSSIDsService               { return m.bssidsService }
+func (m *MockClient) Sites() SitesService               { return m.sitesService }
+func (m *MockClient) Inventory() InventoryService       { return m.inventoryService }
+func (m *MockClient) Devices() DevicesService           { return m.devicesService }
+func (m *MockClient) Search() SearchService             { return m.searchService }
+func (m *MockClient) Profiles() ProfilesService         { return m.profilesService }
+func (m *MockClient) Templates() TemplatesService       { return m.templatesService }
+func (m *MockClient) Configs() ConfigsService           { return m.configsService }
+func (m *MockClient) Statuses() StatusesService         { return m.statusesService }
+func (m *MockClient) WLANs() WLANsService               { return m.wlansService }
+func (m *MockClient) BSSIDs() BSSIDsService             { return m.bssidsService }
 func (m *MockClient) ClientDetail() ClientDetailService { return nil }
-func (m *MockClient) VendorName() string                  { return m.vendor }
-func (m *MockClient) OrgID() string                       { return m.orgID }
+func (m *MockClient) VendorName() string                { return m.vendor }
+func (m *MockClient) OrgID() string                     { return m.orgID }
 
 // SetSitesService sets a custom sites service for testing.
 func (m *MockClient) SetSitesService(svc SitesService) { m.sitesService = svc }
@@ -331,6 +331,10 @@ func (m *MockDevicesService) Rename(_ context.Context, _, deviceID, newName stri
 }
 
 func (m *MockDevicesService) UpdateConfig(_ context.Context, _, _ string, _ map[string]interface{}) error {
+	return m.Error
+}
+
+func (m *MockDevicesService) Reboot(_ context.Context, _, _ string) error {
 	return m.Error
 }
 

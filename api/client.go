@@ -37,6 +37,7 @@ type Client interface {
 	GetDeviceByName(ctx context.Context, siteID, name string) (*UnifiedDevice, error)
 	GetDevicesByType(ctx context.Context, siteID string, deviceType string) ([]UnifiedDevice, error)
 	UpdateDevice(ctx context.Context, siteID string, deviceID string, device *UnifiedDevice) (*UnifiedDevice, error)
+	RestartDevice(ctx context.Context, siteID string, deviceID string) error
 	AssignDevice(ctx context.Context, orgID string, siteID string, mac string) (*UnifiedDevice, error)
 	UnassignDevice(ctx context.Context, orgID string, siteID string, deviceID string) error
 	AssignDevicesToSite(ctx context.Context, orgID string, siteID string, macs []string, noReassign bool) error
