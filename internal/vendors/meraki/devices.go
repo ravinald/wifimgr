@@ -328,5 +328,65 @@ func (s *devicesService) UpdateConfig(ctx context.Context, _, deviceID string, c
 	}
 }
 
+// Reboot triggers an asynchronous reboot of a Meraki device. siteID is
+// ignored — Meraki addresses devices by serial directly. Errors flow through
+// ClassifyError so the caller gets the standard wifimgr-typed taxonomy
+// (*AuthError, *RateLimitError, *ServerError, *NotFoundError, *TransportError).
+//
+// The SDK has historically panicked on flaky connections (e.g.
+// `rand.Int63n(0)` inside its retry backoff). callRebootDevice wraps the
+// SDK call in defer/recover so a panic surfaces as a retryable TransportError
+// instead of taking the whole process down.
+func (s *devicesService) Reboot(ctx context.Context, _, deviceID string) error {
+	logging.Debugf("[meraki] Rebooting device serial=%s", deviceID)
+
+	retryState := NewRetryState(s.retryConfig)
+
+	for {
+		if s.rateLimiter != nil {
+			if err := s.rateLimiter.Acquire(ctx); err != nil {
+				return fmt.Errorf("rate limit acquire failed: %w", err)
+			}
+		}
+
+		httpResp, err := s.callRebootDevice(deviceID)
+
+		err = ClassifyError(s.orgID, "RebootDevice", httpResp, err)
+		if err == nil {
+			return nil
+		}
+
+		if !retryState.ShouldRetry(err) {
+			logging.Debugf("[meraki] Failed to reboot device %s: %v", deviceID, err)
+			return err
+		}
+
+		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {
+			return fmt.Errorf("retry wait failed: %w", waitErr)
+		}
+	}
+}
+
+// callRebootDevice invokes the SDK's RebootDevice with panic recovery. Any
+// panic from the SDK (e.g. a math/rand panic from buggy backoff config under
+// poor connectivity) is converted into a retryable transport-style error so
+// ClassifyError can wrap it consistently with the rest of the taxonomy.
+func (s *devicesService) callRebootDevice(deviceID string) (httpResp *resty.Response, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			logging.Debugf("[meraki] SDK panic during RebootDevice(%s): %v", deviceID, r)
+			httpResp = nil
+			err = fmt.Errorf("meraki SDK panicked during reboot: %v", r)
+		}
+	}()
+
+	if s.suppressOutput {
+		restore := suppressStdout()
+		defer restore()
+	}
+	_, httpResp, err = s.dashboard.Devices.RebootDevice(deviceID)
+	return httpResp, err
+}
+
 // Ensure devicesService implements vendors.DevicesService at compile time.
 var _ vendors.DevicesService = (*devicesService)(nil)
