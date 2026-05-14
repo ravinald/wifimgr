@@ -15,6 +15,7 @@ Complete reference for configuring and using wifimgr.
   - [refresh](#refresh)
   - [init](#init)
   - [set](#set)
+  - [reset](#reset)
   - [encrypt](#encrypt)
 - [Site Configuration](#site-configuration)
   - [Structure](#structure)
@@ -536,6 +537,38 @@ Interactive commands for device management.
 # Assign APs to site interactively
 wifimgr set ap site US-LAB-01
 ```
+
+## reset
+
+Reboot a network device through its owning vendor API.
+
+### Standard Usage
+
+```bash
+wifimgr reset ap AP-LAB-01
+```
+
+The AP is looked up in the local device cache by name; the owning API and site are inferred from the cached record. Prompts for `y/N` confirmation by default.
+
+### Common Recipes
+
+```bash
+# Reboot, with the site asserted as a guardrail (refuses if AP is not in that site)
+wifimgr reset ap AP-LAB-01 site US-LAB-01
+
+# Skip the confirmation prompt for scripted use
+wifimgr reset ap AP-LAB-01 site US-LAB-01 force
+```
+
+### Vendor Support
+
+| Vendor   | Endpoint                                              |
+|----------|-------------------------------------------------------|
+| Mist     | `POST /api/v1/sites/{site}/devices/{device}/restart`  |
+| Meraki   | `POST /devices/{serial}/reboot`                       |
+| Ubiquiti | Not supported — Site Manager API is read-only         |
+
+Running `reset ap` against a Ubiquiti-backed AP prints `This feature is not available with this API (<label>:<vendor>).` and exits non-zero.
 
 ## encrypt
 
