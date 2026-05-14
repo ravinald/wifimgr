@@ -155,16 +155,18 @@ type WiredSearchResults struct {
 
 // WiredClient represents a wired client device connected to the network.
 type WiredClient struct {
-	MAC          string `json:"mac"`
-	IP           string `json:"ip,omitempty"`
-	Hostname     string `json:"hostname,omitempty"`
-	SiteID       string `json:"site_id"`
-	SiteName     string `json:"site_name,omitempty"`
-	SwitchMAC    string `json:"switch_mac,omitempty"`
-	SwitchName   string `json:"switch_name,omitempty"`
-	PortID       string `json:"port_id,omitempty"`
-	VLAN         int    `json:"vlan,omitempty"`
-	Manufacturer string `json:"manufacturer,omitempty"` // from OUI lookup
+	MAC          string    `json:"mac"`
+	IP           string    `json:"ip,omitempty"`
+	Hostname     string    `json:"hostname,omitempty"`
+	SiteID       string    `json:"site_id"`
+	SiteName     string    `json:"site_name,omitempty"`
+	SwitchMAC    string    `json:"switch_mac,omitempty"`
+	SwitchName   string    `json:"switch_name,omitempty"`
+	PortID       string    `json:"port_id,omitempty"`
+	VLAN         int       `json:"vlan,omitempty"`
+	Manufacturer string    `json:"manufacturer,omitempty"` // from OUI lookup
+	FirstSeen    time.Time `json:"first_seen,omitzero"`    // first time client was seen on the network (vendor-supplied)
+	LastSeen     time.Time `json:"last_seen,omitzero"`     // most recent sighting (vendor-supplied)
 
 	// Provenance tracks where this data came from (set by loader, not serialized)
 	SourceAPI    string `json:"-"`
@@ -179,19 +181,21 @@ type WirelessSearchResults struct {
 
 // WirelessClient represents a wireless client device connected to the network.
 type WirelessClient struct {
-	MAC          string `json:"mac"`
-	IP           string `json:"ip,omitempty"`
-	Hostname     string `json:"hostname,omitempty"`
-	SiteID       string `json:"site_id"`
-	SiteName     string `json:"site_name,omitempty"`
-	APMAC        string `json:"ap_mac,omitempty"`
-	APName       string `json:"ap_name,omitempty"`
-	SSID         string `json:"ssid,omitempty"`
-	VLAN         int    `json:"vlan,omitempty"`
-	Band         string `json:"band,omitempty"`         // "2.4", "5", or "6"
-	Status       string `json:"status,omitempty"`       // vendor-supplied state, e.g. "Online" / "Offline"
-	Manufacturer string `json:"manufacturer,omitempty"` // from OUI lookup
-	OS           string `json:"os,omitempty"`
+	MAC          string    `json:"mac"`
+	IP           string    `json:"ip,omitempty"`
+	Hostname     string    `json:"hostname,omitempty"`
+	SiteID       string    `json:"site_id"`
+	SiteName     string    `json:"site_name,omitempty"`
+	APMAC        string    `json:"ap_mac,omitempty"`
+	APName       string    `json:"ap_name,omitempty"`
+	SSID         string    `json:"ssid,omitempty"`
+	VLAN         int       `json:"vlan,omitempty"`
+	Band         string    `json:"band,omitempty"`         // "2.4", "5", or "6"
+	Status       string    `json:"status,omitempty"`       // vendor-supplied state, e.g. "Online" / "Offline"
+	Manufacturer string    `json:"manufacturer,omitempty"` // from OUI lookup
+	OS           string    `json:"os,omitempty"`
+	FirstSeen    time.Time `json:"first_seen,omitzero"` // first time client was seen on the network (vendor-supplied)
+	LastSeen     time.Time `json:"last_seen,omitzero"`  // most recent sighting (vendor-supplied)
 
 	// Provenance tracks where this data came from (set by loader, not serialized)
 	SourceAPI    string `json:"-"`

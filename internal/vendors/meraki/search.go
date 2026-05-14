@@ -598,6 +598,8 @@ func convertOrgClientSearchToWirelessClient(
 		Manufacturer: response.Manufacturer,
 		OS:           record.Os,
 		APMAC:        record.RecentDeviceMac,
+		FirstSeen:    epochSecondsToTime(record.FirstSeen),
+		LastSeen:     epochSecondsToTime(record.LastSeen),
 	}
 
 	// VLAN is a string in Meraki, store as 0
@@ -629,6 +631,8 @@ func convertOrgClientSearchToWiredClient(
 		Manufacturer: response.Manufacturer,
 		SwitchMAC:    record.RecentDeviceMac,
 		PortID:       record.Switchport,
+		FirstSeen:    epochSecondsToTime(record.FirstSeen),
+		LastSeen:     epochSecondsToTime(record.LastSeen),
 	}
 
 	// VLAN is a string in Meraki, store as 0
@@ -660,6 +664,8 @@ func convertNetworkClientToWirelessClient(client *meraki.ResponseItemNetworksGet
 		APMAC:        client.RecentDeviceMac,
 		APName:       client.RecentDeviceName,
 		Status:       client.Status,
+		FirstSeen:    epochSecondsToTime(client.FirstSeen),
+		LastSeen:     epochSecondsToTime(client.LastSeen),
 	}
 
 	// VLAN is a string in Meraki, store as 0
@@ -684,6 +690,8 @@ func convertNetworkClientToWiredClient(client *meraki.ResponseItemNetworksGetNet
 		SwitchMAC:    client.RecentDeviceMac,
 		SwitchName:   client.RecentDeviceName,
 		PortID:       client.Switchport,
+		FirstSeen:    epochSecondsToTime(client.FirstSeen),
+		LastSeen:     epochSecondsToTime(client.LastSeen),
 	}
 
 	// VLAN is a string in Meraki, store as 0
