@@ -682,3 +682,106 @@ func TestSearchCostEstimateStructure(t *testing.T) {
 		t.Errorf("Description = %q, want %q", estimate.Description, "Test description")
 	}
 }
+
+// TestDecodeFlexTime covers the two response shapes Meraki has been observed
+// to emit for firstSeen/lastSeen (Unix int, ISO 8601 string) plus the cases
+// that should map to a zero time.Time.
+func TestDecodeFlexTime(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		wantZ  bool
+		wantTS int64 // expected Unix seconds when non-zero
+	}{
+		{"unix int", "1747201234", false, 1747201234},
+		{"unix int zero", "0", true, 0},
+		{"unix int negative", "-1", true, 0},
+		{"rfc3339", `"2026-05-14T03:00:34Z"`, false, 1778727634},
+		{"rfc3339 with offset", `"2026-05-14T00:00:34-03:00"`, false, 1778727634},
+		{"rfc3339 nano", `"2026-05-14T03:00:34.123456Z"`, false, 1778727634},
+		{"empty string", `""`, true, 0},
+		{"json null", "null", true, 0},
+		{"empty raw", "", true, 0},
+		{"garbage string", `"not a date"`, true, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := decodeFlexTime([]byte(tt.input))
+			if got.IsZero() != tt.wantZ {
+				t.Fatalf("IsZero=%v, want %v (got=%v)", got.IsZero(), tt.wantZ, got)
+			}
+			if !tt.wantZ && got.Unix() != tt.wantTS {
+				t.Errorf("Unix()=%d, want %d", got.Unix(), tt.wantTS)
+			}
+		})
+	}
+}
+
+// TestParseNetworkClientTimes verifies wire-level extraction of firstSeen /
+// lastSeen from a per-network /clients response body, including the
+// string-shaped case that the v5 SDK silently drops.
+func TestParseNetworkClientTimes(t *testing.T) {
+	body := []byte(`[
+		{"mac": "aa:bb:cc:dd:ee:01", "firstSeen": 1747000000, "lastSeen": 1747200000},
+		{"mac": "AA:BB:CC:DD:EE:02", "firstSeen": "2026-05-14T03:00:34Z", "lastSeen": "2026-05-14T04:00:34Z"},
+		{"mac": "aa:bb:cc:dd:ee:03", "firstSeen": null, "lastSeen": null},
+		{"mac": "", "firstSeen": 1747000000, "lastSeen": 1747200000}
+	]`)
+	got := parseNetworkClientTimes(body)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 keyed entries, got %d (%v)", len(got), got)
+	}
+	if ts, ok := got[vendors.NormalizeMAC("aa:bb:cc:dd:ee:01")]; !ok || ts.FirstSeen.IsZero() || ts.LastSeen.IsZero() {
+		t.Errorf("int-shaped entry missing or zero: %+v", ts)
+	}
+	if ts, ok := got[vendors.NormalizeMAC("aa:bb:cc:dd:ee:02")]; !ok || ts.FirstSeen.IsZero() || ts.LastSeen.IsZero() {
+		t.Errorf("string-shaped entry missing or zero: %+v", ts)
+	}
+}
+
+// TestParseOrgClientSearchTimes covers the org-wide search response shape,
+// keyed by network ID.
+func TestParseOrgClientSearchTimes(t *testing.T) {
+	body := []byte(`{
+		"mac": "aa:bb:cc:dd:ee:ff",
+		"records": [
+			{"network": {"id": "L_1"}, "firstSeen": "2026-05-14T03:00:34Z", "lastSeen": "2026-05-14T04:00:34Z"},
+			{"network": {"id": "L_2"}, "firstSeen": 1747000000, "lastSeen": 1747200000},
+			{"network": {"id": ""},    "firstSeen": 1, "lastSeen": 2}
+		]
+	}`)
+	got := parseOrgClientSearchTimes(body)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 entries (skip blank network id), got %d", len(got))
+	}
+	if _, ok := got["L_1"]; !ok {
+		t.Error("L_1 missing from parsed times")
+	}
+	if _, ok := got["L_2"]; !ok {
+		t.Error("L_2 missing from parsed times")
+	}
+}
+
+// TestApplyClientTimes verifies that wire-parsed timestamps fill in zero
+// fields without clobbering values already set by the SDK.
+func TestApplyClientTimes(t *testing.T) {
+	prior := time.Unix(1700000000, 0).UTC()
+	wire := clientTimestamps{
+		FirstSeen: time.Unix(1747000000, 0).UTC(),
+		LastSeen:  time.Unix(1747200000, 0).UTC(),
+	}
+
+	// Both zero -> both filled
+	var f1, l1 time.Time
+	applyClientTimes(&f1, &l1, wire)
+	if !f1.Equal(wire.FirstSeen) || !l1.Equal(wire.LastSeen) {
+		t.Errorf("zero->wire failed: f=%v l=%v", f1, l1)
+	}
+
+	// Already set -> preserved
+	f2, l2 := prior, prior
+	applyClientTimes(&f2, &l2, wire)
+	if !f2.Equal(prior) || !l2.Equal(prior) {
+		t.Errorf("set->preserved failed: f=%v l=%v", f2, l2)
+	}
+}

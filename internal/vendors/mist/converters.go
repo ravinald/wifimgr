@@ -2,6 +2,7 @@ package mist
 
 import (
 	"strings"
+	"time"
 
 	"github.com/ravinald/wifimgr/api"
 	"github.com/ravinald/wifimgr/internal/vendors"
@@ -369,6 +370,15 @@ func convertWirelessClientToVendor(client *api.MistWirelessClient) *vendors.Wire
 		wc.OS = *client.LastOS
 	} else if len(client.OS) > 0 {
 		wc.OS = client.OS[0]
+	}
+
+	// Mist's wireless-client search returns a single timestamp per sighting —
+	// the moment the search backend last observed the client. There is no
+	// distinct first_seen on this endpoint, so populate LastSeen only.
+	if client.Timestamp != nil && *client.Timestamp > 0 {
+		sec := int64(*client.Timestamp)
+		nsec := int64((*client.Timestamp - float64(sec)) * 1e9)
+		wc.LastSeen = time.Unix(sec, nsec).UTC()
 	}
 
 	return wc

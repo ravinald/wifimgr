@@ -141,19 +141,28 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 
 			vendorName, _ := registry.GetVendor(apiLabel)
 			data := formatter.GenericTableData{
-				"mac":       client.MAC,
-				"ip":        client.IP,
-				"hostname":  client.Hostname,
-				"ssid":      client.SSID,
-				"ap_name":   client.APName,
-				"ap_mac":    client.APMAC,
-				"band":      client.Band,
-				"state":     client.Status,
-				"vlan":      client.VLAN,
-				"site_id":   client.SiteID,
-				"site_name": client.SiteName,
-				"api":       apiLabel,
-				"vendor":    vendorName,
+				"mac":           client.MAC,
+				"ip":            client.IP,
+				"hostname":      client.Hostname,
+				"ssid":          client.SSID,
+				"ap_name":       client.APName,
+				"ap_mac":        client.APMAC,
+				"band":          client.Band,
+				"state":         client.Status,
+				"vlan":          client.VLAN,
+				"site_id":       client.SiteID,
+				"site_name":     client.SiteName,
+				"last_seen_ago": formatLastSeenAgo(client.LastSeen),
+				"api":           apiLabel,
+				"vendor":        vendorName,
+			}
+			// Raw timestamps go to JSON output (RFC3339) but are omitted from
+			// the map entirely when zero — keeps unsupported vendors clean.
+			if !client.LastSeen.IsZero() {
+				data["last_seen"] = client.LastSeen
+			}
+			if !client.FirstSeen.IsZero() {
+				data["first_seen"] = client.FirstSeen
 			}
 			allResults = append(allResults, data)
 			apiCounts[apiLabel]++
@@ -555,6 +564,7 @@ func buildWirelessSearchColumns(siteFilter string, targetAPICount int, showDetai
 	}
 	if showDetail {
 		cols = append(cols, formatter.TableColumn{Field: "state", Title: "State", MaxWidth: 0})
+		cols = append(cols, formatter.TableColumn{Field: "last_seen_ago", Title: "Last Seen", MaxWidth: 0})
 	}
 	if siteFilter == "" {
 		cols = append(cols, formatter.TableColumn{Field: "site_name", Title: "Site", MaxWidth: 0})
@@ -584,6 +594,44 @@ func buildWiredSearchColumns(siteFilter string, targetAPICount int, _ bool) []fo
 		cols = append(cols, formatter.TableColumn{Field: "api", Title: "API", MaxWidth: 0})
 	}
 	return cols
+}
+
+// formatLastSeenAgo renders `time.Since(t)` as two-unit d/h/m/s.
+// Zero and future times render as "—" — a future timestamp is almost certainly
+// vendor-side clock skew, not a real reading, so we don't show a negative.
+func formatLastSeenAgo(t time.Time) string {
+	if t.IsZero() {
+		return "—"
+	}
+	d := time.Since(t)
+	if d < 0 {
+		return "—"
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		m := int(d / time.Minute)
+		s := int(d/time.Second) % 60
+		if s == 0 {
+			return fmt.Sprintf("%dm", m)
+		}
+		return fmt.Sprintf("%dm%ds", m, s)
+	}
+	if d < 24*time.Hour {
+		h := int(d / time.Hour)
+		m := int(d/time.Minute) % 60
+		if m == 0 {
+			return fmt.Sprintf("%dh", h)
+		}
+		return fmt.Sprintf("%dh%dm", h, m)
+	}
+	days := int(d / (24 * time.Hour))
+	h := int(d/time.Hour) % 24
+	if h == 0 {
+		return fmt.Sprintf("%dd", days)
+	}
+	return fmt.Sprintf("%dd%dh", days, h)
 }
 
 // printBandCacheFooter emits the provenance footer under the wireless search

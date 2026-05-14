@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 
@@ -479,6 +481,46 @@ func TestBuildWirelessSearchColumns_DetailAddsState(t *testing.T) {
 	}
 	if !containsString(titles, "Band [*]") {
 		t.Errorf("detail=true: Band keeps '[*]' marker, got %v", titles)
+	}
+	if !containsString(fields, "last_seen_ago") {
+		t.Errorf("detail=true: expected last_seen_ago column, got %v", fields)
+	}
+	if !containsString(titles, "Last Seen") {
+		t.Errorf("detail=true: expected 'Last Seen' header, got %v", titles)
+	}
+}
+
+func TestFormatLastSeenAgo(t *testing.T) {
+	now := time.Now()
+	cases := []struct {
+		name   string
+		input  time.Time
+		want   string
+		exact  bool // when true, must equal `want` exactly; else used as a substring check
+		prefix bool // when true, want is a prefix
+	}{
+		{name: "zero time renders dash", input: time.Time{}, want: "—", exact: true},
+		{name: "future time renders dash", input: now.Add(5 * time.Minute), want: "—", exact: true},
+		{name: "seconds only", input: now.Add(-30 * time.Second), want: "s", prefix: false},
+		{name: "minutes only", input: now.Add(-15 * time.Minute), want: "15m", prefix: true},
+		{name: "minutes+seconds", input: now.Add(-(15*time.Minute + 20*time.Second)), want: "15m", prefix: true},
+		{name: "hours+minutes", input: now.Add(-(2*time.Hour + 30*time.Minute)), want: "2h30m", prefix: true},
+		{name: "exact hour", input: now.Add(-2 * time.Hour), want: "2h", prefix: true},
+		{name: "days+hours", input: now.Add(-(3*24*time.Hour + 4*time.Hour)), want: "3d4h", prefix: true},
+		{name: "exact day", input: now.Add(-2 * 24 * time.Hour), want: "2d", prefix: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := formatLastSeenAgo(tc.input)
+			switch {
+			case tc.exact && got != tc.want:
+				t.Errorf("got %q, want exactly %q", got, tc.want)
+			case tc.prefix && !strings.HasPrefix(got, tc.want):
+				t.Errorf("got %q, want prefix %q", got, tc.want)
+			case !tc.exact && !tc.prefix && !strings.Contains(got, tc.want):
+				t.Errorf("got %q, want containing %q", got, tc.want)
+			}
+		})
 	}
 }
 
