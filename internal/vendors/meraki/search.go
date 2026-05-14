@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	meraki "github.com/meraki/dashboard-api-go/v5/sdk"
 
 	"github.com/ravinald/wifimgr/internal/logging"
@@ -154,6 +155,7 @@ func (s *searchService) searchOrgWirelessByMAC(ctx context.Context, mac string) 
 
 	retryState := NewRetryState(s.retryConfig)
 	var response *meraki.ResponseOrganizationsGetOrganizationClientsSearch
+	var httpResp *resty.Response
 
 	for {
 		if s.rateLimiter != nil {
@@ -165,10 +167,10 @@ func (s *searchService) searchOrgWirelessByMAC(ctx context.Context, mac string) 
 		var err error
 		if s.suppressOutput {
 			restore := suppressStdout()
-			response, _, err = s.dashboard.Organizations.GetOrganizationClientsSearch(s.orgID, params)
+			response, httpResp, err = s.dashboard.Organizations.GetOrganizationClientsSearch(s.orgID, params)
 			restore()
 		} else {
-			response, _, err = s.dashboard.Organizations.GetOrganizationClientsSearch(s.orgID, params)
+			response, httpResp, err = s.dashboard.Organizations.GetOrganizationClientsSearch(s.orgID, params)
 		}
 
 		if err == nil {
@@ -193,17 +195,19 @@ func (s *searchService) searchOrgWirelessByMAC(ctx context.Context, mac string) 
 		return results, nil
 	}
 
-	// Convert response to vendor-agnostic format
-	// The top-level response has Mac/Manufacturer, Records have the sightings
+	times := parseOrgClientSearchTimes(httpRespBody(httpResp))
+
 	for i := range *response.Records {
 		record := &(*response.Records)[i]
-		// For org-wide search, determine wireless by checking if SSID is set
-		if record.SSID != "" {
-			client := convertOrgClientSearchToWirelessClient(response, record)
-			if client != nil {
-				results.Results = append(results.Results, client)
-			}
+		if record.SSID == "" {
+			continue
 		}
+		client := convertOrgClientSearchToWirelessClient(response, record)
+		if client == nil {
+			continue
+		}
+		applyClientTimes(&client.FirstSeen, &client.LastSeen, times[client.SiteID])
+		results.Results = append(results.Results, client)
 	}
 
 	results.Total = len(results.Results)
@@ -222,6 +226,7 @@ func (s *searchService) searchOrgWiredByMAC(ctx context.Context, mac string) (*v
 
 	retryState := NewRetryState(s.retryConfig)
 	var response *meraki.ResponseOrganizationsGetOrganizationClientsSearch
+	var httpResp *resty.Response
 
 	for {
 		if s.rateLimiter != nil {
@@ -233,10 +238,10 @@ func (s *searchService) searchOrgWiredByMAC(ctx context.Context, mac string) (*v
 		var err error
 		if s.suppressOutput {
 			restore := suppressStdout()
-			response, _, err = s.dashboard.Organizations.GetOrganizationClientsSearch(s.orgID, params)
+			response, httpResp, err = s.dashboard.Organizations.GetOrganizationClientsSearch(s.orgID, params)
 			restore()
 		} else {
-			response, _, err = s.dashboard.Organizations.GetOrganizationClientsSearch(s.orgID, params)
+			response, httpResp, err = s.dashboard.Organizations.GetOrganizationClientsSearch(s.orgID, params)
 		}
 
 		if err == nil {
@@ -261,17 +266,19 @@ func (s *searchService) searchOrgWiredByMAC(ctx context.Context, mac string) (*v
 		return results, nil
 	}
 
-	// Convert response to vendor-agnostic format
-	// The top-level response has Mac/Manufacturer, Records have the sightings
+	times := parseOrgClientSearchTimes(httpRespBody(httpResp))
+
 	for i := range *response.Records {
 		record := &(*response.Records)[i]
-		// For org-wide search, determine wired by checking if Switchport is set or SSID is empty
-		if record.Switchport != "" || record.SSID == "" {
-			client := convertOrgClientSearchToWiredClient(response, record)
-			if client != nil {
-				results.Results = append(results.Results, client)
-			}
+		if record.Switchport == "" && record.SSID != "" {
+			continue
 		}
+		client := convertOrgClientSearchToWiredClient(response, record)
+		if client == nil {
+			continue
+		}
+		applyClientTimes(&client.FirstSeen, &client.LastSeen, times[client.SiteID])
+		results.Results = append(results.Results, client)
 	}
 
 	results.Total = len(results.Results)
@@ -296,6 +303,7 @@ func (s *searchService) searchNetworkWirelessClients(ctx context.Context, networ
 
 	retryState := NewRetryState(s.retryConfig)
 	var clients *meraki.ResponseNetworksGetNetworkClients
+	var httpResp *resty.Response
 
 	for {
 		if s.rateLimiter != nil {
@@ -307,10 +315,10 @@ func (s *searchService) searchNetworkWirelessClients(ctx context.Context, networ
 		var err error
 		if s.suppressOutput {
 			restore := suppressStdout()
-			clients, _, err = s.dashboard.Networks.GetNetworkClients(networkID, params)
+			clients, httpResp, err = s.dashboard.Networks.GetNetworkClients(networkID, params)
 			restore()
 		} else {
-			clients, _, err = s.dashboard.Networks.GetNetworkClients(networkID, params)
+			clients, httpResp, err = s.dashboard.Networks.GetNetworkClients(networkID, params)
 		}
 
 		if err == nil {
@@ -335,9 +343,12 @@ func (s *searchService) searchNetworkWirelessClients(ctx context.Context, networ
 		return results, nil
 	}
 
-	// Convert and filter results. An empty text skips the local filter so the
-	// caller gets every client on the network — this is the "list all clients
-	// on this site" path used when the user runs `search wireless site X`.
+	// Re-parse firstSeen/lastSeen from the raw HTTP body. The v5 SDK declares
+	// both as *int but the dashboard API has been observed to return ISO 8601
+	// strings, leaving the typed fields nil after silent decode failure. The
+	// helper accepts either shape.
+	times := parseNetworkClientTimes(httpRespBody(httpResp))
+
 	applyFilter := shouldApplyLocalFilter(text)
 	for i := range *clients {
 		client := &(*clients)[i]
@@ -346,6 +357,7 @@ func (s *searchService) searchNetworkWirelessClients(ctx context.Context, networ
 		}
 		wc := convertNetworkClientToWirelessClient(client, networkID)
 		if wc != nil {
+			applyClientTimes(&wc.FirstSeen, &wc.LastSeen, times[vendors.NormalizeMAC(wc.MAC)])
 			results.Results = append(results.Results, wc)
 		}
 	}
@@ -372,6 +384,7 @@ func (s *searchService) searchNetworkWiredClients(ctx context.Context, networkID
 
 	retryState := NewRetryState(s.retryConfig)
 	var clients *meraki.ResponseNetworksGetNetworkClients
+	var httpResp *resty.Response
 
 	for {
 		if s.rateLimiter != nil {
@@ -383,10 +396,10 @@ func (s *searchService) searchNetworkWiredClients(ctx context.Context, networkID
 		var err error
 		if s.suppressOutput {
 			restore := suppressStdout()
-			clients, _, err = s.dashboard.Networks.GetNetworkClients(networkID, params)
+			clients, httpResp, err = s.dashboard.Networks.GetNetworkClients(networkID, params)
 			restore()
 		} else {
-			clients, _, err = s.dashboard.Networks.GetNetworkClients(networkID, params)
+			clients, httpResp, err = s.dashboard.Networks.GetNetworkClients(networkID, params)
 		}
 
 		if err == nil {
@@ -411,8 +424,8 @@ func (s *searchService) searchNetworkWiredClients(ctx context.Context, networkID
 		return results, nil
 	}
 
-	// Convert and filter results. An empty text skips the local filter so the
-	// caller gets every client on the network (list-all-on-site path).
+	times := parseNetworkClientTimes(httpRespBody(httpResp))
+
 	applyFilter := shouldApplyLocalFilter(text)
 	for i := range *clients {
 		client := &(*clients)[i]
@@ -421,6 +434,7 @@ func (s *searchService) searchNetworkWiredClients(ctx context.Context, networkID
 		}
 		wc := convertNetworkClientToWiredClient(client, networkID)
 		if wc != nil {
+			applyClientTimes(&wc.FirstSeen, &wc.LastSeen, times[vendors.NormalizeMAC(wc.MAC)])
 			results.Results = append(results.Results, wc)
 		}
 	}

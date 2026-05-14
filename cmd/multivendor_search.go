@@ -141,20 +141,28 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 
 			vendorName, _ := registry.GetVendor(apiLabel)
 			data := formatter.GenericTableData{
-				"mac":       client.MAC,
-				"ip":        client.IP,
-				"hostname":  client.Hostname,
-				"ssid":      client.SSID,
-				"ap_name":   client.APName,
-				"ap_mac":    client.APMAC,
-				"band":      client.Band,
-				"state":     client.Status,
-				"vlan":      client.VLAN,
-				"site_id":   client.SiteID,
-				"site_name": client.SiteName,
-				"last_seen": formatLastSeenAgo(client.LastSeen),
-				"api":       apiLabel,
-				"vendor":    vendorName,
+				"mac":           client.MAC,
+				"ip":            client.IP,
+				"hostname":      client.Hostname,
+				"ssid":          client.SSID,
+				"ap_name":       client.APName,
+				"ap_mac":        client.APMAC,
+				"band":          client.Band,
+				"state":         client.Status,
+				"vlan":          client.VLAN,
+				"site_id":       client.SiteID,
+				"site_name":     client.SiteName,
+				"last_seen_ago": formatLastSeenAgo(client.LastSeen),
+				"api":           apiLabel,
+				"vendor":        vendorName,
+			}
+			// Raw timestamps go to JSON output (RFC3339) but are omitted from
+			// the map entirely when zero — keeps unsupported vendors clean.
+			if !client.LastSeen.IsZero() {
+				data["last_seen"] = client.LastSeen
+			}
+			if !client.FirstSeen.IsZero() {
+				data["first_seen"] = client.FirstSeen
 			}
 			allResults = append(allResults, data)
 			apiCounts[apiLabel]++
@@ -556,7 +564,7 @@ func buildWirelessSearchColumns(siteFilter string, targetAPICount int, showDetai
 	}
 	if showDetail {
 		cols = append(cols, formatter.TableColumn{Field: "state", Title: "State", MaxWidth: 0})
-		cols = append(cols, formatter.TableColumn{Field: "last_seen", Title: "Last Seen", MaxWidth: 0})
+		cols = append(cols, formatter.TableColumn{Field: "last_seen_ago", Title: "Last Seen", MaxWidth: 0})
 	}
 	if siteFilter == "" {
 		cols = append(cols, formatter.TableColumn{Field: "site_name", Title: "Site", MaxWidth: 0})
