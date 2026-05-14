@@ -77,6 +77,10 @@ Examples:
 			}
 		}
 
+		if err := requireMistClient("site ap"); err != nil {
+			return err
+		}
+
 		if file != "" {
 			if site == "" {
 				return fmt.Errorf("site name required for file-based assignment")
