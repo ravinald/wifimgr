@@ -121,6 +121,18 @@ func (c *mistClient) AssignDevicesToSite(ctx context.Context, orgID string, site
 	return nil
 }
 
+// RestartDevice triggers an asynchronous restart of a single device.
+// Mist returns 200 immediately; the device reboots over the next several seconds.
+func (c *mistClient) RestartDevice(ctx context.Context, siteID, deviceID string) error {
+	c.logDebug("Restarting device %s in site %s", deviceID, siteID)
+
+	path := fmt.Sprintf("/sites/%s/devices/%s/restart", siteID, deviceID)
+	if err := c.do(ctx, "POST", path, nil, nil); err != nil {
+		return fmt.Errorf("failed to restart device %s in site %s: %w", deviceID, siteID, err)
+	}
+	return nil
+}
+
 // UnassignDevicesFromSite unassigns multiple devices from their sites using the new bidirectional pattern
 func (c *mistClient) UnassignDevicesFromSite(ctx context.Context, orgID string, macs []string) error {
 	c.logDebug("Unassigning %d devices from their sites in org %s using new bidirectional pattern", len(macs), orgID)

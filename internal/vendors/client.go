@@ -61,6 +61,11 @@ type DevicesService interface {
 	Update(ctx context.Context, siteID, deviceID string, device *DeviceInfo) (*DeviceInfo, error)
 	Rename(ctx context.Context, siteID, deviceID, newName string) error
 	UpdateConfig(ctx context.Context, siteID, deviceID string, config map[string]interface{}) error
+
+	// Reboot triggers an asynchronous device restart. Vendors that don't
+	// expose a reboot endpoint must return *CapabilityNotSupportedError so
+	// the caller can render the standard "feature not available" message.
+	Reboot(ctx context.Context, siteID, deviceID string) error
 }
 
 // SearchService provides client search operations.
