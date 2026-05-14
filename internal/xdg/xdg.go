@@ -101,16 +101,32 @@ func EnsureDir(path string) error {
 
 // FindEnvFile searches for .env.wifimgr in multiple locations.
 // Returns the path to the first found file, or empty string if not found.
-// Search order: current directory, XDG config directory.
+// Search order:
+//  1. current directory (project-specific override)
+//  2. $HOME/.env.wifimgr (conventional home-dir dotenv location)
+//  3. XDG config directory ($XDG_CONFIG_HOME/wifimgr/.env.wifimgr)
+//
+// Home-directory placement is the most common convention for dotenv files
+// (ssh, gitconfig, dotenv libraries, etc.) so it has to be on the search
+// path or users hit a "file present, tool can't find it" footgun.
 func FindEnvFile() string {
-	// Check current directory first (project-specific env)
-	localEnv := ".env.wifimgr"
-	if _, err := os.Stat(localEnv); err == nil {
-		return localEnv
+	const envFilename = ".env.wifimgr"
+
+	// 1. Current directory (project-specific env).
+	if _, err := os.Stat(envFilename); err == nil {
+		return envFilename
 	}
 
-	// Check XDG config directory
-	xdgEnv := filepath.Join(GetConfigDir(), ".env.wifimgr")
+	// 2. User home directory.
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		homeEnv := filepath.Join(home, envFilename)
+		if _, err := os.Stat(homeEnv); err == nil {
+			return homeEnv
+		}
+	}
+
+	// 3. XDG config directory.
+	xdgEnv := filepath.Join(GetConfigDir(), envFilename)
 	if _, err := os.Stat(xdgEnv); err == nil {
 		return xdgEnv
 	}

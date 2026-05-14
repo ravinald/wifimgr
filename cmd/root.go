@@ -36,12 +36,31 @@ import (
 
 // Global state for initialized client and site configs
 var (
+	// globalClient is the legacy single-Mist api.Client. It is nil when no
+	// Mist API is configured in the registry (e.g. Meraki-only or
+	// Ubiquiti-only setups). Commands that depend on it must call
+	// requireMistClient first so the failure mode is a clear error rather
+	// than a nil dereference.
 	globalClient api.Client
 	// globalContext is populated from the root command's context in
 	// PersistentPreRunE. Callers read it to make cancellable vendor calls.
 	// It is set before any Tier-1/Tier-2 RunE fires.
 	globalContext context.Context = context.Background()
 )
+
+// requireMistClient returns an error suitable for returning from a RunE when
+// the calling command is part of the legacy single-Mist code path (apply,
+// ap, site, backup) and no Mist API is configured. Use this guard at the
+// top of those commands' RunE bodies before passing globalClient into
+// downstream handlers that don't tolerate nil.
+func requireMistClient(commandName string) error {
+	if globalClient != nil {
+		return nil
+	}
+	return fmt.Errorf("%q requires a Mist API to be configured. "+
+		"Add a 'mist' entry under 'apis' in your wifimgr config, or use a multi-vendor command "+
+		"(refresh, show, search) that works with any configured vendor.", commandName)
+}
 
 // Global CLI options (only essential flags, rest handled by Viper)
 var (
@@ -248,18 +267,21 @@ func initializeAPI() error {
 		resultsLimit = 100
 	}
 
-	var apiToken, apiURL, apiOrgID string
+	var apiToken, apiURL, apiOrgID, mistLabel string
 
-	// Get credentials from multi-vendor registry for globalClient
-	// Note: registry already obtained above for globalVendorClient
+	// Locate Mist credentials (if any) from the multi-vendor registry.
+	// globalClient is the legacy single-Mist api.Client used by commands
+	// that haven't been ported to the registry yet (apply, ap, site,
+	// backup). Multi-vendor commands (refresh, show, search) use the
+	// registry directly and don't need this client.
 	if registry != nil {
-		// Find the Mist API config
 		for _, label := range registry.GetAllLabels() {
 			apiConfig, err := registry.GetConfig(label)
 			if err == nil && apiConfig != nil && apiConfig.Vendor == "mist" {
 				apiToken = apiConfig.Credentials["api_key"]
 				apiURL = apiConfig.URL
 				apiOrgID = apiConfig.Credentials["org_id"]
+				mistLabel = label
 				logging.Debugf("Using credentials from %s API for globalClient (URL: %s, OrgID: %s)",
 					label, apiURL, apiOrgID)
 				break
@@ -267,11 +289,6 @@ func initializeAPI() error {
 		}
 	}
 
-	if apiToken == "" {
-		return fmt.Errorf("no Mist API credentials found - ensure api.mist is configured and -e flag is used")
-	}
-
-	// Create API client
 	// Check if debug should be enabled from either CLI flag or config file
 	debugEnabled := opts.DebugLevelInt > config.DebugNone ||
 		(viper.GetBool("logging.enable") && viper.GetString("logging.level") == "debug")
@@ -286,26 +303,9 @@ func initializeAPI() error {
 		cachePath = cacheDir + "/cache.json"
 	}
 
-	client := api.NewClientWithOptions(
-		apiToken,
-		apiURL,
-		apiOrgID,
-		api.WithHTTPClient(httpClient),
-		api.WithDebug(debugEnabled),
-		api.WithRateLimit(rateLimit, time.Minute),
-		api.WithCacheTTL(5*time.Minute),
-		api.WithCacheDirectory(cachePath),
-		api.WithInventory(viper.GetString("files.inventory")),
-		api.WithDryRun(opts.DryRun),
-		api.WithResultsLimit(resultsLimit),
-	)
-
-	// Set global client
-	api.SetClient(client)
-	globalClient = client
-	// Note: siteConfigs are loaded but stored in Viper for command access
-
-	// Create compatibility config for command handlers during Viper migration
+	// globalConfig is built unconditionally so commands that only read the
+	// Files section (config paths, cache, inventory) still work in
+	// Mist-less setups. API.Credentials stays empty if no Mist API exists.
 	globalConfig = &config.Config{
 		API: config.API{
 			Credentials: config.Credentials{
@@ -327,6 +327,36 @@ func initializeAPI() error {
 			Schemas:     viper.GetString("files.schemas"),
 		},
 	}
+
+	if apiToken == "" {
+		// No Mist API configured. Skip the legacy single-client + logging
+		// lookups; multi-vendor commands work via the registry. Commands
+		// that strictly need a Mist client (apply, ap, site, backup) will
+		// surface a clearer error when invoked — see globalClient nil guards.
+		logging.Debug("No Mist API configured; legacy globalClient not initialized. " +
+			"Multi-vendor commands (refresh, show, search) use the registry directly.")
+		return nil
+	}
+
+	client := api.NewClientWithOptions(
+		apiToken,
+		apiURL,
+		apiOrgID,
+		api.WithHTTPClient(httpClient),
+		api.WithDebug(debugEnabled),
+		api.WithRateLimit(rateLimit, time.Minute),
+		api.WithCacheTTL(5*time.Minute),
+		api.WithCacheDirectory(cachePath),
+		api.WithInventory(viper.GetString("files.inventory")),
+		api.WithDryRun(opts.DryRun),
+		api.WithResultsLimit(resultsLimit),
+	)
+
+	// Set global client
+	api.SetClient(client)
+	globalClient = client
+	logging.Debugf("Initialized legacy globalClient from Mist API %q", mistLabel)
+	// Note: siteConfigs are loaded but stored in Viper for command access
 
 	// Configure logging lookups
 	logging.SetSiteNameLookupFunc(func(siteID string) (string, bool) {
