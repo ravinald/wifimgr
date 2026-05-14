@@ -14,6 +14,19 @@ GOFMT=$(GOCMD) fmt
 GOLINT=golangci-lint
 GOMOD=$(GOCMD) mod
 
+# Pinned external tool versions. `go run pkg@vX` reads the project's go.mod
+# `go` directive and (with GOTOOLCHAIN=auto, the default) downloads the
+# matching toolchain to build the tool — so the typechecker version always
+# matches what wifimgr declares, regardless of which Go is on PATH. This
+# prevents the "package X without types" govulncheck failure that hits
+# hosts whose system Go (e.g. snap-installed govulncheck on Go 1.22) is
+# older than our go.mod's go directive.
+GOVULNCHECK_VERSION = v1.3.0
+GOVULNCHECK = $(GOCMD) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+
+GOSEC_VERSION = v2.26.1
+GOSEC = $(GOCMD) run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION)
+
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME = $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -146,12 +159,12 @@ fmt:
 	$(GOFMT) ./...
 
 security:
-	gosec ./...
-	govulncheck ./...
+	$(GOSEC) ./...
+	$(GOVULNCHECK) ./...
 
 # Vulnerability scan only (subset of `security`)
 vuln:
-	govulncheck ./...
+	$(GOVULNCHECK) ./...
 
 # Local goreleaser dry-run; produces dist/ without publishing or signing
 release-snapshot:
