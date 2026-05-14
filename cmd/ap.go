@@ -35,6 +35,9 @@ Examples:
 		if cmdutils.ContainsHelp(args) {
 			return cmd.Help()
 		}
+		if err := requireMistClient("set ap"); err != nil {
+			return err
+		}
 		return ap.HandleCommand(globalContext, globalClient, args, "", false)
 	},
 }

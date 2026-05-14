@@ -213,15 +213,23 @@ func TestEnsureDir(t *testing.T) {
 }
 
 func TestFindEnvFile(t *testing.T) {
-	// Save original environment
+	// Sandbox both XDG_CONFIG_HOME and HOME so the test never sees real
+	// dotfiles in the developer's home directory. Each subtest starts
+	// from an empty home + empty XDG dir.
 	origXDGConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	defer os.Setenv("XDG_CONFIG_HOME", origXDGConfigHome)
+	origHome := os.Getenv("HOME")
+	t.Cleanup(func() {
+		os.Setenv("XDG_CONFIG_HOME", origXDGConfigHome)
+		os.Setenv("HOME", origHome)
+	})
 
-	// Create a temp directory structure
 	tmpDir := t.TempDir()
 	xdgConfigDir := filepath.Join(tmpDir, "config", "wifimgr")
+	homeDir := filepath.Join(tmpDir, "home")
 	os.MkdirAll(xdgConfigDir, 0755)
+	os.MkdirAll(homeDir, 0755)
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "config"))
+	os.Setenv("HOME", homeDir)
 
 	t.Run("no env file found", func(t *testing.T) {
 		result := FindEnvFile()
@@ -241,11 +249,41 @@ func TestFindEnvFile(t *testing.T) {
 		}
 	})
 
+	t.Run("env file in HOME", func(t *testing.T) {
+		envPath := filepath.Join(homeDir, ".env.wifimgr")
+		os.WriteFile(envPath, []byte("HOME=value"), 0644)
+		defer os.Remove(envPath)
+
+		result := FindEnvFile()
+		if result != envPath {
+			t.Errorf("FindEnvFile() = %q, want %q", result, envPath)
+		}
+	})
+
+	t.Run("HOME takes precedence over XDG", func(t *testing.T) {
+		homeEnv := filepath.Join(homeDir, ".env.wifimgr")
+		xdgEnv := filepath.Join(xdgConfigDir, ".env.wifimgr")
+		os.WriteFile(homeEnv, []byte("HOME=value"), 0644)
+		os.WriteFile(xdgEnv, []byte("XDG=value"), 0644)
+		defer os.Remove(homeEnv)
+		defer os.Remove(xdgEnv)
+
+		result := FindEnvFile()
+		if result != homeEnv {
+			t.Errorf("FindEnvFile() = %q, want %q (HOME should take precedence over XDG)", result, homeEnv)
+		}
+	})
+
 	t.Run("env file in current dir takes precedence", func(t *testing.T) {
 		// Create env file in XDG dir
 		xdgEnvPath := filepath.Join(xdgConfigDir, ".env.wifimgr")
 		os.WriteFile(xdgEnvPath, []byte("XDG=value"), 0644)
 		defer os.Remove(xdgEnvPath)
+
+		// Create env file in HOME — CWD should still win
+		homeEnvPath := filepath.Join(homeDir, ".env.wifimgr")
+		os.WriteFile(homeEnvPath, []byte("HOME=value"), 0644)
+		defer os.Remove(homeEnvPath)
 
 		// Create env file in current dir
 		localEnvPath := ".env.wifimgr"
