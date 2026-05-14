@@ -36,6 +36,10 @@ Examples:
 			return fmt.Errorf("configuration not loaded")
 		}
 
+		if err := requireMistClient("backup"); err != nil {
+			return err
+		}
+
 		// Handle the backup command
 		return backup.HandleCommand(globalContext, globalClient, globalConfig, args)
 	},

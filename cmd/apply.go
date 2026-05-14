@@ -52,6 +52,9 @@ Use 'wifimgr apply <subcommand> --help' for detailed information about each oper
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// If called with legacy format: apply <site-name> <operation>
 		if len(args) >= 2 {
+			if err := requireMistClient("apply"); err != nil {
+				return err
+			}
 			parsed, err := cmdutils.ParseApplyArgs(args)
 			if err != nil {
 				return fmt.Errorf("invalid apply arguments: %w", err)

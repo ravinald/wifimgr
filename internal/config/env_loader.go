@@ -154,7 +154,8 @@ func ClearSensitiveEnvVars() {
 }
 
 // SecureLoadEnvFile loads the env file and returns a cleanup function and the path loaded.
-// If the file is not found at the specified path, it searches using XDG paths.
+// If the file is not found at the specified path, it searches CWD, $HOME,
+// and the XDG config directory via xdg.FindEnvFile.
 // Usage:
 //
 //	cleanup, loadedPath, err := SecureLoadEnvFile(".env.wifimgr")
@@ -174,10 +175,10 @@ func SecureLoadEnvFile(filename string) (func(), string, error) {
 		return ClearSensitiveEnvVars, absPath, nil
 	}
 
-	// Try to find using XDG paths
+	// Try to find using the standard search path (CWD, $HOME, XDG config)
 	envPath := xdg.FindEnvFile()
 	if envPath == "" {
-		return nil, "", fmt.Errorf("env file not found: %s (also checked XDG paths)", filename)
+		return nil, "", fmt.Errorf("env file not found: %s (also checked $HOME and XDG paths)", filename)
 	}
 
 	if err := LoadEnvFile(envPath); err != nil {
