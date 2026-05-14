@@ -482,8 +482,8 @@ func TestBuildWirelessSearchColumns_DetailAddsState(t *testing.T) {
 	if !containsString(titles, "Band [*]") {
 		t.Errorf("detail=true: Band keeps '[*]' marker, got %v", titles)
 	}
-	if !containsString(fields, "last_seen") {
-		t.Errorf("detail=true: expected last_seen column, got %v", fields)
+	if !containsString(fields, "last_seen_ago") {
+		t.Errorf("detail=true: expected last_seen_ago column, got %v", fields)
 	}
 	if !containsString(titles, "Last Seen") {
 		t.Errorf("detail=true: expected 'Last Seen' header, got %v", titles)
