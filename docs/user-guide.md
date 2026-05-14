@@ -338,7 +338,7 @@ The `site` argument takes either the cached site name or the vendor's own ID
 name in different APIs maps to the right target. Names with spaces need shell
 quoting, nothing more exotic.
 
-### Connected Band (default) and Client State (`detail` / `extensive`)
+### Connected Band (default) and Client State / Last Seen (`detail` / `extensive`)
 
 **Band is a default column.** Every `search wireless` table shows a
 `Band [*]` column. The `[*]` marker means the value comes from the local
@@ -353,7 +353,7 @@ Mist carries Band natively on the primary response so Mist sites populate
 without any cache dependency. Meraki relies on the cache; populate it with
 `wifimgr refresh client site <name>` or `wifimgr refresh all`.
 
-**`detail` and `extensive`** add the `State` column and change which rows show:
+**`detail` and `extensive`** add the `State` and `Last Seen` columns and change which rows show. `Last Seen` is a two-unit duration (`2h15m`, `47m12s`, `3d4h`) from `now` to the vendor's most recent sighting; `—` means the API did not provide a timestamp. Meraki populates this from the client list endpoint; Mist populates it from the per-sighting `timestamp` field.
 
 ```bash
 # Populate the per-site client detail cache (Meraki only; one call per band).

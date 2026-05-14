@@ -2,11 +2,22 @@ package meraki
 
 import (
 	"strings"
+	"time"
 
 	meraki "github.com/meraki/dashboard-api-go/v5/sdk"
 
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
+
+// epochSecondsToTime converts a Meraki *int Unix-epoch (seconds) into a UTC
+// time.Time. A nil pointer or zero value returns time.Time{} so callers can
+// treat the zero time as "not provided" — JSON omitzero hides the field.
+func epochSecondsToTime(sec *int) time.Time {
+	if sec == nil || *sec == 0 {
+		return time.Time{}
+	}
+	return time.Unix(int64(*sec), 0).UTC()
+}
 
 // convertNetworkToSiteInfo converts a Meraki network to vendors.SiteInfo.
 func convertNetworkToSiteInfo(network *meraki.ResponseItemOrganizationsGetOrganizationNetworks) *vendors.SiteInfo {
