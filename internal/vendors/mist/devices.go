@@ -112,5 +112,11 @@ func (s *devicesService) UpdateConfig(ctx context.Context, siteID, deviceID stri
 	return nil
 }
 
+// Reboot triggers an asynchronous restart of a Mist device.
+// Calls POST /api/v1/sites/{siteID}/devices/{deviceID}/restart.
+func (s *devicesService) Reboot(ctx context.Context, siteID, deviceID string) error {
+	return s.client.RestartDevice(ctx, siteID, deviceID)
+}
+
 // Ensure devicesService implements vendors.DevicesService at compile time.
 var _ vendors.DevicesService = (*devicesService)(nil)

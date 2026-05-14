@@ -584,3 +584,9 @@ func (m *MockClient) GetRawDeviceJSON(_ context.Context, siteID, deviceID string
 	// Mock implementation - return basic JSON
 	return fmt.Sprintf(`{"id": "%s", "site_id": "%s", "mock": true}`, deviceID, siteID), nil
 }
+
+// RestartDevice mocks the device restart endpoint.
+func (m *MockClient) RestartDevice(_ context.Context, siteID, deviceID string) error {
+	m.logRequest("POST", fmt.Sprintf("/sites/%s/devices/%s/restart", siteID, deviceID), nil)
+	return nil
+}

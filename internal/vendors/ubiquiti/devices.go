@@ -86,4 +86,11 @@ func (s *devicesService) UpdateConfig(_ context.Context, _, _ string, _ map[stri
 	}
 }
 
+func (s *devicesService) Reboot(_ context.Context, _, _ string) error {
+	return &vendors.CapabilityNotSupportedError{
+		Capability: "device reboot",
+		VendorName: "ubiquiti",
+	}
+}
+
 var _ vendors.DevicesService = (*devicesService)(nil)
