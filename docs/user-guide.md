@@ -195,7 +195,7 @@ wifimgr apply rollback US-LAB-01
 wifimgr apply rollback US-LAB-01 us-lab-01.json.2
 
 # Cleanup old backups (removes backups older than N days)
-wifimgr apply cleanup-backups --days 30
+wifimgr apply cleanup-backups 30
 ```
 
 ## import

@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -67,16 +66,6 @@ Examples:
 			file = args[2]
 		}
 
-		if assignmentFile != "" || targetSite != "" {
-			fmt.Fprintln(os.Stderr, "DEPRECATED: --file/--site flags will be removed in a future release; use `wifimgr set ap site <site> file <path>`")
-			if file == "" {
-				file = assignmentFile
-			}
-			if site == "" {
-				site = targetSite
-			}
-		}
-
 		if err := requireMistClient("site ap"); err != nil {
 			return err
 		}
@@ -92,16 +81,6 @@ Examples:
 	},
 }
 
-var (
-	assignmentFile string
-	targetSite     string
-)
-
 func init() {
 	apCmd.AddCommand(siteCmd)
-
-	// --file and --site/-s kept for one release for backward compatibility;
-	// emit a deprecation warning when used. Will be removed in the next minor.
-	siteCmd.Flags().StringVar(&assignmentFile, "file", "", "DEPRECATED: use `file <path>` positional")
-	siteCmd.Flags().StringVarP(&targetSite, "site", "s", "", "DEPRECATED: use site name as first positional")
 }
