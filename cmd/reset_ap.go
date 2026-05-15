@@ -75,15 +75,26 @@ func runResetAP(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("device %q is not an AP (type: %s)", parsed.APName, device.Type)
 	}
 
-	if parsed.SiteName != "" {
-		expected, err := cacheAccessor.GetSiteByID(device.SiteID)
-		if err != nil {
-			return fmt.Errorf("AP %q has site_id %q which is not in the cache: %w",
-				parsed.APName, device.SiteID, err)
+	// Resolve site name. The cache layer back-fills InventoryItem.SiteName
+	// from SiteIndex.ByID during save/load (see APICache.BackfillInventory
+	// SiteNames), so this is usually populated. The GetSiteByID fallback
+	// covers stale caches written before the back-fill code landed and the
+	// edge case where the sites cache has the site but the inventory record
+	// pre-dates it.
+	siteLabel := device.SiteName
+	if siteLabel == "" {
+		if site, err := cacheAccessor.GetSiteByID(device.SiteID); err == nil && site != nil && site.Name != "" {
+			siteLabel = site.Name
 		}
-		if !strings.EqualFold(expected.Name, parsed.SiteName) {
+	}
+	if siteLabel == "" {
+		siteLabel = device.SiteID
+	}
+
+	if parsed.SiteName != "" {
+		if !strings.EqualFold(siteLabel, parsed.SiteName) {
 			return fmt.Errorf("AP %q is in site %q, not %q",
-				parsed.APName, expected.Name, parsed.SiteName)
+				parsed.APName, siteLabel, parsed.SiteName)
 		}
 	}
 
@@ -98,11 +109,6 @@ func runResetAP(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get client for %s: %w", apiLabel, err)
 	}
 	vendor, _ := registry.GetVendor(apiLabel)
-
-	siteLabel := device.SiteName
-	if siteLabel == "" {
-		siteLabel = device.SiteID
-	}
 
 	if !parsed.Force {
 		ok, err := confirmReboot(parsed.APName, siteLabel, apiLabel, vendor)
