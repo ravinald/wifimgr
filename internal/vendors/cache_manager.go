@@ -113,6 +113,13 @@ func (c *CacheManager) GetAPICache(apiLabel string) (*APICache, error) {
 		return nil, fmt.Errorf("failed to parse cache for %s: %w", apiLabel, err)
 	}
 
+	// Backfill InventoryItem.SiteName for caches written before this code
+	// landed (or by adapters that don't populate it). Cheap: just walks
+	// three maps already in memory. Newly saved caches already have
+	// SiteName set via saveAPICacheLocked, so this is effectively a no-op
+	// for fresh files.
+	cache.BackfillInventorySiteNames()
+
 	return cache, nil
 }
 
@@ -141,6 +148,7 @@ func (c *CacheManager) SaveAPICache(cache *APICache) error {
 func (c *CacheManager) saveAPICacheLocked(cache *APICache) error {
 	cache.UpdateItemCounts()
 	cache.RebuildSiteIndex()
+	cache.BackfillInventorySiteNames()
 
 	cachePath := c.getAPICachePath(cache.APILabel)
 	metaPath := c.getAPICacheMetaPath(cache.APILabel)
