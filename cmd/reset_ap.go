@@ -75,15 +75,24 @@ func runResetAP(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("device %q is not an AP (type: %s)", parsed.APName, device.Type)
 	}
 
+	// Resolve site once via the cache so we have a human-readable name
+	// for prompts and status output. Meraki's InventoryItem.SiteName is
+	// always empty (the device payload only carries NetworkID), so without
+	// this lookup the user sees the raw L_… network ID instead of the
+	// configured site name. Failure to resolve is non-fatal — fall back
+	// to whatever the device record has.
+	siteLabel := device.SiteName
+	if site, err := cacheAccessor.GetSiteByID(device.SiteID); err == nil && site != nil && site.Name != "" {
+		siteLabel = site.Name
+	}
+	if siteLabel == "" {
+		siteLabel = device.SiteID
+	}
+
 	if parsed.SiteName != "" {
-		expected, err := cacheAccessor.GetSiteByID(device.SiteID)
-		if err != nil {
-			return fmt.Errorf("AP %q has site_id %q which is not in the cache: %w",
-				parsed.APName, device.SiteID, err)
-		}
-		if !strings.EqualFold(expected.Name, parsed.SiteName) {
+		if !strings.EqualFold(siteLabel, parsed.SiteName) {
 			return fmt.Errorf("AP %q is in site %q, not %q",
-				parsed.APName, expected.Name, parsed.SiteName)
+				parsed.APName, siteLabel, parsed.SiteName)
 		}
 	}
 
@@ -98,11 +107,6 @@ func runResetAP(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get client for %s: %w", apiLabel, err)
 	}
 	vendor, _ := registry.GetVendor(apiLabel)
-
-	siteLabel := device.SiteName
-	if siteLabel == "" {
-		siteLabel = device.SiteID
-	}
 
 	if !parsed.Force {
 		ok, err := confirmReboot(parsed.APName, siteLabel, apiLabel, vendor)
