@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -146,17 +145,8 @@ Examples:
 		}
 		days := defaultDays
 
-		flagSet := cmd.Flags().Changed("days")
-		positionalSet := len(args) == 1
-		if flagSet && positionalSet {
-			return fmt.Errorf("specify days as a positional argument or --days, not both")
-		}
-		switch {
-		case positionalSet:
+		if len(args) == 1 {
 			days, _ = strconv.Atoi(args[0])
-		case flagSet:
-			fmt.Fprintln(os.Stderr, "DEPRECATED: --days will be removed in a future release; use `wifimgr apply cleanup-backups <days>`")
-			days, _ = cmd.Flags().GetInt("days")
 		}
 
 		legacyArgs := []string{"placeholder", "cleanup-backups", strconv.Itoa(days)}
@@ -202,8 +192,4 @@ func init() {
 	applyCmd.AddCommand(applyListBackupsCmd)
 	applyCmd.AddCommand(applyCleanupBackupsCmd)
 	applyCmd.AddCommand(applyValidateBackupCmd)
-
-	// --days kept for one release for backward compatibility; emits a
-	// deprecation warning when used. Will be removed in the next minor.
-	applyCleanupBackupsCmd.Flags().Int("days", 30, "DEPRECATED: use positional argument")
 }
