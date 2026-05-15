@@ -194,13 +194,10 @@ With the Cobra migration, the CLI uses a **simplified flag structure** backed by
 
 ### Command-Specific Flags
 
-Some commands may define their own local flags when needed:
-
-```go
-// Example: set ap site command
-siteCmd.Flags().StringVar(&assignmentFile, "file", "", "File containing AP MACs to assign")
-siteCmd.Flags().StringVarP(&targetSite, "site", "s", "", "Target site for bulk assignment")
-```
+Most commands take Junos-style positional arguments rather than flags. When a
+local flag is genuinely needed, use Cobra's `Flags()` method on the relevant
+subcommand. Avoid `--site`-style flags for arguments that the positional
+grammar already covers.
 
 ## API Token Handling
 
