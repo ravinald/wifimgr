@@ -92,6 +92,7 @@ func TestCacheManager_SaveAndLoadAPICache(t *testing.T) {
 		Serial: "AP001",
 		Model:  "AP43",
 		Type:   "ap",
+		SiteID: "site-001",
 	}
 
 	// Save cache
@@ -120,6 +121,19 @@ func TestCacheManager_SaveAndLoadAPICache(t *testing.T) {
 	// Verify site index was rebuilt
 	if _, ok := loaded.SiteIndex.ByName["US-LAB-01"]; !ok {
 		t.Error("site index not rebuilt")
+	}
+
+	// Verify InventoryItem.SiteName was back-filled from SiteIndex.ByID.
+	// The source InventoryItem only carried SiteID — vendors like Meraki
+	// never set SiteName at the converter layer — so the cache layer is
+	// responsible for filling it in.
+	loadedAP := loaded.Inventory.AP["aabbccddeef0"]
+	if loadedAP == nil {
+		t.Fatal("expected AP aabbccddeef0 in loaded cache, got nil")
+	}
+	if loadedAP.SiteName != "US-LAB-01" {
+		t.Errorf("InventoryItem.SiteName = %q, want %q (cache layer must back-fill from SiteIndex.ByID)",
+			loadedAP.SiteName, "US-LAB-01")
 	}
 
 	// Verify no orphan temp files remain from the atomic write.

@@ -191,3 +191,30 @@ func (c *APICache) RebuildSiteIndex() {
 		}
 	}
 }
+
+// BackfillInventorySiteNames populates InventoryItem.SiteName from
+// SiteIndex.ByID for every cached AP, switch, and gateway. Several vendor
+// adapters (notably Meraki) only carry the site/network ID on the device
+// payload — the human-readable name lives on the sites endpoint. Without
+// this backfill, downstream consumers (reset ap, show device, search
+// results) display raw IDs like "L_3732358191183298569" instead of the
+// configured site name.
+//
+// Safe to call repeatedly. RebuildSiteIndex must run first so SiteIndex.ByID
+// is populated; callers that touch sites or inventory should invoke
+// RebuildSiteIndex followed by BackfillInventorySiteNames.
+func (c *APICache) BackfillInventorySiteNames() {
+	backfill := func(items map[string]*InventoryItem) {
+		for _, item := range items {
+			if item == nil || item.SiteID == "" {
+				continue
+			}
+			if name, ok := c.SiteIndex.ByID[item.SiteID]; ok && name != "" {
+				item.SiteName = name
+			}
+		}
+	}
+	backfill(c.Inventory.AP)
+	backfill(c.Inventory.Switch)
+	backfill(c.Inventory.Gateway)
+}

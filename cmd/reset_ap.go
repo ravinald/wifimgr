@@ -75,15 +75,17 @@ func runResetAP(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("device %q is not an AP (type: %s)", parsed.APName, device.Type)
 	}
 
-	// Resolve site once via the cache so we have a human-readable name
-	// for prompts and status output. Meraki's InventoryItem.SiteName is
-	// always empty (the device payload only carries NetworkID), so without
-	// this lookup the user sees the raw L_… network ID instead of the
-	// configured site name. Failure to resolve is non-fatal — fall back
-	// to whatever the device record has.
+	// Resolve site name. The cache layer back-fills InventoryItem.SiteName
+	// from SiteIndex.ByID during save/load (see APICache.BackfillInventory
+	// SiteNames), so this is usually populated. The GetSiteByID fallback
+	// covers stale caches written before the back-fill code landed and the
+	// edge case where the sites cache has the site but the inventory record
+	// pre-dates it.
 	siteLabel := device.SiteName
-	if site, err := cacheAccessor.GetSiteByID(device.SiteID); err == nil && site != nil && site.Name != "" {
-		siteLabel = site.Name
+	if siteLabel == "" {
+		if site, err := cacheAccessor.GetSiteByID(device.SiteID); err == nil && site != nil && site.Name != "" {
+			siteLabel = site.Name
+		}
 	}
 	if siteLabel == "" {
 		siteLabel = device.SiteID
