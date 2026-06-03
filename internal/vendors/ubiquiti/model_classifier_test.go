@@ -104,11 +104,11 @@ func TestClassifyByShortname(t *testing.T) {
 		expected  string
 	}{
 		// AP shortnames
-		{"U7NHD", "ap"},     // Nano HD
-		{"U7PG2", "ap"},     // AC Pro
-		{"U7LR", "ap"},      // AC LR
-		{"UALR6v2", "ap"},   // U6 LR
-		{"U6IW", "ap"},      // U6 In-Wall
+		{"U7NHD", "ap"},   // Nano HD
+		{"U7PG2", "ap"},   // AC Pro
+		{"U7LR", "ap"},    // AC LR
+		{"UALR6v2", "ap"}, // U6 LR
+		{"U6IW", "ap"},    // U6 In-Wall
 
 		// Switch shortnames
 		{"USL48PB", "switch"}, // USW 48 PoE
@@ -121,8 +121,8 @@ func TestClassifyByShortname(t *testing.T) {
 		{"UXGPRO", "gateway"}, // UXG Pro
 
 		// Other
-		{"UCKG2", "other"},    // Cloud Key G2
-		{"UNVR", "other"},     // NVR
+		{"UCKG2", "other"}, // Cloud Key G2
+		{"UNVR", "other"},  // NVR
 		{"", "other"},
 	}
 

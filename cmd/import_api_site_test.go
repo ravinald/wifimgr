@@ -450,4 +450,3 @@ func portalEqual(a, b *config.PortalConfig) bool {
 	}
 	return a.Enabled == b.Enabled && a.Auth == b.Auth
 }
-
