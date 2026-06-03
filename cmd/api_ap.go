@@ -54,9 +54,9 @@ Examples:
   wifimgr show api ap site US-LAB-01           - Show APs for specific site
   wifimgr show api ap AP-NAME                  - Show specific AP by name
   wifimgr show api ap 00:11:22:33:44:55        - Show specific AP by MAC address
-  wifimgr show api ap json                     - Show all APs in JSON format
-  wifimgr show api ap AP-NAME json all         - Show all fields for AP in JSON
-  wifimgr show api ap json no-resolve          - Show JSON with raw IDs
+  wifimgr show api ap format json              - Show all APs in JSON format
+  wifimgr show api ap AP-NAME format json all  - Show all fields for AP in JSON
+  wifimgr show api ap format json no-resolve   - Show JSON with raw IDs
   wifimgr show api ap target mist-prod         - Show APs from mist-prod only`,
 	Args: cmdutils.ValidateShowAPArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

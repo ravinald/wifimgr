@@ -42,10 +42,11 @@ wifimgr uses Junos-style positional keywords instead of flags for most options. 
 | `site <name>`    | Filter by site                   | `wifimgr show api ap site US-LAB-01`      |
 | `essid <name>`   | Filter by SSID name              | `wifimgr show api bssid essid Corp-WiFi`  |
 | `sort <field>`   | Secondary sort (essid, ap)       | `wifimgr show api bssid sort essid`       |
-| `format json\|csv` | Output format                  | `wifimgr show api ap format csv`          |
-| `json` / `csv`   | Output format (shorthand)        | `wifimgr show api ap json`                |
-| `all`            | Show all fields (JSON only)      | `wifimgr show api ap json all`            |
+| `format <type>`  | Output format (`json`, `csv`)    | `wifimgr show api ap format csv`          |
+| `all`            | Show all fields (JSON only)      | `wifimgr show api ap format json all`     |
 | `no-resolve`     | Show raw IDs instead of names    | `wifimgr show api ap no-resolve`          |
+
+The format keyword is required — a bare `json` or `csv` is no longer accepted. Use `format json`, not `json`.
 | `force`          | Bypass confirmation prompts      | `wifimgr search wireless laptop force`    |
 | `save`           | Write output to file             | `wifimgr import api site US-LAB-01 save`  |
 | `split`          | Split output into separate files | `wifimgr import api site US-LAB-01 split` |
@@ -67,7 +68,7 @@ Display data from API cache or local config files.
 wifimgr show api sites                    # All sites
 wifimgr show api ap                       # All APs
 wifimgr show api ap site US-LAB-01        # APs at specific site
-wifimgr show api ap Lobby-AP json         # Single AP as JSON
+wifimgr show api ap Lobby-AP format json  # Single AP as JSON
 ```
 
 ### Data Sources
@@ -86,9 +87,9 @@ wifimgr show api ap site US-LAB-01
 wifimgr show intent ap site US-LAB-01
 
 # Output formats
-wifimgr show api ap json                  # JSON array
-wifimgr show api ap csv                   # CSV for spreadsheets
-wifimgr show api ap Lobby-AP json all     # Full JSON with all fields
+wifimgr show api ap format json           # JSON array
+wifimgr show api ap format csv            # CSV for spreadsheets
+wifimgr show api ap Lobby-AP format json all  # Full JSON with all fields
 
 # Target a specific API (multi-vendor)
 wifimgr show api sites target mist-prod
@@ -109,6 +110,19 @@ wifimgr show api bssid AP-NAME essid Corp-WiFi  # AP filter + SSID filter
 wifimgr show api bssid sort essid               # Sort by site, then SSID
 wifimgr show api bssid sort ap                  # Sort by site, then AP name
 wifimgr show api bssid aa:bb:cc:dd:ee:ff        # Find specific BSSID
+wifimgr show api bssid format alias             # <bssid>,<ap_name> lines
+```
+
+#### BSSID Alias Format
+
+`format alias` emits header-less `<bssid>,<ap_name>` lines — one per BSSID — for wireless survey
+and scanning tools that map a radio's BSSID to a friendly AP name. Feed it to
+[NetSpot](https://www.netspotapp.com/) or [Intuitibits](https://www.intuitibits.com/) tools like
+WiFi Explorer as a custom AP-name alias list. It is supported only on `show api bssid`; other
+commands reject it.
+
+```bash
+wifimgr show api bssid format alias > ap-aliases.csv
 ```
 
 ### Positional Arguments
@@ -119,7 +133,7 @@ All `show` commands accept these optional arguments in order:
 |------------|----------------|--------------------------------|
 | 1          | `<filter>`     | Device name or MAC to filter   |
 | 2          | `site <name>`  | Filter by site                 |
-| 3          | `format json\|csv` or `json` / `csv` | Output format     |
+| 3          | `format <type>` | Output format (`json`, `csv`) |
 | 4          | `all`          | Include all fields (JSON only) |
 | 5          | `no-resolve`   | Show IDs instead of names      |
 

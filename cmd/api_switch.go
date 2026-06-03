@@ -46,9 +46,9 @@ Examples:
   wifimgr show api switch site US-LAB-01           - Show switches for specific site
   wifimgr show api switch SW-NAME                  - Show specific switch by name
   wifimgr show api switch 00:11:22:33:44:55        - Show specific switch by MAC address
-  wifimgr show api switch json                     - Show all switches in JSON format
-  wifimgr show api switch SW-NAME json all         - Show all fields for switch in JSON
-  wifimgr show api switch json no-resolve          - Show JSON with raw IDs
+  wifimgr show api switch format json              - Show all switches in JSON format
+  wifimgr show api switch SW-NAME format json all  - Show all fields for switch in JSON
+  wifimgr show api switch format json no-resolve   - Show JSON with raw IDs
   wifimgr show api switch target mist-prod         - Show switches from mist-prod only`,
 	Args: cmdutils.ValidateShowAPArgs, // Reuse same validation
 	RunE: func(cmd *cobra.Command, args []string) error {
