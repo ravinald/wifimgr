@@ -43,7 +43,7 @@ Arguments:
 Examples:
   wifimgr show api site                      - Show all sites
   wifimgr show api site SITE-NAME            - Show specific site by name
-  wifimgr show api site json                 - Show all sites in JSON format
+  wifimgr show api site format json          - Show all sites in JSON format
   wifimgr show api site target mist-prod     - Show sites from mist-prod only`,
 	Args: cmdutils.ValidateShowAPArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

@@ -96,18 +96,16 @@ func ParseShowArgs(args []string) (*ParsedShowArgs, error) {
 			}
 			fmtVal := strings.ToLower(args[i+1])
 			switch fmtVal {
-			case "json", "csv":
+			case "json", "csv", "alias":
 				result.Format = fmtVal
 			default:
-				return nil, fmt.Errorf("invalid format %q: must be 'json' or 'csv'", args[i+1])
+				return nil, fmt.Errorf("invalid format %q: must be 'json', 'csv', or 'alias'", args[i+1])
 			}
 			i++ // Skip the format value
 
-		case "json", "csv":
-			if result.Format != "table" {
-				return nil, fmt.Errorf("format specified multiple times")
-			}
-			result.Format = arg
+		case "json", "csv", "table", "alias":
+			// Bare format tokens are no longer accepted; require the "format" keyword.
+			return nil, fmt.Errorf("use 'format %s' instead of bare '%s'", arg, arg)
 
 		case "all":
 			result.ShowAll = true
@@ -146,6 +144,22 @@ func ValidateShowAPArgs(_ *cobra.Command, args []string) error {
 	if ContainsHelp(args) {
 		return nil
 	}
+	parsed, err := ParseShowArgs(args)
+	if err != nil {
+		return err
+	}
+	if parsed.Format == "alias" {
+		return fmt.Errorf("alias format is only supported for 'show api bssid'")
+	}
+	return nil
+}
+
+// ValidateShowBSSIDArgs validates arguments for the show api bssid command.
+// Identical to ValidateShowAPArgs but permits the bssid-only "alias" format.
+func ValidateShowBSSIDArgs(_ *cobra.Command, args []string) error {
+	if ContainsHelp(args) {
+		return nil
+	}
 	_, err := ParseShowArgs(args)
 	return err
 }
@@ -160,6 +174,10 @@ func ValidateInventoryArgs(_ *cobra.Command, args []string) error {
 	parsed, err := ParseShowArgs(args)
 	if err != nil {
 		return err
+	}
+
+	if parsed.Format == "alias" {
+		return fmt.Errorf("alias format is only supported for 'show api bssid'")
 	}
 
 	// For inventory, the filter should be a device type if present
