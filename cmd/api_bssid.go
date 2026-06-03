@@ -18,6 +18,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -30,7 +31,7 @@ import (
 
 // apiBSSIDCmd represents the "show api bssid" command
 var apiBSSIDCmd = &cobra.Command{
-	Use:   "bssid [bssid-or-ap-name] [essid ssid-name] [sort essid|ap] [site site-name] [target api-label] [format json|csv] [all] [no-resolve]",
+	Use:   "bssid [bssid-or-ap-name] [essid ssid-name] [sort essid|ap] [site site-name] [target api-label] [format json|csv|alias] [all] [no-resolve]",
 	Short: "Show BSSID-to-AP mappings from API cache",
 	Long: `Show BSSID-to-AP mappings retrieved from the local API cache.
 
@@ -49,7 +50,7 @@ Arguments:
   sort              - Keyword followed by secondary sort: "essid" or "ap"
   site              - Keyword followed by site name for filtering
   target            - Keyword followed by API label to target specific API
-  format            - Output format: "json" or "csv" (default: table)
+  format            - Output format: "json", "csv", or "alias" (bssid only: <mac>,<ap_name>)
   all               - Show all fields (json format only)
   no-resolve        - Disable field ID to name resolution
 
@@ -63,10 +64,11 @@ Examples:
   wifimgr show api bssid AP-NAME essid Corp-WiFi  - AP filter + SSID filter combined
   wifimgr show api bssid aa:bb:cc:dd:ee:ff        - Find specific BSSID
   wifimgr show api bssid AP-NAME                  - Show BSSIDs from matching APs
-  wifimgr show api bssid json                     - Show all BSSIDs in JSON format
-  wifimgr show api bssid json all                 - Show all fields in JSON
+  wifimgr show api bssid format json              - Show all BSSIDs in JSON format
+  wifimgr show api bssid format json all          - Show all fields in JSON
+  wifimgr show api bssid format alias             - Emit <bssid>,<ap_name> lines
   wifimgr show api bssid target mist-prod         - Show BSSIDs from mist-prod only`,
-	Args: cmdutils.ValidateShowAPArgs,
+	Args: cmdutils.ValidateShowBSSIDArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cmdutils.ContainsHelp(args) {
 			return cmd.Help()
@@ -217,6 +219,16 @@ func showBSSIDsMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) e
 	if len(allBSSIDs) == 0 {
 		fmt.Printf("%s:\n", title)
 		fmt.Println("No BSSIDs found")
+		return nil
+	}
+
+	// Alias format: header-less "<bssid>,<ap_name>" lines for scripting.
+	if parsed.Format == "alias" {
+		var b strings.Builder
+		for _, d := range allBSSIDs {
+			fmt.Fprintf(&b, "%v,%v\n", d["bssid"], d["ap_name"])
+		}
+		fmt.Print(b.String())
 		return nil
 	}
 

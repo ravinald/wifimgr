@@ -46,9 +46,9 @@ Examples:
   wifimgr show inventory                     - Show all inventory items
   wifimgr show inventory ap                  - Show only AP inventory
   wifimgr show inventory site US-LAB-01      - Show inventory for specific site
-  wifimgr show inventory json                - Show inventory in JSON format
-  wifimgr show inventory json all            - Show all fields in JSON
-  wifimgr show inventory json no-resolve     - Show JSON with raw IDs
+  wifimgr show inventory format json         - Show inventory in JSON format
+  wifimgr show inventory format json all     - Show all fields in JSON
+  wifimgr show inventory format json no-resolve - Show JSON with raw IDs
   wifimgr show inventory target mist-prod    - Show inventory from mist-prod only`,
 	Args: cmdutils.ValidateInventoryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
