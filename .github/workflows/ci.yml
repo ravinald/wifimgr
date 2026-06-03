@@ -24,6 +24,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # golangci-lint skips test files (run.tests: false); this catches gofmt/
+      # goimports drift everywhere, including *_test.go.
+      - name: Check formatting
+        run: make fmt-check
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
