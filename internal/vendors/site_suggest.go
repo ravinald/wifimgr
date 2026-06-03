@@ -97,9 +97,9 @@ func levenshtein(a, b string) int {
 				cost = 0
 			}
 			curr[j] = minInt(
-				prev[j]+1,        // deletion
-				curr[j-1]+1,      // insertion
-				prev[j-1]+cost,   // substitution
+				prev[j]+1,      // deletion
+				curr[j-1]+1,    // insertion
+				prev[j-1]+cost, // substitution
 			)
 		}
 		prev, curr = curr, prev

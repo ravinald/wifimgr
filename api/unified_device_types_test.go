@@ -13,15 +13,15 @@ var _ DeviceMarshaler = &MistGatewayDevice{}
 
 func TestBaseDevice_FromMap_ParsesAllFieldTypes(t *testing.T) {
 	testData := map[string]interface{}{
-		"id":               "device-123",
-		"mac":              "001122334455",
-		"serial":           "SN123456789",
-		"name":             "Test Device",
-		"type":             "ap",
-		"connected":        true,
-		"created_time":     1640995200.0,
-		"tags":             []interface{}{"tag1", "tag2"},
-		"unknown_field":    "preserved",
+		"id":            "device-123",
+		"mac":           "001122334455",
+		"serial":        "SN123456789",
+		"name":          "Test Device",
+		"type":          "ap",
+		"connected":     true,
+		"created_time":  1640995200.0,
+		"tags":          []interface{}{"tag1", "tag2"},
+		"unknown_field": "preserved",
 	}
 
 	var device BaseDevice
@@ -82,11 +82,11 @@ func TestBaseDevice_ToMap_NilFieldsExcluded(t *testing.T) {
 
 func TestBaseDevice_ToConfigMap_ExcludesStatusFields(t *testing.T) {
 	device := BaseDevice{
-		ID:          StringPtr("test-id"),       // status - excluded
-		Connected:   BoolPtr(true),              // status - excluded
-		CreatedTime: Int64Ptr(1640995200),       // status - excluded
-		Name:        StringPtr("Test Device"),   // config - included
-		Magic:       StringPtr("magic-123"),     // config - included
+		ID:          StringPtr("test-id"),     // status - excluded
+		Connected:   BoolPtr(true),            // status - excluded
+		CreatedTime: Int64Ptr(1640995200),     // status - excluded
+		Name:        StringPtr("Test Device"), // config - included
+		Magic:       StringPtr("magic-123"),   // config - included
 	}
 
 	result := device.ToConfigMap()

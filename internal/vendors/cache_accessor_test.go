@@ -7,7 +7,7 @@ import (
 // TestCacheAccessorMethodsExist verifies all methods exist and are exported
 func TestCacheAccessorMethodsExist(t *testing.T) {
 	var ca *CacheAccessor
-	
+
 	// This is a compile-time test to verify all methods exist
 	methods := []interface{}{
 		ca.GetSiteByID,
@@ -31,7 +31,7 @@ func TestCacheAccessorMethodsExist(t *testing.T) {
 		ca.IsInitialized,
 		ca.GetStats,
 	}
-	
+
 	if len(methods) != 20 {
 		t.Errorf("Expected 20 methods, got %d", len(methods))
 	}

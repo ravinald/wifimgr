@@ -14,7 +14,7 @@ import (
 func TestStatusCodeToError(t *testing.T) {
 	c := &mistClient{}
 	cases := []struct {
-		status     int
+		status       int
 		wantSentinel error // nil if not a sentinel
 		wantAPIErr   bool  // true if expected *APIError
 	}{

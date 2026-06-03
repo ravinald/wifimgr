@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/fatih/color"
+
 	"github.com/ravinald/wifimgr/internal/config"
 )
 

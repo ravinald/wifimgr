@@ -282,7 +282,7 @@ func TestGetSiteSlug(t *testing.T) {
 		expected string
 	}{
 		{"US-LAB-01", "us-lab-01-override"},
-		{"US-LAB-02", "us-lab-02"},         // default slug
+		{"US-LAB-02", "us-lab-02"}, // default slug
 		{"Site With Spaces", "site-with-spaces"},
 		{"Site_With_Underscores", "site-with-underscores"},
 	}

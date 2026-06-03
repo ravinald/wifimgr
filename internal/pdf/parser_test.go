@@ -37,10 +37,10 @@ func TestNaturalCompare(t *testing.T) {
 		sign int // -1, 0, +1
 	}{
 		{"AP1", "AP2", -1},
-		{"AP10", "AP2", +1},          // 10 > 2 numerically
-		{"AP2", "AP10", -1},          // 2 < 10 numerically (lexical comparison would say otherwise)
+		{"AP10", "AP2", +1}, // 10 > 2 numerically
+		{"AP2", "AP10", -1}, // 2 < 10 numerically (lexical comparison would say otherwise)
 		{"AP1", "AP1", 0},
-		{"AP", "AP1", -1},            // shorter wins on equal prefix
+		{"AP", "AP1", -1}, // shorter wins on equal prefix
 		{"AP1", "AP", +1},
 		{"AP-LAB-1", "AP-LAB-10", -1},
 		{"AP-LAB-2", "AP-LAB-10", -1},
