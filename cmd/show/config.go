@@ -16,7 +16,7 @@ import (
 
 // configCmd represents the show config command
 var configCmd = &cobra.Command{
-	Use:   "config [<device-name>|<mac>] [site <site-name>] [json|csv] [all] [no-resolve]",
+	Use:   "config [<device-name>|<mac>] [site <site-name>] [format json|csv] [all] [no-resolve]",
 	Short: "Show device configurations from cache",
 	Long: `Display device configurations from cache for AP, Switch, and Gateway devices.
 
@@ -34,8 +34,8 @@ Examples:
   wifimgr show config                        # Show all device configs
   wifimgr show config AP-NAME               # Show config for specific AP
   wifimgr show config site US-LAB-01       # Show configs for site
-  wifimgr show config AP-NAME json         # Show in JSON format
-  wifimgr show config site US-LAB-01 csv  # Show site configs as CSV`,
+  wifimgr show config AP-NAME format json         # Show in JSON format
+  wifimgr show config site US-LAB-01 format csv   # Show site configs as CSV`,
 	Args: cobra.ArbitraryArgs,
 	Run:  runShowConfig,
 }
@@ -53,6 +53,11 @@ func runShowConfig(_ *cobra.Command, args []string) {
 	parsedArgs, err := cmdutils.ParseShowArgs(args)
 	if err != nil {
 		logger.WithError(err).Error("Failed to parse arguments")
+		return
+	}
+
+	if parsedArgs.Format == "alias" {
+		logger.Error("alias format is only supported for 'show api bssid'")
 		return
 	}
 

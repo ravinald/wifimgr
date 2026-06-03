@@ -46,9 +46,9 @@ Examples:
   wifimgr show api gateway site US-LAB-01           - Show gateways for specific site
   wifimgr show api gateway GW-NAME                  - Show specific gateway by name
   wifimgr show api gateway 00:11:22:33:44:55        - Show specific gateway by MAC address
-  wifimgr show api gateway json                     - Show all gateways in JSON format
-  wifimgr show api gateway GW-NAME json all         - Show all fields for gateway in JSON
-  wifimgr show api gateway json no-resolve          - Show JSON with raw IDs
+  wifimgr show api gateway format json              - Show all gateways in JSON format
+  wifimgr show api gateway GW-NAME format json all  - Show all fields for gateway in JSON
+  wifimgr show api gateway format json no-resolve   - Show JSON with raw IDs
   wifimgr show api gateway target mist-prod         - Show gateways from mist-prod only`,
 	Args: cmdutils.ValidateShowAPArgs, // Reuse same validation
 	RunE: func(cmd *cobra.Command, args []string) error {

@@ -205,10 +205,10 @@ When using JSON format, you can add the `all` argument to display **all cached f
 
 ```bash
 # Show only configured columns
-wifimgr show api ap AP-NAME json
+wifimgr show api ap AP-NAME format json
 
 # Show ALL fields from cache
-wifimgr show api ap AP-NAME json all
+wifimgr show api ap AP-NAME format json all
 ```
 
 This is useful for:

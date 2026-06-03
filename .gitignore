@@ -78,3 +78,6 @@ coverage.html
 *.bak
 devicetype.json
 setup_schemas.sh
+# BEGIN attic — managed by `attic`, do not edit between markers
+docs-internal
+# END attic

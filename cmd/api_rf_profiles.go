@@ -30,7 +30,7 @@ import (
 
 // apiRFProfilesCmd represents the "show api rf-profiles" command
 var apiRFProfilesCmd = &cobra.Command{
-	Use:   "rf-profiles [profile-name] [site <site-name>] [json|csv] [no-resolve]",
+	Use:   "rf-profiles [profile-name] [site <site-name>] [format json|csv] [no-resolve]",
 	Short: "Show RF profiles from API cache",
 	Long: `Show RF profiles retrieved from the local API cache.
 
@@ -40,16 +40,15 @@ With a profile name argument, shows the raw JSON of the RF profile details.
 Arguments:
   profile-name - Optional profile name or ID to filter by
   site         - Filter by site name (use "site <site-name>")
-  json         - Output in JSON format
-  csv          - Output in CSV format
+  format       - Output format: "json" or "csv" (default: table)
   no-resolve   - Disable field ID to name resolution
 
 Examples:
   wifimgr show api rf-profiles                       - Show all RF profiles in table format
   wifimgr show api rf-profiles "Basic Indoor"        - Show specific profile details in JSON
   wifimgr show api rf-profiles site US-LAB-01        - Show RF profiles for a specific site
-  wifimgr show api rf-profiles json                  - Show all profiles in JSON format
-  wifimgr show api rf-profiles csv                   - Show all profiles in CSV format
+  wifimgr show api rf-profiles format json           - Show all profiles in JSON format
+  wifimgr show api rf-profiles format csv            - Show all profiles in CSV format
   wifimgr show api rf-profiles no-resolve            - Show all profiles without field resolution`,
 	Args: cmdutils.ValidateShowAPArgs,
 	RunE: runShowAPIRFProfiles,
