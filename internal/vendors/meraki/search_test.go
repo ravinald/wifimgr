@@ -8,6 +8,7 @@ import (
 	"time"
 
 	meraki "github.com/meraki/dashboard-api-go/v5/sdk"
+
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
 
@@ -312,11 +313,11 @@ func TestConvertOrgClientSearchToWirelessClient(t *testing.T) {
 				Manufacturer: "Apple",
 			},
 			record: &meraki.ResponseOrganizationsGetOrganizationClientsSearchRecords{
-				Description:      "johns-iphone",
-				IP:               "192.168.1.100",
-				SSID:             "Corporate-WiFi",
-				Os:               "iOS 17.0",
-				RecentDeviceMac:  "11:22:33:44:55:66",
+				Description:     "johns-iphone",
+				IP:              "192.168.1.100",
+				SSID:            "Corporate-WiFi",
+				Os:              "iOS 17.0",
+				RecentDeviceMac: "11:22:33:44:55:66",
 				Network: &meraki.ResponseOrganizationsGetOrganizationClientsSearchRecordsNetwork{
 					ID:   "L_123",
 					Name: "Main Office",

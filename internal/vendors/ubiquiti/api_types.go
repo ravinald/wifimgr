@@ -30,12 +30,12 @@ type ReportedState struct {
 
 // Site represents a site from GET /v1/sites.
 type Site struct {
-	SiteID     string        `json:"siteId"`
-	HostID     string        `json:"hostId"`
-	Meta       SiteMeta      `json:"meta"`
+	SiteID     string         `json:"siteId"`
+	HostID     string         `json:"hostId"`
+	Meta       SiteMeta       `json:"meta"`
 	Statistics SiteStatistics `json:"statistics"`
-	Permission string        `json:"permission"`
-	IsOwner    bool          `json:"isOwner"`
+	Permission string         `json:"permission"`
+	IsOwner    bool           `json:"isOwner"`
 }
 
 // SiteMeta contains the site's metadata.

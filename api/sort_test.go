@@ -432,12 +432,12 @@ func TestSortSitesNew(t *testing.T) {
 		{
 			name: "Nil and empty names handled properly",
 			input: []*MistSite{
-				&MistSite{Name: nil},
+				{Name: nil},
 				createMistSite(""),
 				createMistSite("Valid Site"),
 			},
 			expected: []*MistSite{
-				&MistSite{Name: nil},
+				{Name: nil},
 				createMistSite(""),
 				createMistSite("Valid Site"),
 			},

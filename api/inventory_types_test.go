@@ -137,15 +137,15 @@ func TestMistInventoryItem_FromMap_PreservesUnknownFields(t *testing.T) {
 
 func TestMistInventoryItem_ToConfigMap_ExcludesStatusFields(t *testing.T) {
 	item := &MistInventoryItem{
-		ID:           StringPtr("test-id"),         // status - should be excluded
-		OrgID:        StringPtr("org-123"),         // status - should be excluded
-		CreatedTime:  Int64Ptr(1640995200),         // status - should be excluded
-		ModifiedTime: Int64Ptr(1640995300),         // status - should be excluded
-		Connected:    BoolPtr(true),                // status - should be excluded
-		Adopted:      BoolPtr(true),                // status - should be excluded
-		MAC:          StringPtr("001122334455"),    // config - should be included
-		Name:         StringPtr("Test Device"),     // config - should be included
-		SiteID:       StringPtr("site-456"),        // config - should be included
+		ID:           StringPtr("test-id"),      // status - should be excluded
+		OrgID:        StringPtr("org-123"),      // status - should be excluded
+		CreatedTime:  Int64Ptr(1640995200),      // status - should be excluded
+		ModifiedTime: Int64Ptr(1640995300),      // status - should be excluded
+		Connected:    BoolPtr(true),             // status - should be excluded
+		Adopted:      BoolPtr(true),             // status - should be excluded
+		MAC:          StringPtr("001122334455"), // config - should be included
+		Name:         StringPtr("Test Device"),  // config - should be included
+		SiteID:       StringPtr("site-456"),     // config - should be included
 	}
 
 	result := item.ToConfigMap()
@@ -207,11 +207,11 @@ func TestMistInventoryItem_FromConfigMap_IgnoresStatusFields(t *testing.T) {
 func TestMistInventoryItem_RoundTrip(t *testing.T) {
 	// Test that ToMap → FromMap preserves data
 	original := map[string]interface{}{
-		"id":            "test-id",
-		"mac":           "001122334455",
-		"name":          "Test Device",
-		"custom_field":  "custom_value",
-		"created_time":  float64(1640995200),
+		"id":           "test-id",
+		"mac":          "001122334455",
+		"name":         "Test Device",
+		"custom_field": "custom_value",
+		"created_time": float64(1640995200),
 	}
 
 	item, err := NewInventoryItemFromMap(original)

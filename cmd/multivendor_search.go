@@ -24,9 +24,9 @@ import (
 // modes differ in which rows appear:
 //
 //   - detail:    Online clients only. Quick health overview — what's
-//                currently connected and on which band.
+//     currently connected and on which band.
 //   - extensive: Online and offline clients. Useful for historical or
-//                troubleshooting views where disconnected devices matter.
+//     troubleshooting views where disconnected devices matter.
 //
 // Both require the client-detail cache to be populated ahead of time via
 // `wifimgr refresh client site <name>`.
