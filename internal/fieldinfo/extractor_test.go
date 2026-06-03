@@ -77,11 +77,11 @@ func TestExtractFields(t *testing.T) {
 
 func TestGetFieldsForCommand(t *testing.T) {
 	tests := []struct {
-		name        string
-		cmdPath     string
-		wantErr     bool
-		wantType    string
-		minFields   int
+		name      string
+		cmdPath   string
+		wantErr   bool
+		wantType  string
+		minFields int
 	}{
 		{
 			name:      "show.api.ap",

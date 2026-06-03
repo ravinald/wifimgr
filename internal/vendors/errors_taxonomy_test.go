@@ -85,9 +85,9 @@ func TestErrorTaxonomy_AsAndUnwrap(t *testing.T) {
 // a UserMessage that includes the API label and some remediation hint.
 func TestErrorTaxonomy_UserMessages(t *testing.T) {
 	cases := []struct {
-		name      string
-		err       interface{ UserMessage() string }
-		mustHave  []string
+		name        string
+		err         interface{ UserMessage() string }
+		mustHave    []string
 		mustNotHave []string
 	}{
 		{

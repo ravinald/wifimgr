@@ -6,11 +6,11 @@ import (
 
 func TestGetNestedValue(t *testing.T) {
 	tests := []struct {
-		name     string
-		data     map[string]interface{}
-		path     string
-		want     interface{}
-		wantOK   bool
+		name   string
+		data   map[string]interface{}
+		path   string
+		want   interface{}
+		wantOK bool
 	}{
 		{
 			name:   "nil data returns false",

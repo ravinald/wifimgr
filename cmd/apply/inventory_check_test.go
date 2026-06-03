@@ -9,68 +9,68 @@ import (
 
 func TestInventoryChecker_IsInInventory(t *testing.T) {
 	tests := []struct {
-		name              string
-		mac               string
-		inAPIInventory    bool
-		inLocalInventory  bool
-		expectedResult    bool
-		description       string
+		name             string
+		mac              string
+		inAPIInventory   bool
+		inLocalInventory bool
+		expectedResult   bool
+		description      string
 	}{
 		{
-			name:              "device in both inventories",
-			mac:               "aa:bb:cc:dd:ee:ff",
-			inAPIInventory:    true,
-			inLocalInventory:  true,
-			expectedResult:    true,
-			description:       "Device exists in vendor account AND is allowlisted for writes",
+			name:             "device in both inventories",
+			mac:              "aa:bb:cc:dd:ee:ff",
+			inAPIInventory:   true,
+			inLocalInventory: true,
+			expectedResult:   true,
+			description:      "Device exists in vendor account AND is allowlisted for writes",
 		},
 		{
-			name:              "device in API inventory only",
-			mac:               "11:22:33:44:55:66",
-			inAPIInventory:    true,
-			inLocalInventory:  false,
-			expectedResult:    false,
-			description:       "Device exists in vendor account but NOT allowlisted for writes",
+			name:             "device in API inventory only",
+			mac:              "11:22:33:44:55:66",
+			inAPIInventory:   true,
+			inLocalInventory: false,
+			expectedResult:   false,
+			description:      "Device exists in vendor account but NOT allowlisted for writes",
 		},
 		{
-			name:              "device in local inventory only",
-			mac:               "aa:aa:aa:aa:aa:aa",
-			inAPIInventory:    false,
-			inLocalInventory:  true,
-			expectedResult:    false,
-			description:       "Device is allowlisted but doesn't exist in vendor account",
+			name:             "device in local inventory only",
+			mac:              "aa:aa:aa:aa:aa:aa",
+			inAPIInventory:   false,
+			inLocalInventory: true,
+			expectedResult:   false,
+			description:      "Device is allowlisted but doesn't exist in vendor account",
 		},
 		{
-			name:              "device in neither inventory",
-			mac:               "ff:ff:ff:ff:ff:ff",
-			inAPIInventory:    false,
-			inLocalInventory:  false,
-			expectedResult:    false,
-			description:       "Device doesn't exist anywhere",
+			name:             "device in neither inventory",
+			mac:              "ff:ff:ff:ff:ff:ff",
+			inAPIInventory:   false,
+			inLocalInventory: false,
+			expectedResult:   false,
+			description:      "Device doesn't exist anywhere",
 		},
 		{
-			name:              "empty MAC address",
-			mac:               "",
-			inAPIInventory:    true,
-			inLocalInventory:  true,
-			expectedResult:    false,
-			description:       "Invalid MAC should always return false",
+			name:             "empty MAC address",
+			mac:              "",
+			inAPIInventory:   true,
+			inLocalInventory: true,
+			expectedResult:   false,
+			description:      "Invalid MAC should always return false",
 		},
 		{
-			name:              "invalid MAC address",
-			mac:               "invalid-mac",
-			inAPIInventory:    true,
-			inLocalInventory:  true,
-			expectedResult:    false,
-			description:       "Invalid MAC format should always return false",
+			name:             "invalid MAC address",
+			mac:              "invalid-mac",
+			inAPIInventory:   true,
+			inLocalInventory: true,
+			expectedResult:   false,
+			description:      "Invalid MAC format should always return false",
 		},
 		{
-			name:              "MAC normalization test",
-			mac:               "AA-BB-CC-DD-EE-FF", // Different format, same MAC
-			inAPIInventory:    true,
-			inLocalInventory:  true,
-			expectedResult:    true,
-			description:       "Different MAC formats should be normalized",
+			name:             "MAC normalization test",
+			mac:              "AA-BB-CC-DD-EE-FF", // Different format, same MAC
+			inAPIInventory:   true,
+			inLocalInventory: true,
+			expectedResult:   true,
+			description:      "Different MAC formats should be normalized",
 		},
 	}
 
@@ -312,44 +312,44 @@ func TestInventoryChecker_FilterByInventory(t *testing.T) {
 func TestInventoryChecker_WriteOperationScenarios(t *testing.T) {
 	// This test verifies the core requirement: write operations must check BOTH inventories
 	scenarios := []struct {
-		name              string
-		mac               string
-		inAPIInventory    bool
-		inLocalInventory  bool
-		shouldAllowWrite  bool
-		description       string
+		name             string
+		mac              string
+		inAPIInventory   bool
+		inLocalInventory bool
+		shouldAllowWrite bool
+		description      string
 	}{
 		{
-			name:              "write allowed - device in both",
-			mac:               "aa:bb:cc:dd:ee:ff",
-			inAPIInventory:    true,
-			inLocalInventory:  true,
-			shouldAllowWrite:  true,
-			description:       "Device exists and is allowlisted - write should be allowed",
+			name:             "write allowed - device in both",
+			mac:              "aa:bb:cc:dd:ee:ff",
+			inAPIInventory:   true,
+			inLocalInventory: true,
+			shouldAllowWrite: true,
+			description:      "Device exists and is allowlisted - write should be allowed",
 		},
 		{
-			name:              "write denied - device not allowlisted",
-			mac:               "11:22:33:44:55:66",
-			inAPIInventory:    true,
-			inLocalInventory:  false,
-			shouldAllowWrite:  false,
-			description:       "Device exists but not allowlisted - write should be denied",
+			name:             "write denied - device not allowlisted",
+			mac:              "11:22:33:44:55:66",
+			inAPIInventory:   true,
+			inLocalInventory: false,
+			shouldAllowWrite: false,
+			description:      "Device exists but not allowlisted - write should be denied",
 		},
 		{
-			name:              "write denied - device doesn't exist",
-			mac:               "aa:aa:aa:aa:aa:aa",
-			inAPIInventory:    false,
-			inLocalInventory:  true,
-			shouldAllowWrite:  false,
-			description:       "Device is allowlisted but doesn't exist - write should be denied",
+			name:             "write denied - device doesn't exist",
+			mac:              "aa:aa:aa:aa:aa:aa",
+			inAPIInventory:   false,
+			inLocalInventory: true,
+			shouldAllowWrite: false,
+			description:      "Device is allowlisted but doesn't exist - write should be denied",
 		},
 		{
-			name:              "write denied - device unknown",
-			mac:               "ff:ff:ff:ff:ff:ff",
-			inAPIInventory:    false,
-			inLocalInventory:  false,
-			shouldAllowWrite:  false,
-			description:       "Device unknown everywhere - write should be denied",
+			name:             "write denied - device unknown",
+			mac:              "ff:ff:ff:ff:ff:ff",
+			inAPIInventory:   false,
+			inLocalInventory: false,
+			shouldAllowWrite: false,
+			description:      "Device unknown everywhere - write should be denied",
 		},
 	}
 
@@ -391,44 +391,44 @@ func TestInventoryChecker_WriteOperationScenarios(t *testing.T) {
 func TestInventoryChecker_ReadOperationScenarios(t *testing.T) {
 	// This test verifies that read operations only need API inventory
 	scenarios := []struct {
-		name              string
-		mac               string
-		inAPIInventory    bool
-		inLocalInventory  bool
-		shouldAllowRead   bool
-		description       string
+		name             string
+		mac              string
+		inAPIInventory   bool
+		inLocalInventory bool
+		shouldAllowRead  bool
+		description      string
 	}{
 		{
-			name:              "read allowed - device in both",
-			mac:               "aa:bb:cc:dd:ee:ff",
-			inAPIInventory:    true,
-			inLocalInventory:  true,
-			shouldAllowRead:   true,
-			description:       "Device exists and is allowlisted - read allowed",
+			name:             "read allowed - device in both",
+			mac:              "aa:bb:cc:dd:ee:ff",
+			inAPIInventory:   true,
+			inLocalInventory: true,
+			shouldAllowRead:  true,
+			description:      "Device exists and is allowlisted - read allowed",
 		},
 		{
-			name:              "read allowed - device in API only",
-			mac:               "11:22:33:44:55:66",
-			inAPIInventory:    true,
-			inLocalInventory:  false,
-			shouldAllowRead:   true,
-			description:       "Device exists but not allowlisted - read still allowed",
+			name:             "read allowed - device in API only",
+			mac:              "11:22:33:44:55:66",
+			inAPIInventory:   true,
+			inLocalInventory: false,
+			shouldAllowRead:  true,
+			description:      "Device exists but not allowlisted - read still allowed",
 		},
 		{
-			name:              "read denied - device in local only",
-			mac:               "aa:aa:aa:aa:aa:aa",
-			inAPIInventory:    false,
-			inLocalInventory:  true,
-			shouldAllowRead:   false,
-			description:       "Device is allowlisted but doesn't exist - read denied",
+			name:             "read denied - device in local only",
+			mac:              "aa:aa:aa:aa:aa:aa",
+			inAPIInventory:   false,
+			inLocalInventory: true,
+			shouldAllowRead:  false,
+			description:      "Device is allowlisted but doesn't exist - read denied",
 		},
 		{
-			name:              "read denied - device unknown",
-			mac:               "ff:ff:ff:ff:ff:ff",
-			inAPIInventory:    false,
-			inLocalInventory:  false,
-			shouldAllowRead:   false,
-			description:       "Device unknown - read denied",
+			name:             "read denied - device unknown",
+			mac:              "ff:ff:ff:ff:ff:ff",
+			inAPIInventory:   false,
+			inLocalInventory: false,
+			shouldAllowRead:  false,
+			description:      "Device unknown - read denied",
 		},
 	}
 

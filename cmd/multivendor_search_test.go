@@ -302,9 +302,9 @@ func TestSortWirelessRows(t *testing.T) {
 	rows := []formatter.GenericTableData{
 		{"ssid": "Guest", "ap_name": "ap3-1", "mac": "10:00:00:00:00:00"},
 		{"ssid": "Corp", "ap_name": "ap10-2", "mac": "00:11:22:33:44:55"},
-		{"ssid": "Corp", "ap_name": "ap2-2", "mac": "00:11:22:33:44:55"},  // lexically after "ap10-2", naturally before
+		{"ssid": "Corp", "ap_name": "ap2-2", "mac": "00:11:22:33:44:55"}, // lexically after "ap10-2", naturally before
 		{"ssid": "Corp", "ap_name": "ap1-1", "mac": "00:11:22:33:44:54"},
-		{"ssid": "Corp", "ap_name": "ap1-1", "mac": "00:11:22:33:44:55"},  // same SSID+AP, later MAC
+		{"ssid": "Corp", "ap_name": "ap1-1", "mac": "00:11:22:33:44:55"}, // same SSID+AP, later MAC
 		{"ssid": "Guest", "ap_name": "ap1-1", "mac": "aa-bb-cc-dd-ee-ff"},
 		{"ssid": "Corp", "ap_name": "", "mac": "aabb.ccdd.eeff"}, // empty AP sorts first within SSID
 	}
@@ -547,4 +547,3 @@ func TestBuildWiredSearchColumns_SiteFilter(t *testing.T) {
 		t.Errorf("site filter: expected site_name to be omitted")
 	}
 }
-

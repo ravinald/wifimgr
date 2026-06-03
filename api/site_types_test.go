@@ -124,12 +124,12 @@ func TestMistSite_FromMap_PreservesUnknownFields(t *testing.T) {
 
 func TestMistSite_ToConfigMap_ExcludesStatusFields(t *testing.T) {
 	site := &MistSite{
-		ID:           StringPtr("test-id"),         // status - should be excluded
-		OrgID:        StringPtr("org-123"),         // status - should be excluded
-		CreatedTime:  Float64Ptr(1234567890.0),     // status - should be excluded
-		ModifiedTime: Float64Ptr(1234567891.0),     // status - should be excluded
-		Name:         StringPtr("Test Site"),       // config - should be included
-		Address:      StringPtr("123 Test St"),     // config - should be included
+		ID:           StringPtr("test-id"),     // status - should be excluded
+		OrgID:        StringPtr("org-123"),     // status - should be excluded
+		CreatedTime:  Float64Ptr(1234567890.0), // status - should be excluded
+		ModifiedTime: Float64Ptr(1234567891.0), // status - should be excluded
+		Name:         StringPtr("Test Site"),   // config - should be included
+		Address:      StringPtr("123 Test St"), // config - should be included
 	}
 
 	result := site.ToConfigMap()

@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/ravinald/wifimgr/api"
 	"github.com/ravinald/wifimgr/cmd/inventory"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/formatter"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/vendors"
-	"github.com/sirupsen/logrus"
 )
 
 // Test helpers

@@ -1,4 +1,4 @@
-.PHONY: build test test-coverage clean lint vet fmt all version check security vuln release-snapshot
+.PHONY: build test test-coverage clean lint vet fmt fmt-check all version check security vuln release-snapshot
 .PHONY: test-api test-internal test-cmd test-shell test-client test-mock-client test-ap
 .PHONY: test-vendors test-vendors-registry test-vendors-cache test-vendors-errors test-vendors-mock
 
@@ -26,6 +26,10 @@ GOVULNCHECK = $(GOCMD) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSI
 
 GOSEC_VERSION = v2.26.1
 GOSEC = $(GOCMD) run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION)
+
+GOIMPORTS_VERSION = v0.45.0
+GOIMPORTS = $(GOCMD) run golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION)
+GOIMPORTS_LOCAL = github.com/ravinald/wifimgr
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -156,7 +160,18 @@ vet:
 	$(GOVET) ./...
 
 fmt:
-	$(GOFMT) ./...
+	gofmt -w .
+	$(GOIMPORTS) -w -local $(GOIMPORTS_LOCAL) .
+
+# Fail if any file (including tests) is not gofmt/goimports clean. golangci-lint
+# skips test files (run.tests: false), so this is the only gate that catches
+# format drift in *_test.go — every PR must pass it regardless of which files
+# it touched.
+fmt-check:
+	@unformatted=$$(gofmt -l . | grep -v '^vendor/'; $(GOIMPORTS) -l -local $(GOIMPORTS_LOCAL) . | grep -v '^vendor/'); \
+	if [ -n "$$unformatted" ]; then \
+		echo "Unformatted files (run 'make fmt'):"; echo "$$unformatted" | sort -u; exit 1; \
+	fi
 
 security:
 	$(GOSEC) ./...
@@ -212,7 +227,7 @@ install-lint:
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
 # Pre-push quality check (mirrors CI pipeline)
-check: vet lint test security
+check: fmt-check vet lint test security
 
 # Build and install the binary
 install: check build
