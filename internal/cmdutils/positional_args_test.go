@@ -48,14 +48,49 @@ func TestParseShowArgsFormat(t *testing.T) {
 	}
 }
 
+func TestParseShowArgsScopeAndVerbosity(t *testing.T) {
+	// "all" widens object scope; it no longer implies json (former all-fields).
+	p, err := ParseShowArgs([]string{"all"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !p.ShowUnmanaged {
+		t.Error("'all' should set ShowUnmanaged")
+	}
+	if p.AllFields() {
+		t.Error("'all' alone should not imply all-fields")
+	}
+
+	// extensive => all fields; detail is plumbed but not all-fields.
+	p, _ = ParseShowArgs([]string{"extensive"})
+	if p.Verbosity != VerbosityExtensive || !p.AllFields() {
+		t.Errorf("extensive: Verbosity=%q AllFields=%v", p.Verbosity, p.AllFields())
+	}
+	p, _ = ParseShowArgs([]string{"detail"})
+	if p.Verbosity != VerbosityDetail || p.AllFields() {
+		t.Errorf("detail: Verbosity=%q AllFields=%v", p.Verbosity, p.AllFields())
+	}
+
+	// They compose, and table format stays valid with extensive.
+	p, err = ParseShowArgs([]string{"all", "extensive"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !p.ShowUnmanaged || !p.AllFields() || p.Format != "table" {
+		t.Errorf("all+extensive: ShowUnmanaged=%v AllFields=%v Format=%q", p.ShowUnmanaged, p.AllFields(), p.Format)
+	}
+
+	// Double verbosity is rejected.
+	if _, err := ParseShowArgs([]string{"detail", "extensive"}); err == nil {
+		t.Error("expected error for two verbosity keywords")
+	}
+}
+
 func TestValidateShowArgsAliasScope(t *testing.T) {
 	aliasArgs := []string{"format", "alias"}
 
 	if err := ValidateShowAPArgs(nil, aliasArgs); err == nil {
 		t.Error("ValidateShowAPArgs should reject alias format")
-	}
-	if err := ValidateInventoryArgs(nil, aliasArgs); err == nil {
-		t.Error("ValidateInventoryArgs should reject alias format")
 	}
 	if err := ValidateShowBSSIDArgs(nil, aliasArgs); err != nil {
 		t.Errorf("ValidateShowBSSIDArgs should accept alias format, got: %v", err)

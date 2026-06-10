@@ -2,9 +2,7 @@ package inventory
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -99,36 +97,31 @@ func HandleCommand(ctx context.Context, client api.Client, cfg *config.Config, a
 	return ListInventory(ctx, client, cfg, deviceType, siteName, formatOverride, showAllFields)
 }
 
-// LoadLocalInventory loads the inventory from the local inventory file
+// LoadLocalInventory loads the inventory file and flattens the per-site armed
+// lists into a single set of MACs per device type. The on-disk schema is keyed
+// by site (config.inventory.site.<SITE>.<type>); this flattened view is what
+// the legacy inventory display consumes.
 func LoadLocalInventory(filePath string) (*LocalInventoryFile, error) {
 	logging.Infof("Loading inventory from local file: %s", filePath)
 
-	file, err := os.Open(filePath) // #nosec G304 -- path from operator-controlled config
+	inv, err := config.LoadInventoryFile(filePath)
 	if err != nil {
-		logging.Errorf("Failed to open inventory file: %v", err)
-		return nil, fmt.Errorf("failed to open inventory file: %w", err)
-	}
-	defer func() {
-		if closeErr := file.Close(); closeErr != nil {
-			logging.Warnf("Failed to close inventory file: %v", closeErr)
-		}
-	}()
-
-	var inventory LocalInventoryFile
-	if err := json.NewDecoder(file).Decode(&inventory); err != nil {
-		logging.Errorf("Failed to parse inventory file: %v", err)
-		return nil, fmt.Errorf("failed to parse inventory file: %w", err)
+		logging.Errorf("Failed to load inventory file: %v", err)
+		return nil, fmt.Errorf("failed to load inventory file: %w", err)
 	}
 
-	// Extract counts for each device type
-	apCount := len(inventory.Config.Inventory.AP)
-	switchCount := len(inventory.Config.Inventory.Switch)
-	gatewayCount := len(inventory.Config.Inventory.Gateway)
+	flat := &LocalInventoryFile{Version: inv.Version}
+	flat.Metadata.Description = inv.Metadata.Description
+	for _, si := range inv.Config.Inventory.Site {
+		flat.Config.Inventory.AP = append(flat.Config.Inventory.AP, si.AP...)
+		flat.Config.Inventory.Switch = append(flat.Config.Inventory.Switch, si.Switch...)
+		flat.Config.Inventory.Gateway = append(flat.Config.Inventory.Gateway, si.Gateway...)
+	}
 
 	logging.Infof("Successfully loaded inventory from file with %d AP, %d switch, and %d gateway items",
-		apCount, switchCount, gatewayCount)
+		len(flat.Config.Inventory.AP), len(flat.Config.Inventory.Switch), len(flat.Config.Inventory.Gateway))
 
-	return &inventory, nil
+	return flat, nil
 }
 
 // ConvertLocalInventoryToVendors converts local inventory items to vendors inventory items

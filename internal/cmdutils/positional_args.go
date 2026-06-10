@@ -17,17 +17,32 @@ func ContainsHelp(args []string) bool {
 	return false
 }
 
+// Show verbosity levels (Junos-style). Default is the configured column set;
+// detail and extensive widen the fields shown. extensive currently maps onto
+// "all cache fields"; detail is plumbed but reserved for a future column tier.
+const (
+	VerbosityDetail    = "detail"
+	VerbosityExtensive = "extensive"
+)
+
 // ParsedShowArgs represents parsed arguments for show commands
 type ParsedShowArgs struct {
-	Filter     string
-	SiteName   string
-	Target     string // API target label (e.g., "mist-prod", "meraki")
-	ESSIDName  string // SSID name filter (from "essid" keyword)
-	SortField  string // Secondary sort field (from "sort" keyword)
-	Format     string
-	ShowAll    bool
-	NoResolve  bool
-	DeviceType string
+	Filter        string
+	SiteName      string
+	Target        string // API target label (e.g., "mist-prod", "meraki")
+	ESSIDName     string // SSID name filter (from "essid" keyword)
+	SortField     string // Secondary sort field (from "sort" keyword)
+	Format        string
+	ShowUnmanaged bool   // "all": widen object scope to everything the API has, not just managed
+	Verbosity     string // "", "detail", or "extensive" (field verbosity)
+	NoResolve     bool
+	DeviceType    string
+}
+
+// AllFields reports whether every cache field should be shown (the "extensive"
+// verbosity). Replaces the former json-only "all" keyword.
+func (p *ParsedShowArgs) AllFields() bool {
+	return p.Verbosity == VerbosityExtensive
 }
 
 // ParseShowArgs parses positional arguments for show commands
@@ -108,7 +123,14 @@ func ParseShowArgs(args []string) (*ParsedShowArgs, error) {
 			return nil, fmt.Errorf("use 'format %s' instead of bare '%s'", arg, arg)
 
 		case "all":
-			result.ShowAll = true
+			// Object scope: show everything the API has, not just managed devices.
+			result.ShowUnmanaged = true
+
+		case VerbosityDetail, VerbosityExtensive:
+			if result.Verbosity != "" {
+				return nil, fmt.Errorf("verbosity specified multiple times (have %q)", result.Verbosity)
+			}
+			result.Verbosity = arg
 
 		case "no-resolve":
 			result.NoResolve = true
@@ -128,11 +150,6 @@ func ParseShowArgs(args []string) (*ParsedShowArgs, error) {
 				return nil, fmt.Errorf("unexpected argument: %s", arg)
 			}
 		}
-	}
-
-	// Validate combinations
-	if result.ShowAll && result.Format != "json" {
-		return nil, fmt.Errorf("'all' is only valid with json format")
 	}
 
 	return result, nil
@@ -162,36 +179,6 @@ func ValidateShowBSSIDArgs(_ *cobra.Command, args []string) error {
 	}
 	_, err := ParseShowArgs(args)
 	return err
-}
-
-// ValidateInventoryArgs validates arguments for the show inventory command
-func ValidateInventoryArgs(_ *cobra.Command, args []string) error {
-	// Allow "help" as a special keyword (handled in RunE)
-	if ContainsHelp(args) {
-		return nil
-	}
-
-	parsed, err := ParseShowArgs(args)
-	if err != nil {
-		return err
-	}
-
-	if parsed.Format == "alias" {
-		return fmt.Errorf("alias format is only supported for 'show api bssid'")
-	}
-
-	// For inventory, the filter should be a device type if present
-	if parsed.Filter != "" && parsed.DeviceType == "" {
-		// Check if the filter is actually a device type
-		normalized := NormalizeDeviceType(parsed.Filter)
-		if normalized != parsed.Filter {
-			// It was a device type
-			parsed.DeviceType = normalized
-			parsed.Filter = ""
-		}
-	}
-
-	return nil
 }
 
 // ParsedApplyArgs represents parsed arguments for apply commands

@@ -23,33 +23,31 @@ import (
 
 // apiSwitchCmd represents the "show api switch" command
 var apiSwitchCmd = &cobra.Command{
-	Use:   "switch [name-or-mac] [site site-name] [target api-label] [format json|csv] [all] [no-resolve]",
-	Short: "Show switch information from API cache",
-	Long: `Show switch information retrieved from the local API cache.
+	Use:   "switch [name-or-mac] [site site-name] [target api-label] [all] [detail|extensive] [format json|csv] [no-resolve]",
+	Short: "Show switches wifimgr manages (add 'all' for every switch the API knows)",
+	Long: `Show switch data from the local API cache.
 
-This command displays switch device data from the local cache with connection status indicators.
-
-When multiple APIs are configured:
-  - Without target: Aggregates switches from all APIs
-  - With target: Shows switches from the specified API only
+By default this lists only the switches armed in your per-site inventory, with a
+'*' marker when local intent has drifted from the cached config. Add 'all' to
+widen the view to every switch the API knows about (managed ones highlighted).
 
 Arguments:
   name-or-mac  - Optional switch name or MAC address filter
   site         - Keyword followed by site name for filtering
   target       - Keyword followed by API label to target specific API
+  all          - Show every switch the API has, not just managed
+  detail       - Reserved verbosity level (field set unchanged for now)
+  extensive    - Show all cache fields
   format       - Output format: "json" or "csv" (default: table)
-  all          - Show all fields (json format only)
   no-resolve   - Disable field ID to name resolution
 
 Examples:
-  wifimgr show api switch                          - Show all switches
-  wifimgr show api switch site US-LAB-01           - Show switches for specific site
-  wifimgr show api switch SW-NAME                  - Show specific switch by name
-  wifimgr show api switch 00:11:22:33:44:55        - Show specific switch by MAC address
-  wifimgr show api switch format json              - Show all switches in JSON format
-  wifimgr show api switch SW-NAME format json all  - Show all fields for switch in JSON
-  wifimgr show api switch format json no-resolve   - Show JSON with raw IDs
-  wifimgr show api switch target mist-prod         - Show switches from mist-prod only`,
+  wifimgr show switch                          - Managed switches
+  wifimgr show switch all                      - Every switch the API knows
+  wifimgr show switch site US-LAB-01           - Managed switches in a site
+  wifimgr show switch SW-NAME                  - A managed switch by name
+  wifimgr show switch format json extensive    - Managed switches, all fields, JSON
+  wifimgr show switch target mist-prod         - Managed switches from mist-prod only`,
 	Args: cmdutils.ValidateShowAPArgs, // Reuse same validation
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Check for help keyword in positional arguments
@@ -71,5 +69,5 @@ Examples:
 }
 
 func init() {
-	apiCmd.AddCommand(apiSwitchCmd)
+	showCmd.AddCommand(apiSwitchCmd)
 }
