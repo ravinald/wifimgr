@@ -2,9 +2,8 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -36,15 +35,15 @@ func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmduti
 		return fmt.Errorf("no APIs configured")
 	}
 
-	// Load managed MACs from inventory file for highlighting
-	inventoryPath := viper.GetString("files.inventory")
-	var managedMACs map[string]string
-	if inventoryPath != "" {
-		managedMACs = loadManagedMACs(inventoryPath, []string{deviceType})
-		if managedMACs != nil {
-			logging.Debugf("Loaded %d managed MACs for highlighting", len(managedMACs))
-		}
+	// Managed-default: show only the armed devices unless `all` widens the
+	// scope. Drift markers flag devices whose local intent differs from the
+	// cached config — folded in from the former `show inventory` view.
+	managed, err := loadManagedMACSet([]string{deviceType})
+	if err != nil {
+		return err
 	}
+	deviceIntents := loadDeviceIntentsFromSiteConfigs()
+	hasDrift := false
 
 	// Collect devices from all target APIs
 	var allDevices []formatter.GenericTableData
@@ -73,6 +72,12 @@ func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmduti
 		for mac, item := range inventory {
 			normalizedMAC := vendors.NormalizeMAC(mac)
 
+			// Object scope: managed devices only, unless `all` was given.
+			isManaged := managed[normalizedMAC]
+			if !parsed.ShowUnmanaged && !isManaged {
+				continue
+			}
+
 			// Apply site filter if specified
 			if parsed.SiteName != "" {
 				siteID, ok := cache.SiteIndex.ByName[parsed.SiteName]
@@ -94,12 +99,21 @@ func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmduti
 				}
 			}
 
-			// Check if device is in managed inventory for highlighting
-			_, isManaged := managedMACs[normalizedMAC]
-
-			// Convert to table data - highlight name if managed
+			// Drift marker when local intent differs from the cached config.
 			displayName := item.Name
-			if isManaged && displayName != "" {
+			if intent, ok := deviceIntents[normalizedMAC]; ok {
+				if displayName == "" && intent.Name != "" {
+					displayName = intent.Name
+				}
+				if hasConfigDrift(cache, normalizedMAC, deviceType, intent) {
+					displayName = "* " + displayName
+					hasDrift = true
+				}
+			}
+			// In the widened (`all`) view, green-highlight the managed ones so
+			// they stand out among the unmanaged. The managed-default view is
+			// already all-managed, so highlighting there would be noise.
+			if parsed.ShowUnmanaged && isManaged && item.Name != "" {
 				displayName = "GREEN_TEXT:" + displayName
 			}
 
@@ -146,23 +160,32 @@ func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmduti
 		}
 	}
 
-	// Build title based on device type
+	// Build title based on device type. "Managed" in the default view; the
+	// widened `all` view drops the qualifier.
 	typeName := getDeviceTypeName(deviceType)
-	title := fmt.Sprintf("%s Devices (%d)", typeName, len(allDevices))
+	scopeWord := "Managed "
+	if parsed.ShowUnmanaged {
+		scopeWord = ""
+	}
+	title := fmt.Sprintf("%s%s Devices (%d)", scopeWord, typeName, len(allDevices))
 	if len(apiCounts) > 1 {
-		title = fmt.Sprintf("%s Devices (%d from %d APIs)", typeName, len(allDevices), len(apiCounts))
+		title = fmt.Sprintf("%s%s Devices (%d from %d APIs)", scopeWord, typeName, len(allDevices), len(apiCounts))
 	} else if apiFlag != "" {
-		title = fmt.Sprintf("%s Devices from %s (%d)", typeName, apiFlag, len(allDevices))
+		title = fmt.Sprintf("%s%s Devices from %s (%d)", scopeWord, typeName, apiFlag, len(allDevices))
 	}
 
 	if len(allDevices) == 0 {
 		fmt.Printf("%s:\n", title)
-		fmt.Printf("No %s devices found\n", strings.ToLower(typeName))
+		if !parsed.ShowUnmanaged {
+			fmt.Printf("No managed %s devices. Arm devices in inventory.json or add 'all' to see everything.\n", strings.ToLower(typeName))
+		} else {
+			fmt.Printf("No %s devices found\n", strings.ToLower(typeName))
+		}
 		return nil
 	}
 
 	// Create command path for config lookup
-	commandPath := fmt.Sprintf("show.api.%s", deviceType)
+	commandPath := fmt.Sprintf("show.%s", deviceType)
 
 	// Check if there's a command-specific format in the config
 	displayCommands := viper.GetStringMap("display.commands")
@@ -218,7 +241,7 @@ func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmduti
 		ShowSeparator: true,
 		CommandPath:   commandPath,
 		CacheAccess:   cacheAccessor,
-		ShowAllFields: parsed.ShowAll,
+		ShowAllFields: parsed.AllFields(),
 		Columns:       defaultColumns,
 	}
 
@@ -241,6 +264,12 @@ func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmduti
 	}
 
 	fmt.Print(printer.Print())
+
+	// Drift note (table only): mirrors the marker prepended to drifted names.
+	if hasDrift && tableConfig.Format == "table" {
+		fmt.Println()
+		fmt.Println("* Device has configuration drift from intent")
+	}
 
 	// Show cache timestamp
 	printCacheTimestamp(cacheMgr, targetAPIs, tableConfig.Format)
@@ -274,6 +303,12 @@ func showSitesMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) er
 		}
 	}
 
+	// Managed-default: list only armed sites unless `all` widens the scope.
+	managedSites, err := loadManagedSiteSet()
+	if err != nil {
+		return err
+	}
+
 	// Collect sites from all target APIs (list view)
 	var allSites []formatter.GenericTableData
 	apiCounts := make(map[string]int)
@@ -286,6 +321,11 @@ func showSitesMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) er
 		}
 
 		for _, site := range cache.Sites.Info {
+			// Object scope: armed sites only, unless `all` was given.
+			if !parsed.ShowUnmanaged && !managedSites[strings.ToLower(site.Name)] {
+				continue
+			}
+
 			// Apply name filter if specified (substring match for list view)
 			if parsed.Filter != "" {
 				if !strings.Contains(strings.ToLower(site.Name), strings.ToLower(parsed.Filter)) {
@@ -343,17 +383,25 @@ func showSitesMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) er
 		}
 	}
 
-	// Build title
-	title := fmt.Sprintf("Sites (%d)", len(allSites))
+	// Build title. "Managed" in the default view; `all` drops the qualifier.
+	scopeWord := "Managed "
+	if parsed.ShowUnmanaged {
+		scopeWord = ""
+	}
+	title := fmt.Sprintf("%sSites (%d)", scopeWord, len(allSites))
 	if len(apiCounts) > 1 {
-		title = fmt.Sprintf("Sites (%d from %d APIs)", len(allSites), len(apiCounts))
+		title = fmt.Sprintf("%sSites (%d from %d APIs)", scopeWord, len(allSites), len(apiCounts))
 	} else if apiFlag != "" {
-		title = fmt.Sprintf("Sites from %s (%d)", apiFlag, len(allSites))
+		title = fmt.Sprintf("%sSites from %s (%d)", scopeWord, apiFlag, len(allSites))
 	}
 
 	if len(allSites) == 0 {
 		fmt.Printf("%s:\n", title)
-		fmt.Println("No sites found")
+		if !parsed.ShowUnmanaged {
+			fmt.Println("No managed sites. Arm devices in inventory.json or add 'all' to see everything.")
+		} else {
+			fmt.Println("No sites found")
+		}
 		return nil
 	}
 
@@ -375,7 +423,7 @@ func showSitesMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) er
 	}
 
 	// Create command path for config lookup
-	commandPath := "show.api.sites"
+	commandPath := "show.sites"
 
 	// Check if there's a command-specific format in the config
 	displayCommands := viper.GetStringMap("display.commands")
@@ -416,7 +464,7 @@ func showSitesMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) er
 		ShowSeparator: true,
 		CommandPath:   commandPath,
 		CacheAccess:   cacheAccessor,
-		ShowAllFields: parsed.ShowAll,
+		ShowAllFields: parsed.AllFields(),
 		Columns:       columns,
 	}
 
@@ -621,293 +669,6 @@ func showSiteDetailMultiVendor(matches []siteMatch, parsed *cmdutils.ParsedShowA
 	return nil
 }
 
-// showInventoryMultiVendor shows inventory items from one or more APIs.
-// deviceType can be "ap", "switch", "gateway", or "" for all.
-// If an inventory.json file is configured, only devices listed there are shown.
-func showInventoryMultiVendor(_ context.Context, deviceType string, parsed *cmdutils.ParsedShowArgs) error {
-	// Validate target API if provided
-	if err := ValidateAPIFlag(); err != nil {
-		return err
-	}
-
-	cacheMgr := GetCacheManager()
-	if cacheMgr == nil {
-		return fmt.Errorf("cache manager not initialized")
-	}
-
-	targetAPIs := GetTargetAPIs()
-	if len(targetAPIs) == 0 {
-		return fmt.Errorf("no APIs configured")
-	}
-
-	// Determine which device types to show
-	deviceTypes := []string{"ap", "switch", "gateway"}
-	if deviceType != "" {
-		deviceTypes = []string{deviceType}
-	}
-
-	// Check if an inventory file is configured - this filters to only managed devices
-	inventoryPath := viper.GetString("files.inventory")
-	var managedMACs map[string]string // normalized MAC -> device type
-	if inventoryPath != "" {
-		managedMACs = loadManagedMACs(inventoryPath, deviceTypes)
-		if managedMACs == nil {
-			// Error loading inventory file - already logged
-			return fmt.Errorf("failed to load inventory file: %s", inventoryPath)
-		}
-		logging.Debugf("Loaded %d managed MACs from inventory file", len(managedMACs))
-	}
-
-	// Load device intents from local site configs to enrich inventory display and detect drift
-	deviceIntents := loadDeviceIntentsFromSiteConfigs()
-
-	// Collect inventory items from all target APIs
-	var allItems []formatter.GenericTableData
-	apiCounts := make(map[string]int)
-	hasDrift := false // Track if any device has configuration drift
-
-	for _, apiLabel := range targetAPIs {
-		cache, err := cacheMgr.GetAPICache(apiLabel)
-		if err != nil {
-			// Skip APIs with no cache
-			continue
-		}
-
-		for _, dt := range deviceTypes {
-			var inventory map[string]*vendors.InventoryItem
-			switch dt {
-			case "ap":
-				inventory = cache.Inventory.AP
-			case "switch":
-				inventory = cache.Inventory.Switch
-			case "gateway":
-				inventory = cache.Inventory.Gateway
-			}
-
-			for mac, item := range inventory {
-				normalizedMAC := vendors.NormalizeMAC(mac)
-
-				// If inventory file is configured, only show managed devices
-				if managedMACs != nil {
-					if _, isManaged := managedMACs[normalizedMAC]; !isManaged {
-						continue
-					}
-				}
-
-				// Apply site filter if specified
-				if parsed.SiteName != "" {
-					siteID, ok := cache.SiteIndex.ByName[parsed.SiteName]
-					if !ok || item.SiteID != siteID {
-						continue
-					}
-				}
-
-				// Determine device name - prefer API cache, fallback to site config intent
-				displayName := item.Name
-				var hasIntent bool
-				var intent deviceIntent
-				if deviceIntents != nil {
-					intent, hasIntent = deviceIntents[normalizedMAC]
-					if displayName == "" && hasIntent && intent.Name != "" {
-						displayName = intent.Name
-					}
-				}
-
-				// Check for configuration drift (intent differs from cache)
-				driftMarker := ""
-				if hasIntent && hasConfigDrift(cache, normalizedMAC, dt, intent) {
-					driftMarker = "* "
-					hasDrift = true
-				}
-
-				// Apply name/MAC filter if specified
-				if parsed.Filter != "" {
-					if cmdutils.IsMAC(parsed.Filter) {
-						if normalizedMAC != vendors.NormalizeMAC(parsed.Filter) {
-							continue
-						}
-					} else {
-						// Filter by name - use enriched displayName which includes site config names
-						if displayName == "" || !strings.Contains(strings.ToLower(displayName), strings.ToLower(parsed.Filter)) {
-							continue
-						}
-					}
-				}
-
-				// Convert to table data - prepend drift marker to name if needed
-				data := formatter.GenericTableData{
-					"name":    driftMarker + displayName,
-					"mac":     item.MAC,
-					"serial":  item.Serial,
-					"model":   item.Model,
-					"type":    item.Type,
-					"site_id": item.SiteID,
-					"api":     apiLabel,
-				}
-
-				// Look up status from DeviceStatus section
-				if status, ok := cache.DeviceStatus[normalizedMAC]; ok {
-					data["status"] = status.Status
-				} else {
-					data["status"] = "offline" // Default if no status found
-				}
-
-				// Resolve site name from cache (unless no-resolve is set)
-				if parsed.NoResolve {
-					// Show raw site_id when no-resolve is set
-					data["site_name"] = item.SiteID
-				} else if siteName, ok := cache.SiteIndex.ByID[item.SiteID]; ok {
-					data["site_name"] = siteName
-				} else {
-					// Fallback to site_id if name not found
-					data["site_name"] = item.SiteID
-				}
-
-				allItems = append(allItems, data)
-				apiCounts[apiLabel]++
-			}
-		}
-	}
-
-	// Sort inventory items by site, name, type, mac
-	formatter.SortTableData(allItems)
-
-	// Apply field resolution (convert field IDs to names)
-	if !parsed.NoResolve {
-		if err := cmdutils.ApplyFieldResolution(allItems, true); err != nil {
-			logging.Debugf("Field resolution warning: %v", err)
-		}
-	}
-
-	// Build title
-	var title string
-	if deviceType == "" {
-		title = fmt.Sprintf("Inventory (%d)", len(allItems))
-		if len(apiCounts) > 1 {
-			title = fmt.Sprintf("Inventory (%d from %d APIs)", len(allItems), len(apiCounts))
-		} else if apiFlag != "" {
-			title = fmt.Sprintf("Inventory from %s (%d)", apiFlag, len(allItems))
-		}
-	} else {
-		typeName := getDeviceTypeName(deviceType)
-		title = fmt.Sprintf("%s Inventory (%d)", typeName, len(allItems))
-		if len(apiCounts) > 1 {
-			title = fmt.Sprintf("%s Inventory (%d from %d APIs)", typeName, len(allItems), len(apiCounts))
-		} else if apiFlag != "" {
-			title = fmt.Sprintf("%s Inventory from %s (%d)", typeName, apiFlag, len(allItems))
-		}
-	}
-
-	if len(allItems) == 0 {
-		fmt.Printf("%s:\n", title)
-		fmt.Println("No inventory items found")
-		return nil
-	}
-
-	// Determine columns - add Type column when showing all types
-	columns := []formatter.TableColumn{
-		{Field: "name", Title: "Name", MaxWidth: 0},
-		{Field: "mac", Title: "MAC", MaxWidth: 0},
-		{Field: "serial", Title: "Serial", MaxWidth: 0},
-		{Field: "model", Title: "Model", MaxWidth: 0},
-	}
-
-	// Add Type column when showing all device types
-	if deviceType == "" {
-		columns = append(columns, formatter.TableColumn{Field: "type", Title: "Type", MaxWidth: 0})
-	}
-
-	columns = append(columns,
-		formatter.TableColumn{Field: "status", Title: "Status", MaxWidth: 0, IsStatusField: true},
-		formatter.TableColumn{Field: "site_name", Title: "Site", MaxWidth: 0},
-	)
-
-	// Add API column when showing from multiple APIs
-	if len(targetAPIs) > 1 || apiFlag == "" {
-		columns = append(columns, formatter.TableColumn{Field: "api", Title: "API", MaxWidth: 0})
-	}
-
-	// Create command path for config lookup
-	commandPath := "show.inventory"
-	if deviceType != "" {
-		commandPath = fmt.Sprintf("show.inventory.%s", deviceType)
-	}
-
-	// Check if there's a command-specific format in the config
-	displayCommands := viper.GetStringMap("display.commands")
-	commandFormatRaw, hasCommandConfig := displayCommands[commandPath]
-
-	var commandFormat config.CommandFormat
-	if hasCommandConfig {
-		if cmdMap, ok := commandFormatRaw.(map[string]interface{}); ok {
-			if formatVal, ok := cmdMap["format"].(string); ok {
-				commandFormat.Format = formatVal
-			}
-			if fieldsVal, ok := cmdMap["fields"].([]interface{}); ok {
-				commandFormat.Fields = fieldsVal
-			}
-			if titleVal, ok := cmdMap["title"].(string); ok {
-				commandFormat.Title = titleVal
-			}
-		}
-	}
-
-	// Create cache accessor for cache.* field lookups
-	cacheAccessor, err := cmdutils.NewCacheTableAccessor()
-	if err != nil {
-		logging.Debugf("Cache accessor not available: %v", err)
-		cacheAccessor = nil
-	}
-
-	// Override title from config if available
-	if hasCommandConfig && commandFormat.Title != "" {
-		title = commandFormat.Title
-	}
-
-	// Create table config
-	tableConfig := formatter.TableConfig{
-		Title:         title,
-		Format:        parsed.Format,
-		BoldHeaders:   true,
-		ShowSeparator: true,
-		CommandPath:   commandPath,
-		CacheAccess:   cacheAccessor,
-		ShowAllFields: parsed.ShowAll,
-		Columns:       columns,
-	}
-
-	// Set format from config if not overridden by argument
-	if tableConfig.Format == "" && hasCommandConfig {
-		tableConfig.Format = commandFormat.Format
-	}
-	if tableConfig.Format == "" {
-		tableConfig.Format = "table"
-	}
-
-	// Create table printer
-	printer := formatter.NewGenericTablePrinter(tableConfig, allItems)
-
-	// Use config-driven columns if available, otherwise use defaults
-	if hasCommandConfig && commandFormat.Fields != nil {
-		printer.LoadColumnsFromConfig(commandFormat.Fields)
-	} else {
-		printer.Config.Columns = columns
-	}
-
-	fmt.Print(printer.Print())
-
-	// Show drift note if any devices have configuration drift (only for table format)
-	if hasDrift && tableConfig.Format == "table" {
-		fmt.Println()
-		fmt.Println("* Device has configuration drift from intent")
-	}
-
-	// Show cache timestamp
-	printCacheTimestamp(cacheMgr, targetAPIs, tableConfig.Format)
-
-	return nil
-}
-
 // getDeviceTypeName returns a human-readable name for the device type.
 func getDeviceTypeName(deviceType string) string {
 	switch deviceType {
@@ -926,68 +687,45 @@ func getDeviceTypeName(deviceType string) string {
 	}
 }
 
-// loadManagedMACs loads MAC addresses from the inventory.json file.
-// Returns a map of normalized MAC addresses to device types for the requested device types.
-// Returns nil if the file cannot be loaded.
-func loadManagedMACs(inventoryPath string, deviceTypes []string) map[string]string {
-	// Read the inventory file
-	data, err := os.ReadFile(inventoryPath) // #nosec G304 -- path from operator-controlled config
+// loadManagedMACSet returns the normalized armed MACs for the given device
+// types, unioned across every armed site. A legacy-schema inventory is fatal
+// (the operator must migrate); a missing/unreadable file yields an empty set —
+// managed-first means nothing is armed until the operator says so.
+func loadManagedMACSet(deviceTypes []string) (map[string]bool, error) {
+	inv, err := config.LoadInventoryFile(config.InventoryPath(nil))
 	if err != nil {
-		logging.Errorf("Failed to read inventory file %s: %v", inventoryPath, err)
-		return nil
+		if errors.Is(err, config.ErrLegacyInventorySchema) {
+			return nil, err
+		}
+		logging.Debugf("inventory unavailable: %v", err)
+		return map[string]bool{}, nil
 	}
-
-	// Parse the inventory file structure
-	var inventory struct {
-		Config struct {
-			Inventory struct {
-				AP      []string `json:"ap"`
-				Switch  []string `json:"switch"`
-				Gateway []string `json:"gateway"`
-			} `json:"inventory"`
-		} `json:"config"`
-	}
-
-	if err := json.Unmarshal(data, &inventory); err != nil {
-		logging.Errorf("Failed to parse inventory file %s: %v", inventoryPath, err)
-		return nil
-	}
-
-	// Build map of managed MACs
-	managedMACs := make(map[string]string)
-
-	// Check which device types we need
-	needAP := false
-	needSwitch := false
-	needGateway := false
+	set := make(map[string]bool)
 	for _, dt := range deviceTypes {
-		switch dt {
-		case "ap":
-			needAP = true
-		case "switch":
-			needSwitch = true
-		case "gateway":
-			needGateway = true
+		for mac := range inv.NormalizedSet(nil, dt) {
+			set[mac] = true
 		}
 	}
+	return set, nil
+}
 
-	if needAP {
-		for _, mac := range inventory.Config.Inventory.AP {
-			managedMACs[vendors.NormalizeMAC(mac)] = "ap"
+// loadManagedSiteSet returns the armed site names (lowercased) from the
+// inventory file — the sites that contain at least one armed device. Same
+// fatal/empty semantics as loadManagedMACSet.
+func loadManagedSiteSet() (map[string]bool, error) {
+	inv, err := config.LoadInventoryFile(config.InventoryPath(nil))
+	if err != nil {
+		if errors.Is(err, config.ErrLegacyInventorySchema) {
+			return nil, err
 		}
+		logging.Debugf("inventory unavailable: %v", err)
+		return map[string]bool{}, nil
 	}
-	if needSwitch {
-		for _, mac := range inventory.Config.Inventory.Switch {
-			managedMACs[vendors.NormalizeMAC(mac)] = "switch"
-		}
+	set := make(map[string]bool)
+	for _, name := range inv.SiteNames() {
+		set[strings.ToLower(name)] = true
 	}
-	if needGateway {
-		for _, mac := range inventory.Config.Inventory.Gateway {
-			managedMACs[vendors.NormalizeMAC(mac)] = "gateway"
-		}
-	}
-
-	return managedMACs
+	return set, nil
 }
 
 // printCacheTimestamp prints the cache refresh timestamp for the displayed APIs.

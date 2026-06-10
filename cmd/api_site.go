@@ -23,28 +23,29 @@ import (
 
 // apiSiteCmd represents the "show api site" command
 var apiSiteCmd = &cobra.Command{
-	Use:     "site [site-name] [target api-label] [format json|csv] [all]",
+	Use:     "site [site-name] [target api-label] [all] [detail|extensive] [format json|csv]",
 	Aliases: []string{"sites"},
-	Short:   "Show site information from API cache",
-	Long: `Show site information retrieved from the local API cache.
+	Short:   "Show sites wifimgr manages (add 'all' for every site the API knows)",
+	Long: `Show site data from the local API cache.
 
-This command displays site data from the local cache with configuration status indicators.
-
-When multiple APIs are configured:
-  - Without target: Aggregates sites from all APIs
-  - With target: Shows sites from the specified API only
+By default this lists only the sites you manage — those with armed devices in
+your per-site inventory. Add 'all' to widen the view to every site the API
+knows about.
 
 Arguments:
   site-name  - Optional site name filter
   target     - Keyword followed by API label to target specific API
+  all        - Show every site the API has, not just managed
+  detail     - Reserved verbosity level (field set unchanged for now)
+  extensive  - Show all cache fields
   format     - Output format: "json" or "csv" (default: table)
-  all        - Show all fields (json format only)
 
 Examples:
-  wifimgr show api site                      - Show all sites
-  wifimgr show api site SITE-NAME            - Show specific site by name
-  wifimgr show api site format json          - Show all sites in JSON format
-  wifimgr show api site target mist-prod     - Show sites from mist-prod only`,
+  wifimgr show site                      - Managed sites
+  wifimgr show site all                  - Every site the API knows
+  wifimgr show site SITE-NAME            - A specific site by name
+  wifimgr show site format json          - Managed sites in JSON format
+  wifimgr show site target mist-prod     - Managed sites from mist-prod only`,
 	Args: cmdutils.ValidateShowAPArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cmdutils.ContainsHelp(args) {
@@ -62,5 +63,5 @@ Examples:
 }
 
 func init() {
-	apiCmd.AddCommand(apiSiteCmd)
+	showCmd.AddCommand(apiSiteCmd)
 }

@@ -247,7 +247,7 @@ func showBSSIDsMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) e
 		columns = append(columns, formatter.TableColumn{Field: "api", Title: "API"})
 	}
 
-	commandPath := "show.api.bssid"
+	commandPath := "show.bssid"
 
 	// Create cache accessor for cache.* field lookups
 	cacheAccessor, err := cmdutils.NewCacheTableAccessor()
@@ -263,7 +263,7 @@ func showBSSIDsMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) e
 		ShowSeparator: true,
 		CommandPath:   commandPath,
 		CacheAccess:   cacheAccessor,
-		ShowAllFields: parsed.ShowAll,
+		ShowAllFields: parsed.AllFields(),
 		Columns:       columns,
 	}
 
@@ -282,5 +282,5 @@ func showBSSIDsMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) e
 }
 
 func init() {
-	apiCmd.AddCommand(apiBSSIDCmd)
+	showCmd.AddCommand(apiBSSIDCmd)
 }

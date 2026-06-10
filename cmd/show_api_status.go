@@ -38,7 +38,7 @@ Example:
 }
 
 func init() {
-	apiCmd.AddCommand(showAPIStatusCmd)
+	showCmd.AddCommand(showAPIStatusCmd)
 }
 
 func runShowAPIStatus(cmd *cobra.Command, args []string) error {
