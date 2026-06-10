@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 )
 
 // Device Profile-related methods for the mistClient
@@ -134,25 +133,6 @@ func (c *mistClient) GetDeviceProfileByName(ctx context.Context, orgID string, n
 	}
 
 	return nil, fmt.Errorf("device profile with name '%s' and type '%s' not found", name, profileType)
-}
-
-// GetInventoryConfig retrieves the inventory configuration from the specified path
-func (c *mistClient) GetInventoryConfig(inventoryPath string) (*InventoryConfig, error) {
-	c.logDebug("Reading inventory config from %s", inventoryPath)
-
-	// Read the inventory configuration file
-	data, err := os.ReadFile(inventoryPath) // #nosec G304 -- path from operator-controlled config
-	if err != nil {
-		return nil, fmt.Errorf("failed to read inventory config: %w", err)
-	}
-
-	// Parse the JSON data
-	var config InventoryConfig
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse inventory config: %w", err)
-	}
-
-	return &config, nil
 }
 
 // AssignDeviceProfile assigns a device profile to a list of devices

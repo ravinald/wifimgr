@@ -28,7 +28,7 @@ type DeviceUpdater interface {
 	GetAssignedDevices(ctx context.Context, client api.Client, siteID string) ([]string, error)
 
 	// FindDevicesInventoryStatus checks device status in inventory and cache
-	FindDevicesInventoryStatus(client api.Client, cfg *config.Config, configuredDevices []string) ([]DeviceInventoryStatus, error)
+	FindDevicesInventoryStatus(client api.Client, cfg *config.Config, configuredDevices []string, siteName string) ([]DeviceInventoryStatus, error)
 
 	// UnassignDevices removes devices from a site
 	UnassignDevices(ctx context.Context, client api.Client, cfg *config.Config, macs []string) error
@@ -93,6 +93,17 @@ func (b *BaseDeviceUpdater) SetInventoryChecker(checker *InventoryChecker) {
 // GetInventoryChecker returns the stored inventory checker
 func (b *BaseDeviceUpdater) GetInventoryChecker() *InventoryChecker {
 	return b.inventoryChecker
+}
+
+// siteNameFromConfig pulls the operator-facing site name out of a SiteConfig.
+// Used to scope the armed inventory allowlist when a shared checker is absent.
+func siteNameFromConfig(sc SiteConfig) string {
+	if v, ok := sc.SiteConfig["name"]; ok {
+		if name, ok := v.(string); ok {
+			return name
+		}
+	}
+	return ""
 }
 
 // GetAssignedDevices gets MAC addresses of devices assigned to a site from cache

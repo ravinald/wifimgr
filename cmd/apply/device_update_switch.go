@@ -44,17 +44,20 @@ func (s *SwitchUpdater) GetConfiguredDevices(siteConfig SiteConfig) []string {
 }
 
 // FindDevicesInventoryStatus checks Switch status in inventory and cache
-func (s *SwitchUpdater) FindDevicesInventoryStatus(client api.Client, cfg *config.Config, configuredSwitches []string) ([]DeviceInventoryStatus, error) {
+func (s *SwitchUpdater) FindDevicesInventoryStatus(client api.Client, cfg *config.Config, configuredSwitches []string, siteName string) ([]DeviceInventoryStatus, error) {
 	ctx := context.Background()
 
-	// Create inventory checker once for reuse
-	inventoryChecker, err := NewInventoryChecker(ctx, client, cfg, s.deviceType)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create inventory checker: %w", err)
+	// Reuse the shared checker from the apply orchestrator; build one scoped to
+	// this site only if it is missing.
+	inventoryChecker := s.GetInventoryChecker()
+	if inventoryChecker == nil {
+		var err error
+		inventoryChecker, err = NewInventoryChecker(ctx, client, cfg, s.deviceType, siteName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create inventory checker: %w", err)
+		}
+		s.SetInventoryChecker(inventoryChecker)
 	}
-
-	// Store it for later use in UpdateDeviceConfigurations (using base method)
-	s.SetInventoryChecker(inventoryChecker)
 
 	statusList := make([]DeviceInventoryStatus, 0, len(configuredSwitches))
 
@@ -177,7 +180,7 @@ func (s *SwitchUpdater) UpdateDeviceConfigurations(ctx context.Context, client a
 	inventoryChecker := s.GetInventoryChecker()
 	if inventoryChecker == nil {
 		var inventoryErr error
-		inventoryChecker, inventoryErr = NewInventoryChecker(ctx, client, cfg, s.deviceType)
+		inventoryChecker, inventoryErr = NewInventoryChecker(ctx, client, cfg, s.deviceType, siteNameFromConfig(siteConfig))
 		if inventoryErr != nil {
 			logging.Warnf("Could not create inventory checker for safety validation: %v", inventoryErr)
 		}

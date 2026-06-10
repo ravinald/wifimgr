@@ -46,30 +46,3 @@ func (m *MockClient) GetConfigDirectory() string {
 func (m *MockClient) GetSchemaDirectory() string {
 	return "./config/schemas"
 }
-
-// GetInventoryConfig retrieves the inventory configuration from the specified path
-func (m *MockClient) GetInventoryConfig(_ string) (*InventoryConfig, error) {
-	// For mock client, just return a simple inventory config
-	config := &InventoryConfig{
-		Version: 1,
-		Config: struct {
-			Inventory struct {
-				AP      []string `json:"ap"`
-				Switch  []string `json:"switch"`
-				Gateway []string `json:"gateway"`
-			} `json:"inventory"`
-		}{
-			Inventory: struct {
-				AP      []string `json:"ap"`
-				Switch  []string `json:"switch"`
-				Gateway []string `json:"gateway"`
-			}{
-				AP:      []string{},
-				Switch:  []string{},
-				Gateway: []string{},
-			},
-		},
-	}
-
-	return config, nil
-}
