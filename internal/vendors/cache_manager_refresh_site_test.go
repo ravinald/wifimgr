@@ -82,8 +82,8 @@ func TestRefreshAPISite(t *testing.T) {
 		t.Fatalf("SaveAPICache: %v", err)
 	}
 
-	// Now scope-refresh to site-001 only.
-	if err := cm.RefreshAPISite(ctx, "test-api", "site-001"); err != nil {
+	// Now scope-refresh to site-001 only (nil managed set = all devices in site).
+	if err := cm.RefreshAPISite(ctx, "test-api", "site-001", nil); err != nil {
 		t.Fatalf("RefreshAPISite: %v", err)
 	}
 

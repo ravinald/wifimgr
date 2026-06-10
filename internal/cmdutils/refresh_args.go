@@ -11,10 +11,20 @@ import (
 	"strings"
 )
 
+// Refresh scope levels. Default (empty) is the managed set with no client
+// detail; "detail" adds per-client detail; "all" drops the managed filter and
+// fetches everything the API has (and client detail too).
+const (
+	RefreshScopeManaged = ""
+	RefreshScopeDetail  = "detail"
+	RefreshScopeAll     = "all"
+)
+
 // RefreshArgs holds the parsed positional arguments for refresh commands.
 type RefreshArgs struct {
-	APIName  string // set by `api <api-label>`
+	Target   string // set by `target <api-label>`
 	SiteName string // set by `site <site-name>` (or, with AllowImplicitSite, the leading bare token)
+	Scope    string // "", "detail", or "all"
 }
 
 // ParseRefreshOptions tunes ParseRefreshArgs for callers whose cobra subcommand
@@ -27,26 +37,28 @@ type ParseRefreshOptions struct {
 	// already consumed the `site` keyword.
 	AllowImplicitSite bool
 
-	// AllowSite: if false, `site <name>` is rejected. Used to constrain
-	// commands that don't support per-site refresh.
+	// AllowSite: if false, `site <name>` is rejected.
 	AllowSite bool
+
+	// AllowScope: if false, the `detail`/`all` scope words are rejected. Used
+	// by `refresh client site`, whose scope is fixed.
+	AllowScope bool
 }
 
 // ParseRefreshArgs parses positional arguments for refresh commands.
 //
-// Recognised forms (when AllowSite is true):
+// Recognised forms (with AllowSite and AllowScope true):
 //
-//	[]
-//	api <api-label>
-//	site <site-name>
-//	site <site-name> api <api-label>
-//	api <api-label> site <site-name>
+//	[]                                  managed set, every API
+//	all                                 everything the API has, every API
+//	detail                              managed set + client detail
+//	site <site-name>                    managed set for one site
+//	site <site-name> all                everything the API has for one site
+//	site <site-name> detail             managed set + client detail for one site
+//	... target <api-label>              disambiguate a site spanning APIs
 //
-// `target <api-label>` is rejected with an explicit migration error pointing
-// to `api <api-label>`. A bare leading token (e.g. `<api-label>` without the
-// `api` keyword) is rejected with a migration hint, unless
-// AllowImplicitSite=true in which case the leading token is interpreted as
-// the site name.
+// `api <api-label>` is rejected with a migration hint pointing to
+// `target <api-label>`.
 func ParseRefreshArgs(args []string, opts ParseRefreshOptions) (*RefreshArgs, error) {
 	result := &RefreshArgs{}
 
@@ -54,14 +66,14 @@ func ParseRefreshArgs(args []string, opts ParseRefreshOptions) (*RefreshArgs, er
 		arg := args[i]
 
 		switch strings.ToLower(arg) {
-		case "api":
+		case "target":
 			if i+1 >= len(args) {
-				return nil, fmt.Errorf("'api' requires an API label")
+				return nil, fmt.Errorf("'target' requires an API label")
 			}
-			if result.APIName != "" {
-				return nil, fmt.Errorf("api specified multiple times")
+			if result.Target != "" {
+				return nil, fmt.Errorf("target specified multiple times")
 			}
-			result.APIName = StripQuotes(args[i+1])
+			result.Target = StripQuotes(args[i+1])
 			i++
 
 		case "site":
@@ -77,8 +89,17 @@ func ParseRefreshArgs(args []string, opts ParseRefreshOptions) (*RefreshArgs, er
 			result.SiteName = StripQuotes(args[i+1])
 			i++
 
-		case "target":
-			return nil, fmt.Errorf("the 'target' keyword has been removed; use 'api <api-label>' instead")
+		case RefreshScopeDetail, RefreshScopeAll:
+			if !opts.AllowScope {
+				return nil, fmt.Errorf("%q is not valid here", arg)
+			}
+			if result.Scope != "" {
+				return nil, fmt.Errorf("scope specified multiple times (have %q)", result.Scope)
+			}
+			result.Scope = strings.ToLower(arg)
+
+		case "api":
+			return nil, fmt.Errorf("the 'api' keyword has been removed; use 'target <api-label>' instead")
 
 		default:
 			// At i==0 with AllowImplicitSite, the bare token is the site name.
@@ -86,9 +107,7 @@ func ParseRefreshArgs(args []string, opts ParseRefreshOptions) (*RefreshArgs, er
 				result.SiteName = StripQuotes(arg)
 				continue
 			}
-			// Otherwise this is a migration error: the old `refresh device <api>`
-			// shape is gone. Give a precise hint pointing to the new form.
-			return nil, fmt.Errorf("unexpected positional %q — did you mean 'api %s'?", arg, arg)
+			return nil, fmt.Errorf("unexpected positional %q", arg)
 		}
 	}
 
