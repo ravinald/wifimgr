@@ -34,20 +34,20 @@ files:
 ### 2. Refresh the Cache
 
 ```bash
-wifimgr refresh device
+wifimgr refresh
 ```
 
 ### 3. View Your Infrastructure
 
 ```bash
 # See all sites across all vendors
-wifimgr show api sites
+wifimgr show sites
 
 # See all APs across all vendors
-wifimgr show api ap
+wifimgr show ap
 
 # Filter to a specific vendor
-wifimgr show api ap target mist-prod
+wifimgr show ap target mist-prod
 ```
 
 ## Configuration Reference
@@ -165,7 +165,7 @@ Without `target`, commands aggregate results from all APIs:
 
 ```bash
 # Show APs from ALL configured APIs
-wifimgr show api ap
+wifimgr show ap
 
 # Output includes API column:
 # NAME          MAC                MODEL   SITE         STATUS      API
@@ -177,10 +177,10 @@ With `target`, results are filtered:
 
 ```bash
 # Show APs from Mist only
-wifimgr show api ap target mist-prod
+wifimgr show ap target mist-prod
 
 # Show sites from Meraki only
-wifimgr show api sites target meraki-prod
+wifimgr show sites target meraki-prod
 ```
 
 ### Write Commands
@@ -208,10 +208,10 @@ wifimgr apply site US-LAB-01 target meraki-prod
 
 ```bash
 # Refresh all APIs in parallel
-wifimgr refresh device
+wifimgr refresh
 
 # Refresh only one API
-wifimgr refresh device target mist-prod
+wifimgr refresh target mist-prod
 ```
 
 ## Handling Duplicate Site Names
@@ -219,7 +219,7 @@ wifimgr refresh device target mist-prod
 If the same site name exists in multiple APIs:
 
 ```bash
-$ wifimgr show api ap site US-CAMPUS-01
+$ wifimgr show ap site US-CAMPUS-01
 
 # Shows results from both APIs:
 # NAME       MAC                MODEL   STATUS      API
@@ -233,7 +233,7 @@ $ wifimgr show api ap site US-CAMPUS-01
 To target a specific API:
 
 ```bash
-wifimgr show api ap site US-CAMPUS-01 target mist-prod
+wifimgr show ap site US-CAMPUS-01 target mist-prod
 ```
 
 ## Capability Differences
@@ -279,7 +279,7 @@ When searching across multiple networks/sites without a filter, the command esti
 View all configured APIs and their capabilities:
 
 ```bash
-$ wifimgr show api status
+$ wifimgr show status
 
 API          Vendor   Cache       LastRefresh          Age      Capabilities
 mist-prod    mist     ok          2024-01-27T14:30:00  2h15m    sites, inventory, devices, search, configs
@@ -293,24 +293,24 @@ Use this to identify which APIs are healthy and when to refresh cache.
 ### View All Infrastructure
 
 ```bash
-# All sites
-wifimgr show api sites
+# Managed sites (add 'all' for every site)
+wifimgr show sites
 
-# All APs
-wifimgr show api ap
+# Managed APs
+wifimgr show ap
 
-# All switches
-wifimgr show api switch
+# Managed switches
+wifimgr show switch
 
-# All inventory
-wifimgr show inventory
+# Everything the API has, not just managed
+wifimgr show ap all
 ```
 
 ### Find a Device by MAC
 
 ```bash
 # Search inventory across all APIs
-wifimgr show inventory ap aa:bb:cc:dd:ee:ff
+wifimgr show ap aa:bb:cc:dd:ee:ff
 ```
 
 ### Search for Connected Clients
@@ -389,14 +389,14 @@ Error: site 'US-LAB-01' not found in any API
 Searched APIs: mist-prod, meraki-prod
 
 Try:
-  - Refresh the cache: wifimgr refresh device
+  - Refresh the cache: wifimgr refresh
   - Check site name spelling
   - Use target <label> to filter to a specific API
 ```
 
 **Solution:**
-1. Run `wifimgr refresh device` to update the cache
-2. Check the exact site name with `wifimgr show api sites`
+1. Run `wifimgr refresh` to update the cache
+2. Check the exact site name with `wifimgr show sites`
 3. Verify the site exists in the vendor dashboard
 
 ### Stale Cache
@@ -405,10 +405,10 @@ If data seems outdated:
 
 ```bash
 # Refresh all caches
-wifimgr refresh device
+wifimgr refresh
 
 # Or refresh a specific API
-wifimgr refresh device target mist-prod
+wifimgr refresh target mist-prod
 ```
 
 ### Rate Limiting
