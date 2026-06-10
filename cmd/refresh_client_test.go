@@ -24,11 +24,11 @@ func TestRefreshClientSiteArgParsing(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		args     []string
-		wantSite string
-		wantAPI  string
-		wantErr  string // substring; empty means no error
+		name       string
+		args       []string
+		wantSite   string
+		wantTarget string
+		wantErr    string // substring; empty means no error
 	}{
 		{
 			name:     "bare site name",
@@ -41,10 +41,10 @@ func TestRefreshClientSiteArgParsing(t *testing.T) {
 			wantSite: "US-LAB-01",
 		},
 		{
-			name:     "site name + api keyword",
-			args:     []string{"US-LAB-01", "api", "meraki-corp"},
-			wantSite: "US-LAB-01",
-			wantAPI:  "meraki-corp",
+			name:       "site name + target keyword",
+			args:       []string{"US-LAB-01", "target", "meraki-corp"},
+			wantSite:   "US-LAB-01",
+			wantTarget: "meraki-corp",
 		},
 		{
 			name:     "site keyword + multi-word name",
@@ -52,19 +52,19 @@ func TestRefreshClientSiteArgParsing(t *testing.T) {
 			wantSite: "MX - Av. Ejercito Nacional Mexicano 904",
 		},
 		{
-			name:    "legacy target keyword now a hard break",
-			args:    []string{"US-LAB-01", "target", "meraki-corp"},
-			wantErr: "'target' keyword has been removed",
+			name:    "legacy api keyword now a hard break",
+			args:    []string{"US-LAB-01", "api", "meraki-corp"},
+			wantErr: "'api' keyword has been removed",
 		},
 		{
-			name:    "api without value",
-			args:    []string{"US-LAB-01", "api"},
-			wantErr: "'api' requires an API label",
+			name:    "target without value",
+			args:    []string{"US-LAB-01", "target"},
+			wantErr: "'target' requires an API label",
 		},
 		{
 			name:    "unexpected trailing token",
 			args:    []string{"US-LAB-01", "refresh-me-please"},
-			wantErr: "did you mean 'api refresh-me-please'",
+			wantErr: `unexpected positional "refresh-me-please"`,
 		},
 	}
 
@@ -88,8 +88,8 @@ func TestRefreshClientSiteArgParsing(t *testing.T) {
 			if got.SiteName != tt.wantSite {
 				t.Errorf("SiteName = %q, want %q", got.SiteName, tt.wantSite)
 			}
-			if got.APIName != tt.wantAPI {
-				t.Errorf("APIName = %q, want %q", got.APIName, tt.wantAPI)
+			if got.Target != tt.wantTarget {
+				t.Errorf("Target = %q, want %q", got.Target, tt.wantTarget)
 			}
 		})
 	}
