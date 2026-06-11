@@ -66,12 +66,22 @@ func (s *sitesService) ByName(ctx context.Context, name string) (*vendors.SiteIn
 	if err != nil {
 		return nil, err
 	}
+	var match *vendors.SiteInfo
+	count := 0
 	for _, site := range sites {
 		if strings.EqualFold(site.Name, name) {
-			return site, nil
+			match = site
+			count++
 		}
 	}
-	return nil, &vendors.SiteNotFoundError{SiteName: name}
+	switch count {
+	case 0:
+		return nil, &vendors.SiteNotFoundError{SiteName: name}
+	case 1:
+		return match, nil
+	default:
+		return nil, &vendors.DuplicateSiteError{SiteName: name, APILabel: "ubiquiti", MatchCount: count}
+	}
 }
 
 func (s *sitesService) Create(_ context.Context, _ *vendors.SiteInfo) (*vendors.SiteInfo, error) {

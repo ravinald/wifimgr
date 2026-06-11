@@ -141,20 +141,33 @@ func (c *mistClient) GetSite(ctx context.Context, siteID string) (*MistSite, err
 	return site, nil
 }
 
-// GetSiteByName retrieves a site by its name within an organization using the new implementation
+// GetSiteByName retrieves a site by its name within an organization. Mist does
+// not enforce site-name uniqueness, so a name can map to several sites; this
+// refuses the ambiguous case rather than returning whichever site the API
+// happened to list first, which would let writes land on the wrong site.
 func (c *mistClient) GetSiteByName(ctx context.Context, name, orgID string) (*MistSite, error) {
 	sites, err := c.GetSites(ctx, orgID)
 	if err != nil {
 		return nil, formatError("failed to get sites", err)
 	}
 
+	var match *MistSite
+	count := 0
 	for _, site := range sites {
 		if patterns.Equals(site.GetName(), name) {
-			return site, nil
+			match = site
+			count++
 		}
 	}
 
-	return nil, fmt.Errorf("site with name '%s' not found", name)
+	switch count {
+	case 0:
+		return nil, fmt.Errorf("site with name '%s' not found", name)
+	case 1:
+		return match, nil
+	default:
+		return nil, fmt.Errorf("%w: %q has %d matches in org %s - rename one in the Mist dashboard", ErrDuplicateSite, name, count, orgID)
+	}
 }
 
 // GetSiteByIdentifier retrieves a site by either its ID or name using the new implementation
