@@ -291,7 +291,7 @@ pointing **this** command at a Meraki target reports nothing and exits cleanly.
 That limit is specific to `import api templates`. Per-site `import api site`
 *does* export Meraki SSIDs — they come back as WLAN templates in the site's
 import file, and `apply ap` pushes them to the network's SSID slots. See
-[Meraki SSID Assignment](multi-vendor/commands.md#meraki-ssid-assignment-availability-tags).
+[Meraki SSID Assignment](multi-vendor/commands.md#meraki-ssid-assignment).
 
 ### Wiring Imports Into Main Config
 
