@@ -2,6 +2,7 @@ package vendors
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -575,4 +576,66 @@ func isDeviceNotFoundError(err error, target **DeviceNotFoundError) bool {
 		return true
 	}
 	return false
+}
+
+// TestRebuildSiteIndex_Duplicates verifies that two sites sharing a name are
+// recorded in Duplicates rather than silently collapsing in ByName, where the
+// later entry would otherwise overwrite the earlier and leave name resolution
+// pointing at an arbitrary site.
+func TestRebuildSiteIndex_Duplicates(t *testing.T) {
+	cache := NewAPICache("mist-prod", "mist", "org-1")
+	cache.Sites.Info = []SiteInfo{
+		{ID: "site-001", Name: "US-LAB-01"},
+		{ID: "site-002", Name: "US-LAB-01"}, // same name, different ID
+		{ID: "site-003", Name: "US-LAB-02"}, // unique
+	}
+
+	cache.RebuildSiteIndex()
+
+	ids := cache.SiteIndex.Duplicates["US-LAB-01"]
+	if len(ids) != 2 {
+		t.Fatalf("Duplicates[US-LAB-01] = %v, want 2 IDs", ids)
+	}
+	if _, dup := cache.SiteIndex.Duplicates["US-LAB-02"]; dup {
+		t.Error("unique site US-LAB-02 must not appear in Duplicates")
+	}
+	// ByID stays complete — both colliding IDs resolve back to the name so
+	// inventory site-name backfill still works for either physical site.
+	if cache.SiteIndex.ByID["site-001"] != "US-LAB-01" || cache.SiteIndex.ByID["site-002"] != "US-LAB-01" {
+		t.Errorf("ByID dropped a colliding ID: %v", cache.SiteIndex.ByID)
+	}
+}
+
+// TestCacheManager_GetSiteIDByName_Duplicate verifies the primary resolution
+// path refuses an ambiguous name with a typed DuplicateSiteError instead of
+// returning whichever ID survived the index rebuild.
+func TestCacheManager_GetSiteIDByName_Duplicate(t *testing.T) {
+	tmpDir := t.TempDir()
+	cm := NewCacheManager(tmpDir, NewAPIClientRegistry())
+	if err := cm.Initialize(); err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	cache := NewAPICache("mist-prod", "mist", "org-1")
+	cache.Sites.Info = []SiteInfo{
+		{ID: "site-001", Name: "US-LAB-01"},
+		{ID: "site-002", Name: "US-LAB-01"},
+	}
+	if err := cm.SaveAPICache(cache); err != nil {
+		t.Fatalf("SaveAPICache failed: %v", err)
+	}
+
+	_, err := cm.GetSiteIDByName("mist-prod", "US-LAB-01")
+	var dupErr *DuplicateSiteError
+	if !errors.As(err, &dupErr) {
+		t.Fatalf("GetSiteIDByName error = %v, want *DuplicateSiteError", err)
+	}
+	if dupErr.APILabel != "mist-prod" || dupErr.MatchCount != 2 {
+		t.Errorf("DuplicateSiteError = %+v, want APILabel=mist-prod MatchCount=2", dupErr)
+	}
+
+	// A unique name in the same cache still resolves cleanly.
+	if _, err := cm.GetSiteIDByName("mist-prod", "US-LAB-01-other"); err == nil {
+		t.Error("expected miss for absent site, got nil")
+	}
 }
