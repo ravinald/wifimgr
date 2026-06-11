@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -907,7 +908,7 @@ func buildDevicesExport(cacheAccessor *vendors.CacheAccessor, siteID string, sou
 // body is the JSON shape of a WLANProfile rendered back to a raw map so it
 // drops straight into the Templates.WLAN section of the ImportFile envelope.
 func buildWLANsExport(cacheAccessor *vendors.CacheAccessor, siteID, siteSlug string, includeSecrets bool) ([]string, map[string]map[string]any) {
-	labels, profiles := synthesizeWLANLabels(cacheAccessor.GetWLANsBySite(siteID), siteSlug, includeSecrets)
+	labels, profiles, vendorBlocks := synthesizeWLANLabels(cacheAccessor.GetWLANsBySite(siteID), siteSlug, includeSecrets)
 	if len(profiles) == 0 {
 		return labels, nil
 	}
@@ -917,6 +918,12 @@ func buildWLANsExport(cacheAccessor *vendors.CacheAccessor, siteID, siteSlug str
 		if err != nil {
 			logging.Warnf("Failed to serialize WLAN profile %q: %v", label, err)
 			continue
+		}
+		// Pin the vendor's native identity (e.g. Meraki SSID slot) alongside
+		// the portable profile so apply rebinds to the exact slot instead of
+		// matching on SSID name and risking an orphaned slot on rename.
+		for k, v := range vendorBlocks[label] {
+			m[k] = v
 		}
 		templates[label] = m
 	}
@@ -939,15 +946,18 @@ func profileToMap(p *config.WLANProfile) (map[string]any, error) {
 }
 
 // synthesizeWLANLabels is the pure half of buildWLANsExport: given a slice of
-// vendor-normalized WLANs and a site slug, produce label references and the
-// matching WLANProfile map. Separated so unit tests can drive it directly.
-func synthesizeWLANLabels(vendorWLANs []*vendors.WLAN, siteSlug string, includeSecrets bool) ([]string, map[string]*config.WLANProfile) {
+// vendor-normalized WLANs and a site slug, produce label references, the
+// matching WLANProfile map, and any per-label vendor blocks (e.g. the Meraki
+// SSID slot) that pin the WLAN to its native identity. Separated so unit tests
+// can drive it directly.
+func synthesizeWLANLabels(vendorWLANs []*vendors.WLAN, siteSlug string, includeSecrets bool) ([]string, map[string]*config.WLANProfile, map[string]map[string]any) {
 	if len(vendorWLANs) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	labels := make([]string, 0, len(vendorWLANs))
 	profiles := make(map[string]*config.WLANProfile, len(vendorWLANs))
+	vendorBlocks := make(map[string]map[string]any, len(vendorWLANs))
 	used := make(map[string]int) // collision counter keyed on bare label
 
 	for _, w := range vendorWLANs {
@@ -959,17 +969,52 @@ func synthesizeWLANLabels(vendorWLANs []*vendors.WLAN, siteSlug string, includeS
 		used[base]++
 
 		profiles[label] = convertVendorWLANToProfile(w, includeSecrets)
+		if block := vendorBlockForWLAN(w); block != nil {
+			vendorBlocks[label] = block
+		}
 		labels = append(labels, label)
 	}
 
-	return labels, profiles
+	return labels, profiles, vendorBlocks
+}
+
+// vendorBlockForWLAN captures the vendor-native binding that the portable
+// WLANProfile drops, shaped as a template vendor block (e.g. "meraki:").
+// For Meraki it pins the SSID slot (0-14) so apply rebinds to that exact slot
+// rather than name-matching — which keeps a rename in place instead of burning
+// a fresh slot and orphaning the old one. Returns nil when there's nothing to
+// pin (e.g. Mist, whose WLANs are first-class objects with stable UUIDs).
+func vendorBlockForWLAN(w *vendors.WLAN) map[string]any {
+	if w.SourceVendor != "meraki" {
+		return nil
+	}
+	slot, ok := merakiSlot(w)
+	if !ok {
+		return nil
+	}
+	return map[string]any{"meraki:": map[string]any{"number": slot}}
+}
+
+// merakiSlot extracts the SSID slot number from a Meraki WLAN, preferring the
+// raw config field and falling back to the composite ID ("networkID:slot").
+func merakiSlot(w *vendors.WLAN) (int, bool) {
+	if n, ok := firstInt(w.Config, "number"); ok {
+		return n, true
+	}
+	if i := strings.LastIndex(w.ID, ":"); i >= 0 {
+		if n, err := strconv.Atoi(w.ID[i+1:]); err == nil {
+			return n, true
+		}
+	}
+	return 0, false
 }
 
 // convertVendorWLANToProfile maps a vendor-normalized WLAN into the portable
 // WLANProfile shape the template system uses. Vendor-specific metadata
-// (network IDs, SSID slot numbers, ipAssignmentMode, etc.) is deliberately
-// dropped — this is the portable half. PSK and RADIUS secrets honor
-// includeSecrets and are otherwise omitted.
+// (network IDs, ipAssignmentMode, etc.) is deliberately dropped here — this is
+// the portable half. The one binding worth keeping, the Meraki SSID slot, rides
+// alongside in a vendor block (see vendorBlockForWLAN), not in the profile. PSK
+// and RADIUS secrets honor includeSecrets and are otherwise omitted.
 func convertVendorWLANToProfile(w *vendors.WLAN, includeSecrets bool) *config.WLANProfile {
 	profile := &config.WLANProfile{
 		SSID:    w.SSID,
