@@ -68,14 +68,6 @@ func TestDuplicateSiteError(t *testing.T) {
 		contains []string
 	}{
 		{
-			name: "across APIs",
-			err: &DuplicateSiteError{
-				SiteName: "SHARED-SITE",
-				APIs:     []string{"mist-prod", "meraki-prod"},
-			},
-			contains: []string{"SHARED-SITE", "multiple APIs", "mist-prod", "meraki-prod"},
-		},
-		{
 			name: "within single API",
 			err: &DuplicateSiteError{
 				SiteName:   "DUP-SITE",
@@ -99,30 +91,18 @@ func TestDuplicateSiteError(t *testing.T) {
 }
 
 func TestDuplicateSiteError_UserMessage(t *testing.T) {
-	// Test cross-API duplicate
 	err := &DuplicateSiteError{
-		SiteName: "SHARED-SITE",
-		APIs:     []string{"mist-prod", "meraki-prod"},
-	}
-
-	msg := err.UserMessage()
-	if !strings.Contains(msg, "--api") {
-		t.Error("UserMessage should mention --api flag")
-	}
-	if !strings.Contains(msg, "api") && !strings.Contains(msg, "field") {
-		t.Error("UserMessage should mention adding api field to config")
-	}
-
-	// Test within-API duplicate
-	err2 := &DuplicateSiteError{
 		SiteName:   "DUP-SITE",
 		APILabel:   "mist-prod",
 		MatchCount: 3,
 	}
 
-	msg2 := err2.UserMessage()
-	if !strings.Contains(msg2, "rename") {
+	msg := err.UserMessage()
+	if !strings.Contains(msg, "rename") {
 		t.Error("UserMessage for in-API duplicates should suggest renaming")
+	}
+	if !strings.Contains(msg, "DUP-SITE") {
+		t.Error("UserMessage should name the duplicated site")
 	}
 }
 
