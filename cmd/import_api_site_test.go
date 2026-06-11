@@ -375,6 +375,95 @@ func TestMerakiSlotFallbackToID(t *testing.T) {
 	}
 }
 
+// TestVendorBlockForWLAN_MerakiFaithful checks the meraki: block pins exactly
+// what canonical can't round-trip: raw band/auth (only when canonicalization
+// would lose them) and the real availability model.
+func TestVendorBlockForWLAN_MerakiFaithful(t *testing.T) {
+	// Restricted SSID with verbose Meraki tokens — pin everything raw.
+	w := &vendors.WLAN{
+		SSID: "Corp", SourceVendor: "meraki", ID: "L_1:2",
+		Band:     "Dual band operation with Band Steering",
+		AuthType: "8021x-radius",
+		Config: map[string]any{
+			"number":            float64(2),
+			"availabilityTags":  []any{"lobby"},
+			"availableOnAllAps": false,
+		},
+	}
+	block, ok := vendorBlockForWLAN(w)["meraki:"].(map[string]any)
+	if !ok {
+		t.Fatal("expected meraki: block")
+	}
+	if block["number"] != 2 {
+		t.Errorf("number = %v, want 2", block["number"])
+	}
+	if block["band"] != "Dual band operation with Band Steering" {
+		t.Errorf("band = %v", block["band"])
+	}
+	if auth, _ := block["auth"].(map[string]any); auth["type"] != "8021x-radius" {
+		t.Errorf("auth.type = %v", block["auth"])
+	}
+	if !equalStrings(toStringList(block["availabilityTags"]), []string{"lobby"}) {
+		t.Errorf("availabilityTags = %v", block["availabilityTags"])
+	}
+	if block["availableOnAllAps"] != false {
+		t.Errorf("availableOnAllAps = %v, want false", block["availableOnAllAps"])
+	}
+
+	// All-AP SSID whose band/auth canonicalize cleanly — keep them out of the
+	// block; pin only the availability flag.
+	w2 := &vendors.WLAN{
+		SSID: "Guest", SourceVendor: "meraki", ID: "L_1:0",
+		Band: "5", AuthType: "psk",
+		Config: map[string]any{"number": float64(0), "availableOnAllAps": true},
+	}
+	block2 := vendorBlockForWLAN(w2)["meraki:"].(map[string]any)
+	if _, has := block2["band"]; has {
+		t.Error("band should be omitted when canonical round-trips")
+	}
+	if _, has := block2["auth"]; has {
+		t.Error("auth should be omitted when canonical round-trips")
+	}
+	if block2["availableOnAllAps"] != true {
+		t.Errorf("availableOnAllAps = %v, want true", block2["availableOnAllAps"])
+	}
+}
+
+func TestMistAssignedMACs(t *testing.T) {
+	idToMAC := map[string]string{"ap-uuid-1": "aabbccddee01", "ap-uuid-2": "aabbccddee02"}
+
+	aps := &vendors.WLAN{SourceVendor: "mist", SSID: "Corp", Config: map[string]any{
+		"apply_to": "aps", "ap_ids": []any{"ap-uuid-1", "ap-uuid-2"},
+	}}
+	if got := mistAssignedMACs(aps, idToMAC); !equalStrings(got, []string{"aabbccddee01", "aabbccddee02"}) {
+		t.Errorf("aps-scoped = %v", got)
+	}
+
+	site := &vendors.WLAN{SourceVendor: "mist", Config: map[string]any{"apply_to": "site"}}
+	if mistAssignedMACs(site, idToMAC) != nil {
+		t.Error("site-wide Mist WLAN should resolve to no per-AP assignment")
+	}
+
+	mer := &vendors.WLAN{SourceVendor: "meraki", Config: map[string]any{"apply_to": "aps", "ap_ids": []any{"x"}}}
+	if mistAssignedMACs(mer, idToMAC) != nil {
+		t.Error("Meraki expresses availability via vendor block, not device placement")
+	}
+}
+
+func TestAttachDeviceWLANs(t *testing.T) {
+	sb := &siteObjExport{}
+	attachDeviceWLANs(sb, map[string][]string{
+		"corp":  {"mac2", "mac1"},
+		"guest": {"mac1"},
+	})
+	if got := toStringList(sb.Devices.AP["mac1"]["wlan"]); !equalStrings(got, []string{"corp", "guest"}) {
+		t.Errorf("mac1 wlan = %v, want [corp guest]", got)
+	}
+	if got := toStringList(sb.Devices.AP["mac2"]["wlan"]); !equalStrings(got, []string{"corp"}) {
+		t.Errorf("mac2 wlan = %v, want [corp]", got)
+	}
+}
+
 // TestExportRoundTripsThroughLoaderTypes guards the contract that was broken
 // in PR #20: the file we emit must be directly loadable through
 // config.LoadImportFile (the real loader path). Covers the site body,
@@ -397,7 +486,7 @@ func TestExportRoundTripsThroughLoaderTypes(t *testing.T) {
 				"MX - Av. Ejercito Nacional Mexicano 904": {
 					API:        "meraki",
 					SiteConfig: map[string]any{"name": "MX - Av. Ejercito Nacional Mexicano 904"},
-					WLAN:       labels,
+					Profiles:   config.SiteConfigObjProfiles{WLAN: labels},
 				},
 			},
 		},
@@ -422,8 +511,8 @@ func TestExportRoundTripsThroughLoaderTypes(t *testing.T) {
 	if !ok {
 		t.Fatalf("site not present after unmarshal")
 	}
-	if !equalStrings(gotSite.WLAN, []string{"mx-mex-904--scale-guest"}) {
-		t.Errorf("WLAN labels lost in round-trip: %v", gotSite.WLAN)
+	if !equalStrings(gotSite.Profiles.WLAN, []string{"mx-mex-904--scale-guest"}) {
+		t.Errorf("WLAN labels lost in round-trip: %v", gotSite.Profiles.WLAN)
 	}
 
 	if loaded.Templates == nil {
