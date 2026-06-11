@@ -21,7 +21,7 @@ import (
 	"github.com/ravinald/wifimgr/internal/cmdutils"
 )
 
-// apiSwitchCmd represents the "show api switch" command
+// apiSwitchCmd represents the "show switch" command
 var apiSwitchCmd = &cobra.Command{
 	Use:   "switch [name-or-mac] [site site-name] [target api-label] [all] [detail|extensive] [format json|csv] [no-resolve]",
 	Short: "Show switches wifimgr manages (add 'all' for every switch the API knows)",

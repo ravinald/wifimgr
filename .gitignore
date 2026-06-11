@@ -13,6 +13,11 @@ cache.json
 # Local configuration (contains credentials)
 config/wifimgr-config.json
 config/.file_hashes.json
+config-internal/
+
+# Local debug scratch
+/wlan-missing.json
+/wlan-working.json
 config/inventory.json
 config/device-profiles.json
 config/profiles.json

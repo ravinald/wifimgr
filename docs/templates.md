@@ -1,6 +1,8 @@
 # Templates
 
-Templates in wifimgr are an **app-level convenience** that expands into explicit device settings. Templates are NOT vendor-side profiles—they expand at apply time into fully explicit configurations that are pushed to each device.
+Vendors give you one place to define settings for a fleet of devices: Mist calls them **templates**, Meraki calls them **profiles**. The device stays bound to that object on the vendor side, and the vendor pushes the settings down.
+
+wifimgr templates serve the same authoring goal — define a setting once, apply it to many devices — but invert the binding. A wifimgr template is an **app-level convenience** that expands at apply time into fully explicit per-device config, and that explicit config is what gets pushed. Nothing on the vendor side references the template: there is no shared object to manage, and no profile to drift against.
 
 ```
 Template file → Expand at apply → Push explicit config to each device
@@ -450,22 +452,31 @@ The diff shows the expanded values, not the template references.
 
 ## Auto-Generated Templates from Import
 
-`wifimgr import api site <name> save` writes two files: the site config itself (into `<configDir>/<api>/sites/<site>.json`) and a companion WLAN template file (into `<configDir>/<api>/wlans/<site>.json`). The site file carries label references like `wlan: ["<site-slug>--<ssid-slug>", ...]`; the template file holds the matching `wlan_profiles` definitions.
+You don't have to author templates by hand. `import api` reads live API state and writes it back as wifimgr templates, so a vendor's shared objects become local, explicit config you own and push per-device from then on.
 
-This matters most for Meraki and other vendors that don't have a native shared-WLAN-profile model. Everything that comes in from the API gets mapped into the Mist-canonical template shape, so once the files are registered the site loads through the same path as a hand-written one. The importer prints the exact two lines to add to your main config:
+### From a site: `import api site`
 
-```
-Wrote site config:    meraki/sites/MX-MEX-904EN.json
-Wrote WLAN template:  meraki/wlans/MX-MEX-904EN.json
+`wifimgr import api site <name> save` writes a single loadable `ImportFile` to `<config_dir>/import/<site>_<api>.json`. One file carries both halves: the site body (`config`) and the WLAN templates it references (`templates`). The site body uses label references like `"wlan": ["<ssid-slug>", ...]`; the `templates.wlan` section holds the matching definitions.
 
-To activate, add to your wifimgr-config.json:
+Register the file under `files.imports` — the loader dispatches the `config` and `templates` sections into the right registries automatically:
+
+```json
+{
   "files": {
-    "site_configs": [ ..., "meraki/sites/MX-MEX-904EN.json" ],
-    "templates":    [ ..., "meraki/wlans/MX-MEX-904EN.json" ]
+    "imports": [ "import/MX-MEX-904EN_meraki.json" ]
   }
+}
 ```
 
-Labels are synthesized as `<site-slug>--<ssid-slug>` to keep them unique across sites. Collisions (two SSIDs that slug to the same base) get `-2`, `-3` suffixes. The files are freestanding — rename labels, merge profiles, or re-scope them across sites once they're yours.
+This matters most for Meraki and other vendors with no native shared-WLAN-profile model: everything maps into the Mist-canonical template shape, so the imported site loads through the same path as a hand-written one. The importer prints the exact line to add. See [import](user-guide.md#import) for the full keyword set (`config` / `inventory` / `all`, scope `type`, `compare`, `secrets`).
+
+### From the org: `import api templates`
+
+Some vendors keep templates above the site boundary — Mist org-level WLANs today. `wifimgr import api templates target <api> save` harvests those into their own import file at `<config_dir>/import/wlan-template_<api>.json`, using bare SSID-slug labels (no site prefix, because the scope is the whole org). Register it under `files.imports` the same way. See [Vendor-Level Templates](user-guide.md#vendor-level-templates) for the command reference.
+
+Meraki has no org-level WLAN templates (SSIDs live inside networks), so this reports nothing and exits cleanly for Meraki targets. Only `type wlan` is wired today; `rf`, `device`, and `gateway` are reserved.
+
+Labels collide-suffix with `-2`, `-3`. The files are freestanding once written — rename labels, merge definitions, or re-scope them. From that point wifimgr expands and pushes them per-device like any other template, with no link back to the vendor object they came from.
 
 ## Best Practices
 

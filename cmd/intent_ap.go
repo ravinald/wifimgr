@@ -227,10 +227,10 @@ func runIntentAP(cmd *cobra.Command, args []string) error {
 			return nil
 		} else if len(rawAPs) == 1 {
 			// Single AP - output just the object
-			jsonData, err = formatter.MarshalJSONWithColorIndent(rawAPs[0], "", "  ")
+			jsonData, err = formatter.MarshalJSONIndent(rawAPs[0], "", "  ")
 		} else {
 			// Multiple APs - output as array
-			jsonData, err = formatter.MarshalJSONWithColorIndent(rawAPs, "", "  ")
+			jsonData, err = formatter.MarshalJSONIndent(rawAPs, "", "  ")
 		}
 
 		if err != nil {

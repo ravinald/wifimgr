@@ -40,6 +40,11 @@ var versionCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(versionCmd)
+
+	// Wire `--version` to the same build metadata as the version subcommand.
+	rootCmd.Version = Version
+	rootCmd.SetVersionTemplate(
+		fmt.Sprintf("wifimgr {{.Version}} (commit %s, built %s)\n", GitCommit, BuildTime))
 }
 
 // printVersion prints version information to stdout

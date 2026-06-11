@@ -459,7 +459,7 @@ func handleValidateBackupCommand(args []string) error {
 
 	// Check for required fields
 	if configData.Version == 0 {
-		fmt.Printf("Warning: missing version field\n")
+		fmt.Fprintf(os.Stderr, "Warning: missing version field\n")
 	}
 
 	// Count sites and devices

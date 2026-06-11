@@ -3,7 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
+	"github.com/ravinald/wifimgr/internal/cmdutils"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/vendors"
@@ -17,11 +19,11 @@ func RefreshAPICacheForApply(ctx context.Context, apiLabel string) error {
 		return fmt.Errorf("cache manager not initialized")
 	}
 
-	fmt.Printf("Refreshing %s cache to get current running config...\n", apiLabel)
+	cmdutils.Noticef("Refreshing %s cache to get current running config...", apiLabel)
 	if err := cacheMgr.RefreshAPI(ctx, apiLabel); err != nil {
 		return fmt.Errorf("failed to refresh %s cache: %w", apiLabel, err)
 	}
-	fmt.Printf("Cache refreshed successfully\n")
+	cmdutils.Noticef("Cache refreshed successfully")
 
 	return nil
 }
@@ -71,7 +73,7 @@ func ResolveAPIForSite(siteName string, siteConfig *config.SiteConfig) (string, 
 	if apiFlag != "" {
 		if expectedAPI != "" && apiFlag != expectedAPI {
 			logging.Warnf("target (%s) overrides site's configured API (%s)", apiFlag, expectedAPI)
-			fmt.Printf("WARN: Using target %s instead of site's configured API %s\n", apiFlag, expectedAPI)
+			fmt.Fprintf(os.Stderr, "WARN: Using target %s instead of site's configured API %s\n", apiFlag, expectedAPI)
 		}
 		return apiFlag, nil
 	}

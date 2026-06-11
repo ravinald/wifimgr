@@ -12,6 +12,19 @@ MAC addresses should be handled using the `internal/macaddr` utility package, wh
 
 This ensures consistent MAC address handling throughout the application.
 
+### Format policy
+
+One rule, split by audience:
+
+- **Input** — accept any of four styles, any case: colon (`aa:bb:cc:dd:ee:ff`), hyphen
+  (`aa-bb-cc-dd-ee-ff`), dot/Cisco (`aabb.ccdd.eeff`), or bare (`aabbccddeeff`).
+- **Storage** — lowercase bare hex everywhere it acts as machine identity: cache keys, site
+  config device keys, and the inventory allowlist. Bare keys stay unique (you can't end up with
+  both `aabb…` and `aa:bb…` as separate entries).
+- **Display** — lowercase colon-hex (`aa:bb:cc:dd:ee:ff`) in every output format: table, CSV, and
+  JSON. Rendering happens at the formatter boundary, keyed on column/field name, so a stored
+  serial that shares the 12-hex shape is never reformatted.
+
 ### Common operations
 
 - Normalize a MAC address: `macaddr.Normalize("00:11:22:33:44:55")` → "001122334455"

@@ -55,7 +55,7 @@ Examples:
 }
 
 func init() {
-	showCmd.AddCommand(apiRFProfilesCmd)
+	showAPICmd.AddCommand(apiRFProfilesCmd)
 }
 
 func runShowAPIRFProfiles(cmd *cobra.Command, args []string) error {
@@ -151,8 +151,8 @@ func runShowAPIRFProfiles(cmd *cobra.Command, args []string) error {
 }
 
 func showRFProfileDetails(profile *vendors.RFTemplate) error {
-	// Marshal and print with color using MarshalJSONWithColorIndent
-	jsonData, err := formatter.MarshalJSONWithColorIndent(profile, "", "  ")
+	// Marshal and print with color using MarshalJSONIndent
+	jsonData, err := formatter.MarshalJSONIndent(profile, "", "  ")
 	if err != nil {
 		logging.GetLogger().WithError(err).Error("Failed to marshal RF profile to JSON")
 		return err
@@ -167,9 +167,9 @@ func outputRFProfilesJSON(profiles []*vendors.RFTemplate) error {
 	var err error
 
 	if len(profiles) == 1 {
-		jsonData, err = formatter.MarshalJSONWithColorIndent(profiles[0], "", "  ")
+		jsonData, err = formatter.MarshalJSONIndent(profiles[0], "", "  ")
 	} else {
-		jsonData, err = formatter.MarshalJSONWithColorIndent(profiles, "", "  ")
+		jsonData, err = formatter.MarshalJSONIndent(profiles, "", "  ")
 	}
 
 	if err != nil {

@@ -279,7 +279,7 @@ When searching across multiple networks/sites without a filter, the command esti
 View all configured APIs and their capabilities:
 
 ```bash
-$ wifimgr show status
+$ wifimgr show api status
 
 API          Vendor   Cache       LastRefresh          Age      Capabilities
 mist-prod    mist     ok          2024-01-27T14:30:00  2h15m    sites, inventory, devices, search, configs

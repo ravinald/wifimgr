@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -26,7 +27,16 @@ type SiteInventory struct {
 	AP      []string `json:"ap"`
 	Switch  []string `json:"switch"`
 	Gateway []string `json:"gateway"`
+	// Note carries an operator-facing annotation, set by import when a site holds
+	// template/profile-managed devices that direct-to-device push can't fully own.
+	// JSON has no comment syntax, so the warning rides as a data field; loaders
+	// ignore unknown keys, so it never affects allowlist evaluation.
+	Note string `json:"_note,omitempty"`
 }
+
+// inventoryDescription is the metadata blurb stamped on a freshly created
+// inventory.json so the file explains itself to whoever opens it next.
+const inventoryDescription = "Per-site armed allowlist: devices wifimgr may write configuration to"
 
 // InventoryFile is the on-disk shape of inventory.json.
 type InventoryFile struct {
@@ -137,6 +147,95 @@ func (f *InventoryFile) SiteNames() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// siteKey returns the map key under which a site is stored, matched
+// case-insensitively, plus whether it already exists. Callers writing the file
+// reuse the existing key so a case variance doesn't split one site into two
+// entries.
+func (f *InventoryFile) siteKey(siteName string) (string, bool) {
+	if f == nil || f.Config.Inventory.Site == nil {
+		return siteName, false
+	}
+	if _, ok := f.Config.Inventory.Site[siteName]; ok {
+		return siteName, true
+	}
+	lower := strings.ToLower(siteName)
+	for name := range f.Config.Inventory.Site {
+		if strings.ToLower(name) == lower {
+			return name, true
+		}
+	}
+	return siteName, false
+}
+
+// SaveInventoryFile writes inventory.json with the same durability shape as the
+// site-config writer: parent dirs created, 2-space indent, 0600 perms (the file
+// names devices an operator authorizes for writes — not world-readable).
+func SaveInventoryFile(path string, f *InventoryFile) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return fmt.Errorf("inventory: mkdir %s: %w", dir, err)
+	}
+	data, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return fmt.Errorf("inventory: marshal: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("inventory: write %s: %w", path, err)
+	}
+	return nil
+}
+
+// ArmSiteDevices merges the given MACs into a site's allowlist at path, creating
+// the file if absent and leaving every other site untouched. MACs are stored as
+// canonical lowercase bare hex and de-duplicated, so re-running an import is
+// idempotent. A non-empty note is stamped on the site section (see
+// SiteInventory.Note). deviceType slices map to ap/switch/gateway.
+func ArmSiteDevices(path, siteName string, aps, switches, gateways []string, note string) error {
+	f, err := LoadInventoryFile(path)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		f = &InventoryFile{Version: 1}
+		f.Metadata.Description = inventoryDescription
+	}
+	if f.Config.Inventory.Site == nil {
+		f.Config.Inventory.Site = map[string]SiteInventory{}
+	}
+
+	key, _ := f.siteKey(siteName)
+	si := f.Config.Inventory.Site[key]
+	si.AP = mergeMACs(si.AP, aps)
+	si.Switch = mergeMACs(si.Switch, switches)
+	si.Gateway = mergeMACs(si.Gateway, gateways)
+	if note != "" {
+		si.Note = note
+	}
+	f.Config.Inventory.Site[key] = si
+
+	return SaveInventoryFile(path, f)
+}
+
+// mergeMACs appends incoming MACs to existing ones as normalized bare hex,
+// dropping invalid entries and duplicates while preserving first-seen order.
+// Existing entries are normalized too, so an arm rewrites a hand-edited file to
+// the canonical form.
+func mergeMACs(existing, incoming []string) []string {
+	seen := make(map[string]bool, len(existing)+len(incoming))
+	out := make([]string, 0, len(existing)+len(incoming))
+	for _, src := range [][]string{existing, incoming} {
+		for _, mac := range src {
+			n := macaddr.NormalizeOrEmpty(mac)
+			if n == "" || seen[n] {
+				continue
+			}
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // NormalizedSet returns the union of armed MACs (normalized, uppercase, no

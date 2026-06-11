@@ -4,8 +4,25 @@ import (
 	"os"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"golang.org/x/term"
 )
+
+// ConfigureColor applies the color policy once at startup. Styled output is
+// disabled — globally, for every lipgloss-rendered string — when any of these
+// hold: an explicit --no-color, NO_COLOR set (any value), TERM=dumb, or stdout
+// is not a TTY. Structured formats (json/csv) are plain by construction and
+// don't depend on this; it governs the human table/symbol output.
+func ConfigureColor(noColorFlag bool) {
+	stdoutFd := int(os.Stdout.Fd()) // #nosec G115 -- file descriptors are small non-negative integers
+	disabled := noColorFlag ||
+		os.Getenv("NO_COLOR") != "" ||
+		os.Getenv("TERM") == "dumb" ||
+		!term.IsTerminal(stdoutFd)
+	if disabled {
+		lipgloss.SetColorProfile(termenv.Ascii)
+	}
+}
 
 var (
 	// greenStyle creates a bold green style

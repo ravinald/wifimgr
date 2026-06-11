@@ -282,5 +282,5 @@ func showBSSIDsMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) e
 }
 
 func init() {
-	showCmd.AddCommand(apiBSSIDCmd)
+	showAPICmd.AddCommand(apiBSSIDCmd)
 }
