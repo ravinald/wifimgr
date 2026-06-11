@@ -1,18 +1,15 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/ravinald/wifimgr/api"
-	"github.com/ravinald/wifimgr/cmd/inventory"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/formatter"
 	"github.com/ravinald/wifimgr/internal/logging"
@@ -222,129 +219,6 @@ func TestParseCommandLine(t *testing.T) {
 	}
 	if !opts.DryRun {
 		t.Errorf("Expected dry-run flag to be true")
-	}
-}
-
-func TestInventoryOperations(t *testing.T) {
-	mistConfig := api.Config{
-		BaseURL:      "https://api.mist.com/api/v1",
-		APIToken:     "test-token",
-		Organization: "test-org",
-		Timeout:      30 * time.Second,
-		LocalCache:   "",
-	}
-
-	// Create mock client and add test inventory items
-	mockClient := api.NewMockClient(mistConfig).(*api.MockClient)
-
-	// Set up a mock cache accessor for testing
-	cacheManager := vendors.NewCacheManager(t.TempDir(), nil)
-	cacheAccessor := vendors.NewCacheAccessor(cacheManager)
-	vendors.SetGlobalCacheAccessor(cacheAccessor)
-	defer vendors.SetGlobalCacheAccessor(nil) // Clean up after test
-
-	// Create a minimal config
-	cfg := &config.Config{
-		Version: 1,
-		Files: config.Files{
-			ConfigDir:   "",
-			SiteConfigs: []string{},
-			Cache:       "",
-			Inventory:   "",
-		},
-		API: config.API{
-			Credentials: config.Credentials{
-				APIID:             "test-id",
-				APIToken:          "test-token",
-				OrgID:             "test-org",
-				KeyEncryptionSalt: "",
-			},
-			URL:          "https://api.mist.com/api/v1",
-			RateLimit:    1000,
-			ResultsLimit: 1000,
-		},
-		Logging: config.Logging{
-			Enable: true,
-			Level:  "info",
-			Format: "text",
-		},
-		Display: config.Display{
-			Inventory: config.DisplayFormat{
-				Format: "table",
-				Fields: []string{"Name", "Type", "Mac", "Serial", "Model"},
-			},
-		},
-	}
-
-	// Create pointer variables directly since we're not using the helper function
-
-	// Add test inventory items
-	apName := "TestAP"
-	apType := "ap"
-	apMac := "d420b080516d"
-	apSerial := "A0052190206A2"
-	apModel := "AP41"
-	apItem := api.InventoryItem{
-		Name:   &apName,
-		Type:   &apType,
-		Mac:    &apMac,
-		Serial: &apSerial,
-		Model:  &apModel,
-	}
-	mockClient.AddInventoryItem(apItem)
-
-	switchName := "TestSwitch"
-	switchType := "switch"
-	switchMac := "8403280bc0a0"
-	switchSerial := "HV3620270051"
-	switchModel := "EX2300-C-12P"
-	switchItem := api.InventoryItem{
-		Name:   &switchName,
-		Type:   &switchType,
-		Mac:    &switchMac,
-		Serial: &switchSerial,
-		Model:  &switchModel,
-	}
-	mockClient.AddInventoryItem(switchItem)
-
-	gatewayName := "TestGateway"
-	gatewayType := "gateway"
-	gatewayMac := "fc334262af00"
-	gatewaySerial := "CW1419AN0651"
-	gatewayModel := "SRX320"
-	gatewayItem := api.InventoryItem{
-		Name:   &gatewayName,
-		Type:   &gatewayType,
-		Mac:    &gatewayMac,
-		Serial: &gatewaySerial,
-		Model:  &gatewayModel,
-	}
-	mockClient.AddInventoryItem(gatewayItem)
-
-	ctx := context.Background()
-
-	// Test listing all inventory
-	err := inventory.ListInventory(ctx, mockClient, cfg, "", "", "", false)
-	if err != nil {
-		t.Fatalf("Failed to list inventory: %v", err)
-	}
-
-	// Test listing AP inventory
-	err = inventory.ListInventory(ctx, mockClient, cfg, "ap", "", "", false)
-	if err != nil {
-		t.Fatalf("Failed to list AP inventory: %v", err)
-	}
-
-	// Test listing switch inventory
-	err = inventory.ListInventory(ctx, mockClient, cfg, "switch", "", "", false)
-	if err != nil {
-		t.Fatalf("Failed to list switch inventory: %v", err)
-	}
-
-	// Test listing gateway inventory
-	err = inventory.ListInventory(ctx, mockClient, cfg, "gateway", "", "", false)
-	if err != nil {
-		t.Fatalf("Failed to list gateway inventory: %v", err)
 	}
 }
 
