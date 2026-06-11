@@ -3,6 +3,7 @@ package apply
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/ravinald/wifimgr/api"
+	"github.com/ravinald/wifimgr/internal/cmdutils"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/macaddr"
@@ -191,15 +193,20 @@ func getSiteNameFromConfig(siteConfig SiteConfig) (string, bool) {
 // getSiteIDByName gets the site ID for a site name.
 // First checks the multi-vendor cache, then falls back to API lookup.
 func getSiteIDByName(client api.Client, siteName string) (string, error) {
-	// Try cache first (multi-vendor cache)
-	if accessor := vendors.GetGlobalCacheAccessor(); accessor != nil {
-		if site, err := accessor.GetSiteByName(siteName); err == nil && site.ID != "" {
-			logging.Debugf("Found site ID for '%s' in cache: %s", siteName, site.ID)
-			return site.ID, nil
-		}
+	// Cache first (multi-vendor, duplicate-safe). A duplicate site name is fatal
+	// here — applying to the wrong same-named site is exactly the hazard the
+	// refusal guards against, so it must not fall through to a live lookup.
+	ref, err := cmdutils.ResolveSite(siteName, "")
+	if err == nil {
+		logging.Debugf("Found site ID for '%s' in cache: %s", siteName, ref.SiteID)
+		return ref.SiteID, nil
+	}
+	var dup *vendors.DuplicateSiteError
+	if errors.As(err, &dup) {
+		return "", err
 	}
 
-	// Fall back to API lookup
+	// Cache miss — fall back to a live API lookup.
 	ctx := context.Background()
 	site, err := client.GetSiteByIdentifier(ctx, siteName)
 	if err != nil {
