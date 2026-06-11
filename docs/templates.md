@@ -474,7 +474,7 @@ This matters most for Meraki and other vendors with no native shared-WLAN-profil
 
 Some vendors keep templates above the site boundary — Mist org-level WLANs today. `wifimgr import api templates target <api> save` harvests those into their own import file at `<config_dir>/import/wlan-template_<api>.json`, using bare SSID-slug labels (no site prefix, because the scope is the whole org). Register it under `files.imports` the same way. See [Vendor-Level Templates](user-guide.md#vendor-level-templates) for the command reference.
 
-Meraki has no org-level WLAN templates (SSIDs live inside networks), so this reports nothing and exits cleanly for Meraki targets. Only `type wlan` is wired today; `rf`, `device`, and `gateway` are reserved.
+Meraki has no org-level WLAN templates (SSIDs live inside networks), so this reports nothing and exits cleanly for Meraki targets. Only `type wlan` is wired today; `rf`, `device`, and `gateway` are reserved. This is the *org-level* command only — per-site `import api site` does export Meraki SSIDs as WLAN templates, and `apply ap` pushes them back to network SSID slots. See [Meraki SSID Assignment](multi-vendor/commands.md#meraki-ssid-assignment-availability-tags).
 
 Labels collide-suffix with `-2`, `-3`. The files are freestanding once written — rename labels, merge definitions, or re-scope them. From that point wifimgr expands and pushes them per-device like any other template, with no link back to the vendor object they came from.
 

@@ -53,6 +53,107 @@ wifimgr show ap target mist-prod
 | `show intent ap` | Local config only, no API involved |
 | `show intent sites` | Local config only, no API involved |
 
+## Applying WLANs to APs
+
+The intent config is the same regardless of vendor — that's the point of the
+vendor-agnostic UX. You declare WLAN template labels at up to three levels, and
+`apply ap <site>` translates them to each vendor's native model.
+
+| Level | Key | Purpose |
+|-------|-----|---------|
+| Create | `profiles.wlan` | WLANs to **create** at the site/network |
+| Site-wide | `wlan` (site-level) | Apply to **all** APs by default |
+| Per-AP | `devices.ap[mac].wlan` | Apply to **specific** APs (overrides the site default for that AP) |
+
+Every label used at the site or per-AP level must be declared in `profiles.wlan`
+and must resolve to a WLAN template. `apply` validates this before pushing.
+
+### Site-wide and per-AP example
+
+```json
+{
+  "config": {
+    "sites": {
+      "site1": {
+        "site_config": { "name": "US-NYC-OFFICE", "api": "mist-prod" },
+        "profiles": { "wlan": ["corp-secure", "guest-open", "iot-network"] },
+        "wlan": ["corp-secure", "guest-open"],
+        "devices": {
+          "ap": {
+            "aa:bb:cc:dd:ee:f1": { "name": "NYC-AP-LOBBY" },
+            "aa:bb:cc:dd:ee:f2": { "name": "NYC-AP-WAREHOUSE", "wlan": ["iot-network"] }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+- **LOBBY** inherits the site default → broadcasts `corp-secure` + `guest-open`.
+- **WAREHOUSE** has an explicit `wlan` → broadcasts only `iot-network` (the per-AP
+  list replaces the site default for that AP, it does not merge).
+
+Run it the same way for any vendor — the API comes from the site's `api` field:
+
+```bash
+wifimgr apply ap US-NYC-OFFICE diff      # preview first, always
+wifimgr apply ap US-NYC-OFFICE           # push
+```
+
+### What each vendor does under the hood
+
+The config above is identical across vendors; only the translation differs.
+
+| Vendor | How site-wide assignment maps | How per-AP assignment maps |
+|--------|-------------------------------|----------------------------|
+| **Mist** | WLAN object with `apply_to: "site"` | WLAN object with `apply_to: "aps"` and `ap_ids` resolved from the AP MACs |
+| **Meraki** | SSID slot with `availableOnAllAps: true` | SSID slot tagged `availabilityTags: ["wifimgr-wlan-<label>"]`, `availableOnAllAps: false`, plus the matching tag injected on each AP |
+| **Ubiquiti** | Not supported (read-only Phase 1) | Not supported (read-only Phase 1) |
+
+Ubiquiti Phase 1 is read-only via the Site Manager API; WLAN/SSID apply arrives in
+Phase 2 on the Network API. Until then `apply ap` against a Ubiquiti site reports the
+capability as unsupported.
+
+### Meraki SSID Assignment (Availability Tags)
+
+Meraki SSIDs are network-wide and live in 15 fixed slots (0–14) — there is no per-AP
+SSID object like Mist. wifimgr bridges that gap with **availability tags**:
+
+1. `apply ap` writes each WLAN template into a network SSID slot via the Meraki
+   dashboard API (reusing the first free slot; it never creates extra SSIDs).
+2. For a WLAN scoped to specific APs, the SSID is set to
+   `availabilityTags: ["wifimgr-wlan-<label>"]` and `availableOnAllAps: false`.
+3. wifimgr injects that same `wifimgr-wlan-<label>` tag into each target AP's tags,
+   and strips any orphaned `wifimgr-wlan-*` tags so removals converge.
+4. Meraki broadcasts the SSID only where the SSID tag and an AP tag match — that match
+   *is* the per-AP assignment.
+
+A profile-only WLAN (declared in `profiles.wlan` but not assigned at the site or AP
+level) gets `availableOnAllAps: true` and broadcasts everywhere.
+
+Tags prefixed `wifimgr-wlan-` are managed by wifimgr — don't set them by hand; edit the
+`wlan` lists in your site config instead. Other tags you set on an AP are preserved.
+
+#### Slot pinning on import
+
+A Meraki network has 15 fixed SSID slots (0–14). When you `import api site`, each live
+SSID is captured with its slot in a vendor block on the WLAN template:
+
+```json
+"office--corp-secure": {
+  "ssid": "CorpNet", "enabled": true, "auth": { "type": "psk" },
+  "meraki:": { "number": 3 }
+}
+```
+
+On the next `apply`, that pinned slot is the join key: wifimgr updates **slot 3** in
+place rather than matching on SSID name. This means **renaming the SSID edits its own
+slot** instead of consuming a fresh one and orphaning the old. Resolution order is
+pinned slot → SSID-name match → allocate a free slot (only for genuinely new WLANs with
+no `meraki:` block). The `meraki:` block is Meraki-only; Mist WLANs are first-class
+objects with stable IDs and need no pin.
+
 ## Aggregation Display
 
 When showing data from multiple APIs, include source columns:
