@@ -112,28 +112,6 @@ func setDefaults() {
 	viper.SetDefault("logging.format", "text")
 	viper.SetDefault("logging.stdout", true)
 
-	// Display jsoncolor defaults
-	viper.SetDefault("display.jsoncolor.null.hex", "#767676")
-	viper.SetDefault("display.jsoncolor.null.ansi256", "244")
-	viper.SetDefault("display.jsoncolor.null.ansi", "8")
-	viper.SetDefault("display.jsoncolor.bool.hex", "#FFFFFF")
-	viper.SetDefault("display.jsoncolor.bool.ansi256", "15")
-	viper.SetDefault("display.jsoncolor.bool.ansi", "7")
-	viper.SetDefault("display.jsoncolor.number.hex", "#00FFFF")
-	viper.SetDefault("display.jsoncolor.number.ansi256", "51")
-	viper.SetDefault("display.jsoncolor.number.ansi", "6")
-	viper.SetDefault("display.jsoncolor.string.hex", "#00FF00")
-	viper.SetDefault("display.jsoncolor.string.ansi256", "46")
-	viper.SetDefault("display.jsoncolor.string.ansi", "2")
-	viper.SetDefault("display.jsoncolor.key.hex", "#0000FF")
-	viper.SetDefault("display.jsoncolor.key.ansi256", "21")
-	viper.SetDefault("display.jsoncolor.key.ansi", "4")
-	viper.SetDefault("display.jsoncolor.bytes.hex", "#767676")
-	viper.SetDefault("display.jsoncolor.bytes.ansi256", "244")
-	viper.SetDefault("display.jsoncolor.bytes.ansi", "8")
-	viper.SetDefault("display.jsoncolor.time.hex", "#00FF00")
-	viper.SetDefault("display.jsoncolor.time.ansi256", "46")
-	viper.SetDefault("display.jsoncolor.time.ansi", "2")
 }
 
 // LoadViperConfig loads the main configuration using Viper

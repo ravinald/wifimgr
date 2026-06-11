@@ -21,7 +21,7 @@ import (
 	"github.com/ravinald/wifimgr/internal/cmdutils"
 )
 
-// apiSiteCmd represents the "show api site" command
+// apiSiteCmd represents the "show site" command
 var apiSiteCmd = &cobra.Command{
 	Use:     "site [site-name] [target api-label] [all] [detail|extensive] [format json|csv]",
 	Aliases: []string{"sites"},

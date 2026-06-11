@@ -88,23 +88,12 @@
   },
 
   "display": {
-    "_comment_display": "Output formatting and color configuration",
-
-    "jsoncolor": {
-      "_comment": "Colors for JSON output. Supports hex, ansi256, and ansi formats",
-      "null":   { "hex": "#767676", "ansi256": "244", "ansi": "8" },
-      "bool":   { "hex": "#FFFFFF", "ansi256": "15",  "ansi": "7" },
-      "number": { "hex": "#00FFFF", "ansi256": "51",  "ansi": "6" },
-      "string": { "hex": "#00FF00", "ansi256": "46",  "ansi": "2" },
-      "key":    { "hex": "#0000FF", "ansi256": "21",  "ansi": "4" },
-      "bytes":  { "hex": "#767676", "ansi256": "244", "ansi": "8" },
-      "time":   { "hex": "#00FF00", "ansi256": "46",  "ansi": "2" }
-    },
+    "_comment_display": "Per-command output formatting. JSON and CSV output are always plain (no color).",
 
     "commands": {
       "_comment_commands": "Per-command display customization",
 
-      "show.api.sites": {
+      "show.sites": {
         "format": "table",
         "title": "Sites",
         "fields": [
@@ -116,7 +105,7 @@
         ]
       },
 
-      "show.api.ap": {
+      "show.ap": {
         "format": "table",
         "title": "AP Devices",
         "fields": [
@@ -130,9 +119,9 @@
         ]
       },
 
-      "show.inventory.ap": {
+      "show.switch": {
         "format": "table",
-        "title": "AP Inventory",
+        "title": "Switches",
         "fields": [
           { "field": "status", "title": "Status", "width": 6 },
           { "field": "name", "title": "Name", "width": -1 },
@@ -143,22 +132,9 @@
         ]
       },
 
-      "show.inventory.switch": {
+      "show.gateway": {
         "format": "table",
-        "title": "Switch Inventory",
-        "fields": [
-          { "field": "status", "title": "Status", "width": 6 },
-          { "field": "name", "title": "Name", "width": -1 },
-          { "field": "mac", "title": "MAC", "width": -1 },
-          { "field": "serial", "title": "Serial", "width": -1 },
-          { "field": "model", "title": "Model", "width": -1 },
-          { "field": "site_name", "title": "Site", "width": -1 }
-        ]
-      },
-
-      "show.inventory.gateway": {
-        "format": "table",
-        "title": "Gateway Inventory",
+        "title": "Gateways",
         "fields": [
           { "field": "status", "title": "Status", "width": 6 },
           { "field": "name", "title": "Name", "width": -1 },

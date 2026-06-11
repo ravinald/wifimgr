@@ -2,6 +2,41 @@
 
 All notable changes to wifimgr are documented in this file.
 
+## [Unreleased]
+
+### Added
+- `import api site <site> inventory|all` — arm discovered devices into the per-site
+  allowlist (`inventory.json`) straight from a vendor; template/profile-managed
+  devices (Meraki bound config templates, Mist device profiles) import with a `WARN`
+  and an inline `_note`.
+- MAC address policy: input accepts colon, hyphen, dot (Cisco), or bare hex in any
+  case; display is lowercase colon-hex; on-disk storage is lowercase bare hex.
+- Global flags: `--version`, `--no-color` (also honors `NO_COLOR` / `TERM=dumb`),
+  `-q/--quiet`, `-y/--yes`, `--no-input`.
+- Duplicate-site-name safety: ambiguous site names fail loud instead of binding to
+  whichever site loaded last.
+- `search wireless detail` shows a `Last Seen` column; `last_seen`/`first_seen` in JSON.
+
+### Changed
+- **Managed-first `show`:** `show ap`, `show site`, `show switch`, `show gateway` default
+  to the devices you manage (`all` widens to everything the API knows). Vendor
+  introspection lives under `show api`: `show api status|bssid|wlans|device-profiles|rf-profiles`.
+- **`refresh`** defaults to the managed set; `refresh all` pulls everything, `refresh
+  detail` adds client detail, `refresh site <S>` scopes to one site, `target <label>`
+  picks an API.
+- Output discipline: primary output (table/CSV/JSON) on stdout, diagnostics on stderr;
+  `format json` and `format csv` are always plain (no color escapes) so `| jq` is safe.
+- Inventory is keyed per site (`config.inventory.site.<SITE>.<type>`); the old global
+  layout is rejected.
+- `import api site` and `import api templates` share one arg parser for the
+  `secrets`/`save`/`file` keywords; `import api templates` is documented next to
+  template authoring in the Templates guide.
+
+### Removed
+- `set ap` / `set ap site` — list with `show ap`, assign with `apply` (which enforces
+  the per-site inventory allowlist).
+- `refresh device` and the `refresh all` subcommand (replaced by the scope keywords above).
+
 ## [0.1.1] - 2026-02-09
 
 ### WLAN Support

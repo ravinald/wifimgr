@@ -13,7 +13,7 @@ require (
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/maruel/natural v1.3.0
 	github.com/meraki/dashboard-api-go/v5 v5.0.8
-	github.com/neilotoole/jsoncolor v0.9.1
+	github.com/muesli/termenv v0.16.0
 	github.com/netbox-community/go-netbox/v4 v4.3.0
 	github.com/ravinald/jsondiff v1.1.3
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
@@ -47,7 +47,6 @@ require (
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
-	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect

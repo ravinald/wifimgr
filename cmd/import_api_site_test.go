@@ -450,3 +450,92 @@ func portalEqual(a, b *config.PortalConfig) bool {
 	}
 	return a.Enabled == b.Enabled && a.Auth == b.Auth
 }
+
+func TestParseImportSiteArgs_Kind(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want importKind
+		site string
+	}{
+		{"default is config", []string{"US-LAB"}, kindConfig, "US-LAB"},
+		{"inventory after site", []string{"US-LAB", "inventory"}, kindInventory, "US-LAB"},
+		{"all after site", []string{"US-LAB", "all"}, kindAll, "US-LAB"},
+		{"config explicit", []string{"US-LAB", "config"}, kindConfig, "US-LAB"},
+		{"with api prefix", []string{"api", "meraki", "US-LAB", "all"}, kindAll, "US-LAB"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseImportSiteArgs(tc.args)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if got.kind != tc.want {
+				t.Errorf("kind = %v, want %v", got.kind, tc.want)
+			}
+			if got.siteName != tc.site {
+				t.Errorf("siteName = %q, want %q", got.siteName, tc.site)
+			}
+		})
+	}
+}
+
+func templateTestEnvelope() *importEnvelope {
+	return &importEnvelope{
+		Config: &siteConfigEnvelope{Sites: map[string]*siteObjExport{
+			"US-LAB": {Devices: &devicesExport{
+				AP: map[string]map[string]any{
+					"aabbccddeeff": {"deviceprofile_name": "Default-Profile"},
+					"001122334455": {"name": "plain-ap"},
+				},
+			}},
+		}},
+	}
+}
+
+func TestDetectTemplateManagement(t *testing.T) {
+	// Mist device profile on one AP.
+	f := detectTemplateManagement(&vendors.SiteInfo{Name: "US-LAB"}, templateTestEnvelope())
+	if !f.managed {
+		t.Fatal("expected managed=true for profile-bound device")
+	}
+	if len(f.profileMACs) != 1 || f.profileMACs[0] != "aabbccddeeff" {
+		t.Errorf("profileMACs = %v, want [aabbccddeeff]", f.profileMACs)
+	}
+	if f.merakiBound {
+		t.Error("merakiBound should be false")
+	}
+
+	// Meraki config-template binding at the site level.
+	bound := detectTemplateManagement(&vendors.SiteInfo{Name: "US-LAB", BoundToConfigTemplate: true}, templateTestEnvelope())
+	if !bound.merakiBound || !bound.managed {
+		t.Errorf("expected merakiBound managed finding, got %+v", bound)
+	}
+
+	// Clean site: no profiles, not bound.
+	clean := detectTemplateManagement(&vendors.SiteInfo{Name: "US-LAB"}, &importEnvelope{
+		Config: &siteConfigEnvelope{Sites: map[string]*siteObjExport{
+			"US-LAB": {Devices: &devicesExport{AP: map[string]map[string]any{"001122334455": {"name": "plain"}}}},
+		}},
+	})
+	if clean.managed {
+		t.Error("expected managed=false for clean site")
+	}
+}
+
+func TestAnnotateEnvelope(t *testing.T) {
+	env := templateTestEnvelope()
+	f := detectTemplateManagement(&vendors.SiteInfo{Name: "US-LAB"}, env)
+	annotateEnvelope(env, "US-LAB", f)
+
+	body := env.Config.Sites["US-LAB"]
+	if body.Note == "" {
+		t.Error("expected site-level _note")
+	}
+	if _, ok := body.Devices.AP["aabbccddeeff"]["_note"]; !ok {
+		t.Error("expected _note on profile-managed device")
+	}
+	if _, ok := body.Devices.AP["001122334455"]["_note"]; ok {
+		t.Error("plain device should not be annotated")
+	}
+}

@@ -393,8 +393,9 @@ func TestGenericTablePrinter_CacheFieldPath_CSV(t *testing.T) {
 		t.Errorf("CSV headers should contain all column titles. Output: %s", output)
 	}
 
-	// Verify data row contains resolved cache values
-	expectedValues := []string{"AP-Test-01", "aabbccddeeff", "36", "17", "Default-Profile"}
+	// Verify data row contains resolved cache values. MAC renders as colon-hex per
+	// the display policy (stored bare hex, presented aa:bb:cc:dd:ee:ff).
+	expectedValues := []string{"AP-Test-01", "aa:bb:cc:dd:ee:ff", "36", "17", "Default-Profile"}
 	for _, val := range expectedValues {
 		if !strings.Contains(output, val) {
 			t.Errorf("CSV output should contain '%s', but it doesn't. Output: %s", val, output)

@@ -26,6 +26,15 @@ type SiteInfo struct {
 	Longitude   float64 `json:"longitude,omitempty"`
 	DeviceCount int     `json:"device_count,omitempty"`
 
+	// BoundToConfigTemplate marks a site whose devices a vendor manages through a
+	// bound configuration template (a Meraki network bound to a config template).
+	// wifimgr pushes config direct to devices, so a bound site signals that an
+	// import can't fully own those devices — import warns rather than silently
+	// producing config a template will overwrite. ConfigTemplateName is best-effort
+	// (the org-networks list exposes the binding as a flag, not the template name).
+	BoundToConfigTemplate bool   `json:"bound_to_config_template,omitempty"`
+	ConfigTemplateName    string `json:"config_template_name,omitempty"`
+
 	// Provenance tracks where this data came from (set by loader, not serialized)
 	SourceAPI    string `json:"-"`
 	SourceVendor string `json:"-"`

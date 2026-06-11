@@ -31,6 +31,7 @@ import (
 	"github.com/ravinald/wifimgr/internal/cmdutils"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/logging"
+	"github.com/ravinald/wifimgr/internal/symbols"
 	"github.com/ravinald/wifimgr/internal/xdg"
 )
 
@@ -71,6 +72,10 @@ var (
 	configFile      string
 	caseInsensitive bool
 	suppressOutput  bool // --suppress: suppress SDK debug output
+	noColor         bool // --no-color: disable styled output
+	quiet           bool // -q/--quiet: suppress non-essential output
+	assumeYes       bool // -y/--yes: auto-approve confirmations
+	noInput         bool // --no-input: never prompt (fail closed)
 
 	// Temporary compatibility for command handlers during Viper migration
 	globalConfig *config.Config
@@ -97,6 +102,14 @@ For detailed usage information, run 'wifimgr help [command]'`,
 		if ctx := cmd.Context(); ctx != nil {
 			globalContext = ctx
 		}
+
+		// Apply operational flags before any output or prompt. Color policy and
+		// quiet/confirmation behavior are process-level, so they take effect for
+		// every command regardless of init tier.
+		symbols.ConfigureColor(noColor)
+		cmdutils.SetQuiet(quiet)
+		cmdutils.SetAssumeYes(assumeYes)
+		cmdutils.SetNoInput(noInput)
 
 		// Determine initialization tier based on command annotations
 		tier := cmdutils.GetCommandTier(cmd.Annotations)
@@ -495,6 +508,10 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&caseInsensitive, "case-insensitive", "i", false, "Perform case-insensitive pattern matching")
 	rootCmd.PersistentFlags().BoolVar(&suppressOutput, "suppress", false,
 		"Suppress Meraki SDK debug output (workaround for github.com/meraki/dashboard-api-go issues #72 and #75)")
+	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable colored output")
+	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "Suppress non-essential output")
+	rootCmd.PersistentFlags().BoolVarP(&assumeYes, "yes", "y", false, "Assume yes to confirmation prompts")
+	rootCmd.PersistentFlags().BoolVar(&noInput, "no-input", false, "Never prompt; fail instead of asking")
 
 	// Bind the case-insensitive flag to viper
 	if err := viper.BindPFlag("case-insensitive", rootCmd.PersistentFlags().Lookup("case-insensitive")); err != nil {

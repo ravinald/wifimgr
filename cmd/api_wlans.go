@@ -73,7 +73,7 @@ Examples:
 }
 
 func init() {
-	showCmd.AddCommand(apiWLANsCmd)
+	showAPICmd.AddCommand(apiWLANsCmd)
 }
 
 func runShowAPIWLANs(cmd *cobra.Command, args []string) error {
@@ -231,8 +231,8 @@ func runShowAPIWLANs(cmd *cobra.Command, args []string) error {
 }
 
 func showWLANDetails(wlan *vendors.WLAN) error {
-	// Marshal and print with color using MarshalJSONWithColorIndent
-	jsonData, err := formatter.MarshalJSONWithColorIndent(wlan, "", "  ")
+	// Marshal and print with color using MarshalJSONIndent
+	jsonData, err := formatter.MarshalJSONIndent(wlan, "", "  ")
 	if err != nil {
 		logging.GetLogger().WithError(err).Error("Failed to marshal WLAN to JSON")
 		return err
@@ -247,9 +247,9 @@ func outputWLANsJSON(wlans []*vendors.WLAN) error {
 	var err error
 
 	if len(wlans) == 1 {
-		jsonData, err = formatter.MarshalJSONWithColorIndent(wlans[0], "", "  ")
+		jsonData, err = formatter.MarshalJSONIndent(wlans[0], "", "  ")
 	} else {
-		jsonData, err = formatter.MarshalJSONWithColorIndent(wlans, "", "  ")
+		jsonData, err = formatter.MarshalJSONIndent(wlans, "", "  ")
 	}
 
 	if err != nil {

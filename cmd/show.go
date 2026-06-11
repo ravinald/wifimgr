@@ -27,14 +27,17 @@ var showCmd = &cobra.Command{
 switches, gateways, and configurations.
 
 Use 'wifimgr show <subcommand> --help' for detailed information about each source.`,
-	Example: `  # Show sites from API
-  wifimgr show api sites
+	Example: `  # Managed sites (add 'all' for every site the API knows)
+  wifimgr show site
 
-  # Show APs from local config
+  # Managed APs at a site
+  wifimgr show ap site US-LAB-01
+
+  # Local configuration intent
   wifimgr show intent ap site US-LAB-01
 
-  # Show inventory information
-  wifimgr show inventory ap`,
+  # API/vendor state (status, profiles, BSSIDs, WLANs)
+  wifimgr show api status`,
 	Aliases: []string{"s", "sh"},
 }
 
