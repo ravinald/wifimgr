@@ -117,6 +117,8 @@ func NewBubbleTable(config TableConfig, data []GenericTableData, interactive boo
 						strVal = "BOOL_UNKNOWN"
 					}
 				}
+			} else if isMACField(col.Field) {
+				strVal = formatMACDisplay(fmt.Sprintf("%v", val))
 			} else if strings.HasPrefix(col.Field, "cache.") {
 				// Use formatNestedValue for cache.* fields to handle complex nested values
 				strVal = formatNestedValue(val)
@@ -557,6 +559,8 @@ func (m *BubbleTableModel) RenderStatic() string {
 			} else if col.IsStatusField {
 				// Handle status field values: online/offline/alerting/dormant
 				strVal = fmt.Sprintf("STATUS_%s", strings.ToUpper(fmt.Sprintf("%v", val)))
+			} else if isMACField(col.Field) {
+				strVal = formatMACDisplay(fmt.Sprintf("%v", val))
 			} else if strings.HasPrefix(col.Field, "cache.") {
 				// Use formatNestedValue for cache.* fields to handle complex nested values
 				strVal = formatNestedValue(val)

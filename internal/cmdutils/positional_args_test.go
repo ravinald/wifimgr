@@ -105,3 +105,56 @@ func TestValidateShowArgsAliasScope(t *testing.T) {
 		t.Errorf("ValidateShowBSSIDArgs rejected json: %v", err)
 	}
 }
+
+func TestImportOutputArgsConsume(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		wantMatch   bool
+		wantLast    int
+		wantSecrets bool
+		wantSave    bool
+		wantFile    string
+		wantErr     string
+	}{
+		{name: "secrets", args: []string{"secrets"}, wantMatch: true, wantLast: 0, wantSecrets: true},
+		{name: "save", args: []string{"save"}, wantMatch: true, wantLast: 0, wantSave: true},
+		{name: "file consumes operand", args: []string{"file", "x.json"}, wantMatch: true, wantLast: 1, wantFile: "x.json"},
+		{name: "file strips quotes", args: []string{"file", `"q.json"`}, wantMatch: true, wantLast: 1, wantFile: "q.json"},
+		{name: "file missing operand", args: []string{"file"}, wantMatch: true, wantLast: 0, wantErr: "requires a filename"},
+		{name: "non-match falls through", args: []string{"config"}, wantMatch: false, wantLast: 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var o ImportOutputArgs
+			matched, last, err := o.Consume(tc.args, 0)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("err = %v, want substring %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if matched != tc.wantMatch || last != tc.wantLast {
+				t.Errorf("matched=%v last=%d, want matched=%v last=%d", matched, last, tc.wantMatch, tc.wantLast)
+			}
+			if o.IncludeSecrets != tc.wantSecrets || o.SaveMode != tc.wantSave || o.OutputFile != tc.wantFile {
+				t.Errorf("state = %+v, want secrets=%v save=%v file=%q", o, tc.wantSecrets, tc.wantSave, tc.wantFile)
+			}
+		})
+	}
+}
+
+func TestImportOutputArgsValidate(t *testing.T) {
+	if err := (&ImportOutputArgs{OutputFile: "x.json"}).Validate(); err == nil {
+		t.Error("file without save should error")
+	}
+	if err := (&ImportOutputArgs{OutputFile: "x.json", SaveMode: true}).Validate(); err != nil {
+		t.Errorf("file with save should pass: %v", err)
+	}
+	if err := (&ImportOutputArgs{}).Validate(); err != nil {
+		t.Errorf("empty should pass: %v", err)
+	}
+}

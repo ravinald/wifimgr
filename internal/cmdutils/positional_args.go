@@ -155,7 +155,7 @@ func ParseShowArgs(args []string) (*ParsedShowArgs, error) {
 	return result, nil
 }
 
-// ValidateShowAPArgs validates arguments for the show api ap command
+// ValidateShowAPArgs validates arguments for the show ap command
 func ValidateShowAPArgs(_ *cobra.Command, args []string) error {
 	// Allow "help" as a special keyword (handled in RunE)
 	if ContainsHelp(args) {
@@ -216,6 +216,48 @@ func ParseApplyArgs(args []string) (*ParsedApplyArgs, error) {
 	}
 
 	return result, nil
+}
+
+// ImportOutputArgs carries the emit-control keywords every `import api …`
+// subcommand shares: secrets (include redacted-by-default fields), save (write
+// to disk vs print), and file <name> (output path). Each importer embeds this
+// and runs Consume before its own grammar switch so the shared keywords behave
+// identically across commands; the command-specific keywords stay local.
+type ImportOutputArgs struct {
+	IncludeSecrets bool
+	SaveMode       bool
+	OutputFile     string
+}
+
+// Consume handles the shared import keyword at args[i]. It reports whether the
+// token matched, the index of the last token it consumed (callers advance past
+// it), and any error. A non-match returns (false, i, nil) so the caller can fall
+// through to its own keywords.
+func (o *ImportOutputArgs) Consume(args []string, i int) (matched bool, last int, err error) {
+	switch strings.ToLower(args[i]) {
+	case "secrets":
+		o.IncludeSecrets = true
+	case "save":
+		o.SaveMode = true
+	case "file":
+		if i+1 >= len(args) {
+			return true, i, fmt.Errorf("'file' requires a filename")
+		}
+		o.OutputFile = StripQuotes(args[i+1])
+		return true, i + 1, nil
+	default:
+		return false, i, nil
+	}
+	return true, i, nil
+}
+
+// Validate enforces the cross-keyword rule shared by import commands: a custom
+// output file only makes sense when actually writing one.
+func (o *ImportOutputArgs) Validate() error {
+	if o.OutputFile != "" && !o.SaveMode {
+		return fmt.Errorf("'file' requires 'save' to be specified")
+	}
+	return nil
 }
 
 // StripQuotes removes surrounding double quotes from a value.

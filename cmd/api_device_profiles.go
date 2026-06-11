@@ -50,7 +50,7 @@ Examples:
 }
 
 func init() {
-	showCmd.AddCommand(apiDeviceProfilesCmd)
+	showAPICmd.AddCommand(apiDeviceProfilesCmd)
 }
 
 func runShowAPIDeviceProfiles(cmd *cobra.Command, args []string) error {
@@ -89,8 +89,8 @@ func showProfileDetails(cacheAccessor *vendors.CacheAccessor, profileName string
 		return nil
 	}
 
-	// Marshal and print with color using MarshalJSONWithColorIndent
-	jsonData, err := formatter.MarshalJSONWithColorIndent(profile, "", "  ")
+	// Marshal and print with color using MarshalJSONIndent
+	jsonData, err := formatter.MarshalJSONIndent(profile, "", "  ")
 	if err != nil {
 		logger.WithError(err).Error("Failed to marshal profile to JSON")
 		return err

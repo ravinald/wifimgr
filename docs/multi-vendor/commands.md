@@ -26,12 +26,12 @@ wifimgr show ap target mist-prod
 | Command | Default Behavior | With `target` |
 |---------|------------------|---------------|
 | `show ap` | Aggregate from all APIs | Filter to specific API |
-| `show bssid` | Aggregate from all APIs | Filter to specific API |
+| `show api bssid` | Aggregate from all APIs | Filter to specific API |
 | `show sites` | Aggregate from all APIs | Filter to specific API |
 | `show switch` | Aggregate from all APIs | Filter to specific API |
-| `show wlans` | Aggregate from all APIs | Filter to specific API |
-| `show rf-profiles` | Aggregate from all APIs | Filter to specific API |
-| `show device-profiles` | Aggregate from all APIs | Filter to specific API |
+| `show api wlans` | Aggregate from all APIs | Filter to specific API |
+| `show api rf-profiles` | Aggregate from all APIs | Filter to specific API |
+| `show api device-profiles` | Aggregate from all APIs | Filter to specific API |
 | `show site <name>` | Show from all APIs with that name | Show from specific API |
 | `search wired <text>` | Search all APIs | Search specific API |
 | `search wireless <text>` | Search all APIs | Search specific API |
@@ -45,7 +45,6 @@ wifimgr show ap target mist-prod
 |---------|------------------|---------------|
 | `apply site <name>` | Use site config's API | Override (warns) |
 | `apply ap <site>` | Use site config's API | Override (warns) |
-| `set ap site` | Use device's resolved API | Override (warns) |
 
 ### Intent Commands (Local Config)
 

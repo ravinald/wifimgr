@@ -33,9 +33,9 @@ var showFieldsCmd = &cobra.Command{
 section of wifimgr-config.json for the specified command.
 
 Examples:
-  wifimgr show fields show.api.ap
-  wifimgr show fields show.inventory.switch
-  wifimgr show fields show.api.sites
+  wifimgr show fields show.ap
+  wifimgr show fields show.sites
+  wifimgr show fields show.wlans
 
 To see all commands with configurable fields:
   wifimgr show fields`,

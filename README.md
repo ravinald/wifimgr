@@ -24,7 +24,7 @@ cp config/wifimgr-config-sample.json ~/.config/wifimgr/wifimgr-config.json
 wifimgr -e refresh cache
 
 # List sites
-wifimgr show api sites
+wifimgr show site
 ```
 
 ## What It Does
@@ -40,8 +40,8 @@ wifimgr show api sites
 
 ```bash
 # View
-wifimgr show api sites                    # List all sites
-wifimgr show api ap site US-LAB-01        # List APs at a site
+wifimgr show site                    # List all sites
+wifimgr show ap site US-LAB-01        # List APs at a site
 wifimgr show api wlans site US-LAB-01     # List WLANs at a site
 
 # Apply
@@ -54,7 +54,7 @@ wifimgr search wireless laptop-john       # Find wireless client
 wifimgr search wired 5c:5b:35:8e:4c:f9   # Find wired client by MAC
 
 # Target a specific API (multi-vendor)
-wifimgr show api sites target mist-prod
+wifimgr show site target mist-prod
 wifimgr search wireless laptop target meraki-corp
 ```
 

@@ -51,16 +51,28 @@ const (
 
 // importAPISiteCmd represents the "import api site" command
 var importAPISiteCmd = &cobra.Command{
-	Use:   "site [api <api-label>] <site-name> [full|type <scope>] [secrets] [compare] [save] [file <filename>]",
+	Use:   "site [api <api-label>] <site-name> [config|inventory|all] [full|type <scope>] [secrets] [compare] [save] [file <filename>]",
 	Short: "Import site configuration from API cache",
 	Long: `Import site configuration from the API cache.
 
 By default, this command outputs the configuration to STDOUT for preview.
 Use the 'save' argument to write to a local config file.
 
+Pick what to import with config (default), inventory, or all:
+  config      Translate the vendor config into a wifimgr import envelope
+  inventory   Arm the discovered devices into the per-site allowlist (inventory.json)
+  all         Both
+
+Devices a vendor manages through a template or profile (a Meraki network bound
+to a configuration template, or Mist device profiles) can't be fully owned by
+wifimgr's direct-to-device push. Import still runs, prints a WARN, and stamps a
+'_note' into the written file and section.
+
 Basic Usage:
   wifimgr import api site US-SFO-LAB
   wifimgr import api site US-SFO-LAB save
+  wifimgr import api site US-SFO-LAB inventory
+  wifimgr import api site US-SFO-LAB all save
   wifimgr import api site US-SFO-LAB type ap
   wifimgr import api site US-SFO-LAB compare
 
@@ -81,6 +93,9 @@ Combined Options:
 Arguments:
   api            Optional. Keyword followed by API label to target specific API
   site-name      Required. The site name to import
+  config         Optional. Import the configuration envelope (default)
+  inventory      Optional. Arm discovered devices into inventory.json
+  all            Optional. Import config and arm inventory
   full           Optional. Import full site configuration (default)
   type <scope>   Optional. Limit import to specific scope:
                    - wlans     WLAN/SSID configurations only
@@ -123,15 +138,25 @@ func init() {
 	importAPICmd.AddCommand(importAPISiteCmd)
 }
 
+// importKind selects what an import produces. config translates the vendor
+// config into a wifimgr import envelope (the long-standing behavior); inventory
+// arms the discovered devices into the per-site allowlist; all does both.
+type importKind int
+
+const (
+	kindConfig importKind = iota
+	kindInventory
+	kindAll
+)
+
 // importSiteArgs holds parsed arguments for the import api site command
 type importSiteArgs struct {
-	apiLabel       string
-	siteName       string
-	scope          ImportScope
-	includeSecrets bool
-	compareMode    bool
-	saveMode       bool
-	outputFile     string
+	apiLabel    string
+	siteName    string
+	kind        importKind
+	scope       ImportScope
+	compareMode bool
+	cmdutils.ImportOutputArgs
 }
 
 // parseImportSiteArgs parses positional arguments for import api site command
@@ -164,8 +189,19 @@ func parseImportSiteArgs(args []string) (*importSiteArgs, error) {
 
 	// Parse remaining arguments
 	for i < len(args) {
-		arg := strings.ToLower(args[i])
-		switch arg {
+		if matched, last, err := result.Consume(args, i); err != nil {
+			return nil, err
+		} else if matched {
+			i = last + 1
+			continue
+		}
+		switch strings.ToLower(args[i]) {
+		case "config":
+			result.kind = kindConfig
+		case "inventory":
+			result.kind = kindInventory
+		case "all":
+			result.kind = kindAll
 		case "full":
 			result.scope = ScopeFull
 		case "type":
@@ -188,18 +224,8 @@ func parseImportSiteArgs(args []string) (*importSiteArgs, error) {
 				return nil, fmt.Errorf("invalid scope '%s' - must be one of: wlans, profiles, ap, switch, gateway", scopeArg)
 			}
 			i++ // Skip the scope value
-		case "secrets":
-			result.includeSecrets = true
 		case "compare":
 			result.compareMode = true
-		case "save":
-			result.saveMode = true
-		case "file":
-			if i+1 >= len(args) {
-				return nil, fmt.Errorf("'file' requires a filename")
-			}
-			result.outputFile = args[i+1]
-			i++ // Skip the filename
 		case "help":
 			// Already handled in RunE
 		default:
@@ -208,20 +234,16 @@ func parseImportSiteArgs(args []string) (*importSiteArgs, error) {
 		i++
 	}
 
-	// Validate combinations
-	if result.outputFile != "" && !result.saveMode {
-		return nil, fmt.Errorf("'file' requires 'save' to be specified")
+	if err := result.Validate(); err != nil {
+		return nil, err
 	}
 
 	return result, nil
 }
 
 func runImportAPISite(cmd *cobra.Command, args []string) error {
-	// Check for help keyword in positional arguments
-	for _, arg := range args {
-		if strings.ToLower(arg) == "help" {
-			return cmd.Help()
-		}
+	if cmdutils.ContainsHelp(args) {
+		return cmd.Help()
 	}
 
 	logger := logging.GetLogger()
@@ -254,17 +276,38 @@ func runImportAPISite(cmd *cobra.Command, args []string) error {
 	}
 
 	apiLabel := site.SourceAPI
-	logger.Infof("Importing site '%s' from API '%s' (scope: %s, save: %v)", siteName, apiLabel, parsed.scope, parsed.saveMode)
+	logger.Infof("Importing site '%s' from API '%s' (scope: %s, save: %v)", siteName, apiLabel, parsed.scope, parsed.SaveMode)
 
 	// Build the combined ImportFile envelope (site config + site-local WLAN
 	// templates live side-by-side so the file self-describes).
-	exportData, err := buildSiteExportData(cacheAccessor, site, parsed.scope, parsed.includeSecrets)
+	exportData, err := buildSiteExportData(cacheAccessor, site, parsed.scope, parsed.IncludeSecrets)
 	if err != nil {
 		return fmt.Errorf("failed to build export data: %w", err)
 	}
 
+	// Surface and annotate template/profile-managed devices before emitting
+	// anything: direct-to-device push can't fully own those, so the warning and
+	// the _note ride along into whatever we write (config envelope, inventory).
+	tmpl := detectTemplateManagement(site, exportData)
+	if tmpl.managed {
+		warnTemplateManaged(site.Name, tmpl)
+		annotateEnvelope(exportData, site.Name, tmpl)
+	}
+
+	// Inventory: arm the discovered devices into the per-site allowlist. This
+	// writes inventory.json directly (no staging) — the apply-time dual-inventory
+	// check remains the guard against acting on the wrong device.
+	if parsed.kind == kindInventory || parsed.kind == kindAll {
+		if err := armSiteInventory(site.Name, exportData, tmpl); err != nil {
+			return err
+		}
+		if parsed.kind == kindInventory {
+			return nil
+		}
+	}
+
 	configDir := viper.GetString("files.config_dir")
-	outputPath := resolveImportOutputPath(parsed.outputFile, configDir, apiLabel, site.Name)
+	outputPath := resolveImportOutputPath(parsed.OutputFile, configDir, apiLabel, site.Name)
 
 	if parsed.compareMode {
 		if exportData == nil {
@@ -274,7 +317,7 @@ func runImportAPISite(cmd *cobra.Command, args []string) error {
 		return compareImportFile(exportData, existingData, fileExists, outputPath, siteName)
 	}
 
-	if !parsed.saveMode {
+	if !parsed.SaveMode {
 		if exportData == nil {
 			fmt.Println("{}")
 			return nil
@@ -304,6 +347,148 @@ func runImportAPISite(cmd *cobra.Command, args []string) error {
 
 	printActivationHint(outputPath, configDir)
 	return nil
+}
+
+// templateFinding records which devices in an import are managed by a vendor
+// template or profile, so the import can warn and annotate consistently.
+type templateFinding struct {
+	managed     bool
+	merakiBound bool     // site is bound to a Meraki configuration template
+	profileMACs []string // normalized MACs managed by a Mist device profile
+	note        string   // operator-facing one-liner stamped into written files
+}
+
+// detectTemplateManagement inspects a built envelope for the two ways a vendor
+// keeps config out of wifimgr's direct-push reach: a Meraki network bound to a
+// configuration template (whole site), and Mist devices bound to a device
+// profile (per device, surfaced as deviceprofile_* keys during export).
+func detectTemplateManagement(site *vendors.SiteInfo, env *importEnvelope) templateFinding {
+	var f templateFinding
+	if site != nil && site.BoundToConfigTemplate {
+		f.merakiBound = true
+	}
+
+	devices := envDevices(env, site)
+	if devices != nil {
+		for _, group := range []map[string]map[string]any{devices.AP, devices.Switch, devices.Gateway} {
+			for mac, body := range group {
+				if _, ok := body["deviceprofile_name"]; ok {
+					f.profileMACs = append(f.profileMACs, mac)
+					continue
+				}
+				if _, ok := body["deviceprofile_id"]; ok {
+					f.profileMACs = append(f.profileMACs, mac)
+				}
+			}
+		}
+	}
+
+	f.managed = f.merakiBound || len(f.profileMACs) > 0
+	switch {
+	case f.merakiBound && len(f.profileMACs) > 0:
+		f.note = "template-managed: site bound to a Meraki configuration template and some devices use device profiles; direct config push may be overridden"
+	case f.merakiBound:
+		f.note = "template-managed: site bound to a Meraki configuration template; direct config push may be overridden"
+	case len(f.profileMACs) > 0:
+		f.note = fmt.Sprintf("template-managed: %d device(s) use a device profile; direct config push may be overridden", len(f.profileMACs))
+	}
+	return f
+}
+
+// envDevices returns the device export for the site, or nil when the envelope
+// carries no site body (e.g. wlans scope).
+func envDevices(env *importEnvelope, site *vendors.SiteInfo) *devicesExport {
+	if env == nil || env.Config == nil || site == nil {
+		return nil
+	}
+	body, ok := env.Config.Sites[site.Name]
+	if !ok || body == nil {
+		return nil
+	}
+	return body.Devices
+}
+
+// warnTemplateManaged prints the template/profile finding to the operator. The
+// import still proceeds — the user asked for it, and the annotation records why
+// the result may be incomplete.
+func warnTemplateManaged(siteName string, f templateFinding) {
+	fmt.Fprintf(os.Stderr, "WARN: %s: %s\n", siteName, f.note)
+	if len(f.profileMACs) > 0 {
+		fmt.Fprintf(os.Stderr, "WARN:   profile-managed devices: %s\n", strings.Join(f.profileMACs, ", "))
+	}
+}
+
+// annotateEnvelope stamps the finding into the config envelope: a site-level
+// _note plus a per-device _note on each profile-managed device.
+func annotateEnvelope(env *importEnvelope, siteName string, f templateFinding) {
+	if env == nil || env.Config == nil {
+		return
+	}
+	body, ok := env.Config.Sites[siteName]
+	if !ok || body == nil {
+		return
+	}
+	body.Note = f.note
+
+	if body.Devices == nil {
+		return
+	}
+	const perDevice = "template-managed: bound to a device profile; direct config push may be overridden"
+	profile := make(map[string]bool, len(f.profileMACs))
+	for _, mac := range f.profileMACs {
+		profile[mac] = true
+	}
+	for _, group := range []map[string]map[string]any{body.Devices.AP, body.Devices.Switch, body.Devices.Gateway} {
+		for mac, deviceBody := range group {
+			if profile[mac] {
+				deviceBody["_note"] = perDevice
+			}
+		}
+	}
+}
+
+// armSiteInventory writes the discovered devices into the per-site allowlist,
+// pulling MACs straight from the built envelope so config and inventory stay
+// keyed by the same set. A template finding rides along as the site note.
+func armSiteInventory(siteName string, env *importEnvelope, f templateFinding) error {
+	devices := envDevices(env, &vendors.SiteInfo{Name: siteName})
+	if devices == nil {
+		cmdutils.Noticef("%s: no devices to arm", siteName)
+		return nil
+	}
+	aps := macKeys(devices.AP)
+	switches := macKeys(devices.Switch)
+	gateways := macKeys(devices.Gateway)
+	if len(aps)+len(switches)+len(gateways) == 0 {
+		cmdutils.Noticef("%s: no devices to arm", siteName)
+		return nil
+	}
+
+	path := config.InventoryPath(nil)
+	if path == "" {
+		return fmt.Errorf("inventory: files.inventory is not configured")
+	}
+	note := ""
+	if f.managed {
+		note = f.note
+	}
+	if err := config.ArmSiteDevices(path, siteName, aps, switches, gateways, note); err != nil {
+		return err
+	}
+	cmdutils.Noticef("Armed %d device(s) for %s in %s", len(aps)+len(switches)+len(gateways), siteName, path)
+	return nil
+}
+
+// macKeys returns the (normalized) MAC keys of a device export group.
+func macKeys(group map[string]map[string]any) []string {
+	if len(group) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(group))
+	for mac := range group {
+		out = append(out, mac)
+	}
+	return out
 }
 
 // resolveImportOutputPath picks the on-disk location for the import file.
@@ -381,6 +566,9 @@ type siteObjExport struct {
 	Profiles   config.SiteConfigObjProfiles `json:"profiles,omitempty"`
 	WLAN       []string                     `json:"wlan,omitempty"`
 	Devices    *devicesExport               `json:"devices,omitempty"`
+	// Note flags template/profile-managed devices in this site (see importKind
+	// docs). JSON has no comments; loaders ignore unknown keys, so it rides as data.
+	Note string `json:"_note,omitempty"`
 }
 
 type devicesExport struct {

@@ -1,13 +1,36 @@
 package formatter
 
 import (
+	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/ravinald/wifimgr/internal/macaddr"
 )
+
+// MarshalJSONIndent renders data as plain, indented JSON. Structured output
+// (the `format json` interaction) is machine-facing, so it never carries ANSI
+// color — escapes would corrupt `| jq` and redirected files. HTML escaping is
+// disabled so values like `&` and `<` survive verbatim.
+func MarshalJSONIndent(data interface{}, prefix, indent string) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent(prefix, indent)
+	if err := enc.Encode(data); err != nil {
+		return nil, err
+	}
+	out := buf.Bytes()
+	if len(out) > 0 && out[len(out)-1] == '\n' {
+		out = out[:len(out)-1]
+	}
+	return out, nil
+}
 
 // TableColumn represents a column in a table with display options.
 type TableColumn struct {
@@ -359,6 +382,8 @@ func (p *GenericTablePrinter) formatAsCSV() string {
 				} else {
 					row[i] = "Unknown"
 				}
+			} else if isMACField(col.Field) {
+				row[i] = formatMACDisplay(fmt.Sprintf("%v", val))
 			} else if strings.HasPrefix(col.Field, "cache.") {
 				// Use formatNestedValue for cache.* fields to handle complex nested values
 				row[i] = formatNestedValue(val)
@@ -389,7 +414,7 @@ func (p *GenericTablePrinter) formatAsJSON() string {
 
 	// For single item, return the raw object
 	if len(p.Data) == 1 {
-		jsonData, err := MarshalJSONWithColorIndent(p.Data[0], "", "  ")
+		jsonData, err := MarshalJSONIndent(colonizeMACValues(map[string]interface{}(p.Data[0])), "", "  ")
 		if err != nil {
 			return fmt.Sprintf("Error marshalling JSON: %v\n", err)
 		}
@@ -397,7 +422,11 @@ func (p *GenericTablePrinter) formatAsJSON() string {
 	}
 
 	// For multiple items, return an array
-	jsonData, err := MarshalJSONWithColorIndent(p.Data, "", "  ")
+	items := make([]interface{}, len(p.Data))
+	for i, d := range p.Data {
+		items[i] = colonizeMACValues(map[string]interface{}(d))
+	}
+	jsonData, err := MarshalJSONIndent(items, "", "  ")
 	if err != nil {
 		return fmt.Sprintf("Error marshalling JSON: %v\n", err)
 	}
@@ -411,7 +440,7 @@ func (p *GenericTablePrinter) formatAsJSONWithAllFields() string {
 		// Try to get MAC from the data
 		if mac, exists := p.Data[0]["mac"].(string); exists && mac != "" {
 			if rawData, found := p.Config.CacheAccess.GetCachedData(mac); found {
-				jsonData, err := MarshalJSONWithColorIndent(rawData, "", "  ")
+				jsonData, err := MarshalJSONIndent(colonizeMACValues(rawData), "", "  ")
 				if err != nil {
 					return fmt.Sprintf("Error marshalling all fields JSON: %v\n", err)
 				}
@@ -419,7 +448,7 @@ func (p *GenericTablePrinter) formatAsJSONWithAllFields() string {
 			}
 		}
 		// Fallback to configured fields if cache data not found
-		jsonData, err := MarshalJSONWithColorIndent(p.Data[0], "", "  ")
+		jsonData, err := MarshalJSONIndent(colonizeMACValues(map[string]interface{}(p.Data[0])), "", "  ")
 		if err != nil {
 			return fmt.Sprintf("Error marshalling JSON: %v\n", err)
 		}
@@ -427,22 +456,22 @@ func (p *GenericTablePrinter) formatAsJSONWithAllFields() string {
 	}
 
 	// For multiple items, collect raw cache data for each
-	var allFieldsData []map[string]interface{}
+	var allFieldsData []interface{}
 	for _, item := range p.Data {
 		if mac, exists := item["mac"].(string); exists && mac != "" {
 			if rawData, found := p.Config.CacheAccess.GetCachedData(mac); found {
-				allFieldsData = append(allFieldsData, rawData)
+				allFieldsData = append(allFieldsData, colonizeMACValues(rawData))
 			} else {
 				// Fallback to configured fields if cache data not found
-				allFieldsData = append(allFieldsData, item)
+				allFieldsData = append(allFieldsData, colonizeMACValues(map[string]interface{}(item)))
 			}
 		} else {
 			// Fallback to configured fields if no MAC
-			allFieldsData = append(allFieldsData, item)
+			allFieldsData = append(allFieldsData, colonizeMACValues(map[string]interface{}(item)))
 		}
 	}
 
-	jsonData, err := MarshalJSONWithColorIndent(allFieldsData, "", "  ")
+	jsonData, err := MarshalJSONIndent(allFieldsData, "", "  ")
 	if err != nil {
 		return fmt.Sprintf("Error marshalling all fields JSON: %v\n", err)
 	}
@@ -570,6 +599,53 @@ func getNestedValue(data map[string]interface{}, path string) (interface{}, bool
 	}
 
 	return current, true
+}
+
+// isMACField reports whether a column or JSON key holds a MAC address, decided
+// purely by name. Display formatting is name-driven so it covers every render
+// path and command without a per-column flag; value-sniffing would mangle other
+// 12-hex fields (serials).
+func isMACField(field string) bool {
+	field = strings.ToLower(field)
+	return field == "mac" || field == "bssid" || field == "base_mac" || strings.HasSuffix(field, "_mac")
+}
+
+// formatMACDisplay renders a MAC in the canonical display format (lowercase
+// colon-hex). Non-MAC or partial values pass through unchanged so an empty cell
+// or a hostname that landed in a MAC column is never dropped.
+func formatMACDisplay(s string) string {
+	colon, err := macaddr.Format(s, macaddr.FormatColon)
+	if err != nil {
+		return s
+	}
+	return colon
+}
+
+// colonizeMACValues returns a copy of v with every string value whose key is a
+// MAC field rendered as colon-hex, recursing through maps and slices. Keying on
+// name (not value) keeps serials and other hex fields untouched. Used on the
+// JSON path, which marshals whole records rather than only configured columns.
+func colonizeMACValues(v interface{}) interface{} {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(val))
+		for k, child := range val {
+			if s, ok := child.(string); ok && isMACField(k) {
+				out[k] = formatMACDisplay(s)
+				continue
+			}
+			out[k] = colonizeMACValues(child)
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(val))
+		for i, child := range val {
+			out[i] = colonizeMACValues(child)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 // formatNestedValue formats a nested value for display.

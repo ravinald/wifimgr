@@ -202,7 +202,7 @@ func showIntentProfileDetails(allProfiles map[string]map[string]interface{}, pro
 	}
 
 	// Marshal and print with color
-	jsonData, err := formatter.MarshalJSONWithColorIndent(profileDetail, "", "  ")
+	jsonData, err := formatter.MarshalJSONIndent(profileDetail, "", "  ")
 	if err != nil {
 		logger.WithError(err).Error("Failed to marshal profile detail to JSON")
 		return err

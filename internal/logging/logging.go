@@ -41,8 +41,9 @@ var (
 	// Current log file
 	logFile *os.File
 
-	// Original stdout/stderr for restoration when needed
-	originalStdout = os.Stdout
+	// Diagnostic logs go to stderr so stdout carries only primary output (tables,
+	// CSV, JSON) — a `format json | jq` stream must never see a log line.
+	originalStderr = os.Stderr
 )
 
 // SiteNameLookupFunc is a function type for looking up site names from site IDs
@@ -54,7 +55,7 @@ type OrgNameLookupFunc func(orgID string) (string, bool)
 // init initializes the default logger with basic settings
 func init() {
 	// Set default configuration
-	defaultLogger.SetOutput(os.Stdout)
+	defaultLogger.SetOutput(os.Stderr)
 	defaultLogger.SetLevel(logrus.InfoLevel)
 	defaultLogger.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
@@ -159,9 +160,8 @@ func ConfigureLogging(config LogConfig) error {
 		}
 
 		if config.ToStdout {
-			// Log to both file and stdout
-			defaultLogger.SetOutput(io.MultiWriter(originalStdout, logFile))
-			// Keep stdout/stderr as they are - pointing to original outputs
+			// Tee diagnostics to the console (stderr) as well as the file.
+			defaultLogger.SetOutput(io.MultiWriter(originalStderr, logFile))
 		} else {
 			// Log ONLY to file - don't redirect stdout/stderr
 			// IMPORTANT: We configure the logger only, not OS-level stdout/stderr
@@ -169,18 +169,18 @@ func ConfigureLogging(config LogConfig) error {
 			defaultLogger.SetOutput(logFile)
 		}
 	} else {
-		// No log file specified, use stdout only
-		defaultLogger.SetOutput(originalStdout)
+		// No log file specified — diagnostics go to the console (stderr).
+		defaultLogger.SetOutput(originalStderr)
 	}
 
 	// Log destination message (will go to the configured destination) unless silenced
 	if !config.Silent {
 		if config.LogFile != "" && config.ToStdout {
-			Infof("Logging to both file %s and stdout", config.LogFile)
+			Infof("Logging to both file %s and stderr", config.LogFile)
 		} else if config.LogFile != "" && !config.ToStdout {
 			Infof("Logging to file only: %s", config.LogFile)
 		} else if config.ToStdout && config.LogFile == "" {
-			Infof("Logging to stdout only")
+			Infof("Logging to stderr only")
 		} else {
 			Infof("Logging disabled")
 		}

@@ -22,24 +22,32 @@ import (
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
 
-// Registry maps command paths to their data types.
-// A nil value indicates the command uses GenericTableData (special handling).
+// Registry maps a command path (the dotted form of the CLI hierarchy, e.g.
+// `show ap` -> "show.ap") to the source data type its table is built from. The
+// `show fields` command extracts the type's fields so operators can discover
+// what they may select for display. A nil value marks a command backed by
+// GenericTableData, handled specially in the extractor.
+//
+// Keys are the runtime command paths — the same `show.<noun>` strings the
+// commands set as TableConfig.CommandPath for display-column config lookup
+// (`display.commands.<key>`). They are a flat config namespace, independent of
+// where a command sits in the CLI tree (e.g. `show api bssid` keys as
+// `show.bssid`), so `show fields` and a user's column config always agree.
 var Registry = map[string]any{
-	// API commands - show data from API cache
-	"show.api.ap":      (*vendors.DeviceInfo)(nil),
-	"show.api.switch":  (*vendors.DeviceInfo)(nil),
-	"show.api.gateway": (*vendors.DeviceInfo)(nil),
-	"show.api.sites":   (*vendors.SiteInfo)(nil),
-	"show.api.wlans":   (*vendors.WLAN)(nil),
+	// Managed resource commands — data from API cache, managed-first.
+	"show.ap":      (*vendors.DeviceInfo)(nil),
+	"show.switch":  (*vendors.DeviceInfo)(nil),
+	"show.gateway": (*vendors.DeviceInfo)(nil),
+	"show.sites":   (*vendors.SiteInfo)(nil),
 
-	// Inventory commands - show inventory data
-	"show.inventory.ap":      (*vendors.InventoryItem)(nil),
-	"show.inventory.switch":  (*vendors.InventoryItem)(nil),
-	"show.inventory.gateway": (*vendors.InventoryItem)(nil),
-	"show.inventory.all":     (*vendors.InventoryItem)(nil),
+	// Vendor introspection (CLI: show api <view>; config key stays flat).
+	"show.wlans":           (*vendors.WLAN)(nil),
+	"show.bssid":           (*vendors.BSSIDEntry)(nil),
+	"show.device-profiles": (*vendors.DeviceProfile)(nil),
+	"show.rf-profiles":     (*vendors.RFTemplate)(nil),
 
-	// Intent commands - show data from local config files
-	// These use actual config types to show all available fields
+	// Intent commands — data from local config files. These use the actual
+	// config types so every settable field is discoverable.
 	"show.intent.site":    nil, // GenericTableData (special handling)
 	"show.intent.ap":      (*config.APConfig)(nil),
 	"show.intent.switch":  (*config.SwitchConfig)(nil),

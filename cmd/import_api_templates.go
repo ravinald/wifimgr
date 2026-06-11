@@ -92,11 +92,8 @@ Vendor Notes:
   networks. This command reports nothing found and exits cleanly for
   Meraki targets.`,
 	Args: func(cmd *cobra.Command, args []string) error {
-		// Allow "help" as a special keyword
-		for _, arg := range args {
-			if strings.ToLower(arg) == "help" {
-				return nil
-			}
+		if cmdutils.ContainsHelp(args) {
+			return nil
 		}
 		if len(args) < 1 {
 			return fmt.Errorf("requires at least 'target <api-label>' — got %d args", len(args))
@@ -112,11 +109,9 @@ func init() {
 
 // importTemplatesArgs holds parsed arguments for the import api templates command.
 type importTemplatesArgs struct {
-	apiLabel       string
-	templateType   TemplateImportType
-	includeSecrets bool
-	saveMode       bool
-	outputFile     string
+	apiLabel     string
+	templateType TemplateImportType
+	cmdutils.ImportOutputArgs
 }
 
 func parseImportTemplatesArgs(args []string) (*importTemplatesArgs, error) {
@@ -125,13 +120,18 @@ func parseImportTemplatesArgs(args []string) (*importTemplatesArgs, error) {
 	}
 
 	for i := 0; i < len(args); i++ {
-		arg := strings.ToLower(args[i])
-		switch arg {
+		if matched, last, err := result.Consume(args, i); err != nil {
+			return nil, err
+		} else if matched {
+			i = last
+			continue
+		}
+		switch strings.ToLower(args[i]) {
 		case "target":
 			if i+1 >= len(args) {
 				return nil, fmt.Errorf("'target' requires an API label")
 			}
-			result.apiLabel = args[i+1]
+			result.apiLabel = cmdutils.StripQuotes(args[i+1])
 			i++
 		case "type":
 			if i+1 >= len(args) {
@@ -147,16 +147,6 @@ func parseImportTemplatesArgs(args []string) (*importTemplatesArgs, error) {
 				return nil, fmt.Errorf("invalid template type %q - must be one of: wlan, rf, device, gateway, all", kind)
 			}
 			i++
-		case "secrets":
-			result.includeSecrets = true
-		case "save":
-			result.saveMode = true
-		case "file":
-			if i+1 >= len(args) {
-				return nil, fmt.Errorf("'file' requires a filename")
-			}
-			result.outputFile = args[i+1]
-			i++
 		case "help":
 			// Handled in RunE
 		default:
@@ -167,18 +157,16 @@ func parseImportTemplatesArgs(args []string) (*importTemplatesArgs, error) {
 	if result.apiLabel == "" {
 		return nil, fmt.Errorf("'target <api-label>' is required")
 	}
-	if result.outputFile != "" && !result.saveMode {
-		return nil, fmt.Errorf("'file' requires 'save' to be specified")
+	if err := result.Validate(); err != nil {
+		return nil, err
 	}
 
 	return result, nil
 }
 
 func runImportAPITemplates(cmd *cobra.Command, args []string) error {
-	for _, arg := range args {
-		if strings.ToLower(arg) == "help" {
-			return cmd.Help()
-		}
+	if cmdutils.ContainsHelp(args) {
+		return cmd.Help()
 	}
 
 	logger := logging.GetLogger()
@@ -200,7 +188,7 @@ func runImportAPITemplates(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build the envelope. For now only WLANs are supported.
-	env, err := buildTemplatesExportData(cacheAccessor, parsed.apiLabel, parsed.templateType, parsed.includeSecrets)
+	env, err := buildTemplatesExportData(cacheAccessor, parsed.apiLabel, parsed.templateType, parsed.IncludeSecrets)
 	if err != nil {
 		return fmt.Errorf("failed to build templates export: %w", err)
 	}
@@ -212,9 +200,9 @@ func runImportAPITemplates(cmd *cobra.Command, args []string) error {
 	}
 
 	configDir := viper.GetString("files.config_dir")
-	outputPath := resolveTemplateImportPath(parsed.outputFile, configDir, parsed.apiLabel, parsed.templateType)
+	outputPath := resolveTemplateImportPath(parsed.OutputFile, configDir, parsed.apiLabel, parsed.templateType)
 
-	if !parsed.saveMode {
+	if !parsed.SaveMode {
 		data, err := json.MarshalIndent(env, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal data: %w", err)
