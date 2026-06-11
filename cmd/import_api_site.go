@@ -241,14 +241,14 @@ func runImportAPISite(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get cache accessor: %w", err)
 	}
 
-	// Find the site, optionally filtered by API label. Propagate the accessor
-	// error directly so "did you mean?" suggestions embedded in it survive.
-	var site *vendors.SiteInfo
-	if parsed.apiLabel != "" {
-		site, err = cacheAccessor.GetSiteByNameAndAPI(siteName, parsed.apiLabel)
-	} else {
-		site, err = cacheAccessor.GetSiteByName(siteName)
+	// Resolve the site (duplicate-safe; honours an explicit api label), then
+	// fetch the full record by its unique ID. Errors propagate directly so the
+	// "did you mean?" / duplicate-site guidance survives.
+	ref, err := cmdutils.ResolveSite(siteName, parsed.apiLabel)
+	if err != nil {
+		return err
 	}
+	site, err := cacheAccessor.GetSiteByID(ref.SiteID)
 	if err != nil {
 		return err
 	}

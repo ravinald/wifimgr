@@ -130,7 +130,7 @@ func runShowAPIWLANs(cmd *cobra.Command, args []string) error {
 		// Single arg: try to match as site first, then as SSID
 		arg := positionalArgs[0]
 		// Check if this matches a known site
-		if site, err := cacheAccessor.GetSiteByName(arg); err == nil && site != nil {
+		if _, err := cmdutils.ResolveSite(arg, ""); err == nil {
 			siteFilter = arg
 		} else {
 			// Not a known site name, treat as SSID filter

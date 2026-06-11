@@ -96,15 +96,18 @@ func runRefreshClientSite(cmd *cobra.Command, args []string) error {
 // resolveSiteForRefresh looks up the named site, optionally constraining the
 // search to a specific API label. Used by every per-site refresh command.
 func resolveSiteForRefresh(siteName, apiLabel string) (*vendors.SiteInfo, error) {
+	ref, err := cmdutils.ResolveSite(siteName, apiLabel)
+	if err != nil {
+		return nil, err
+	}
+
 	cacheAccessor, err := cmdutils.GetCacheAccessor()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cache accessor: %w", err)
 	}
-
-	if apiLabel != "" {
-		return cacheAccessor.GetSiteByNameAndAPI(siteName, apiLabel)
-	}
-	return cacheAccessor.GetSiteByName(siteName)
+	// Resolution is duplicate-safe by name; the full record comes back by ID,
+	// which is unique.
+	return cacheAccessor.GetSiteByID(ref.SiteID)
 }
 
 // refreshClientDetailForSite fetches per-client detail for a single site and
