@@ -103,56 +103,69 @@ wifimgr apply ap US-NYC-OFFICE           # push
 
 ### What each vendor does under the hood
 
-The config above is identical across vendors; only the translation differs.
+The three-level intent config maps to each vendor's native availability model — wifimgr
+never invents a mechanism the vendor doesn't already use.
 
-| Vendor | How site-wide assignment maps | How per-AP assignment maps |
-|--------|-------------------------------|----------------------------|
-| **Mist** | WLAN object with `apply_to: "site"` | WLAN object with `apply_to: "aps"` and `ap_ids` resolved from the AP MACs |
-| **Meraki** | SSID slot with `availableOnAllAps: true` | SSID slot tagged `availabilityTags: ["wifimgr-wlan-<label>"]`, `availableOnAllAps: false`, plus the matching tag injected on each AP |
+| Vendor | Site-wide | Per-AP |
+|--------|-----------|--------|
+| **Mist** | WLAN object with `apply_to: "site"` | WLAN object with `apply_to: "aps"` and `ap_ids` resolved from the AP MACs (`devices.ap[mac].wlan`) |
+| **Meraki** | SSID slot with `availableOnAllAps: true` (the native default) | SSID slot with real Meraki `availabilityTags` + `availableOnAllAps: false`, matched by the APs' own `tags` |
 | **Ubiquiti** | Not supported (read-only Phase 1) | Not supported (read-only Phase 1) |
 
 Ubiquiti Phase 1 is read-only via the Site Manager API; WLAN/SSID apply arrives in
 Phase 2 on the Network API. Until then `apply ap` against a Ubiquiti site reports the
 capability as unsupported.
 
-### Meraki SSID Assignment (Availability Tags)
+### Meraki SSID assignment
 
-Meraki SSIDs are network-wide and live in 15 fixed slots (0–14) — there is no per-AP
-SSID object like Mist. wifimgr bridges that gap with **availability tags**:
+Meraki SSIDs are network-wide and live in 15 fixed slots (0–14) — there's no per-AP SSID
+object like Mist. wifimgr respects Meraki's native model rather than overlaying its own:
 
-1. `apply ap` writes each WLAN template into a network SSID slot via the Meraki
-   dashboard API (reusing the first free slot; it never creates extra SSIDs).
-2. For a WLAN scoped to specific APs, the SSID is set to
-   `availabilityTags: ["wifimgr-wlan-<label>"]` and `availableOnAllAps: false`.
-3. wifimgr injects that same `wifimgr-wlan-<label>` tag into each target AP's tags,
-   and strips any orphaned `wifimgr-wlan-*` tags so removals converge.
-4. Meraki broadcasts the SSID only where the SSID tag and an AP tag match — that match
-   *is* the per-AP assignment.
+- **Default is all-APs.** A WLAN with no availability restriction is written with
+  `availableOnAllAps: true` — exactly Meraki's default. No tags, nothing to maintain.
+- **Restriction uses real tags.** To scope an SSID to a subset of APs, Meraki intersects
+  the SSID's `availabilityTags` with each AP's `tags`. wifimgr preserves whatever tags
+  already exist — it does not invent or manage a tag scheme of its own. The SSID's
+  `availabilityTags` and `availableOnAllAps: false` ride in the WLAN's `meraki:` vendor
+  block; the APs keep their `tags` through their device config.
 
-A profile-only WLAN (declared in `profiles.wlan` but not assigned at the site or AP
-level) gets `availableOnAllAps: true` and broadcasts everywhere.
+So per-AP availability on Meraki is expressed entirely through real Meraki tags, captured
+on import and pushed back verbatim on apply — a functional no-op. Managing membership
+going forward means editing the AP's `tags` (keep `tags` in `managed_keys.ap`) and the
+SSID's `availabilityTags`.
 
-Tags prefixed `wifimgr-wlan-` are managed by wifimgr — don't set them by hand; edit the
-`wlan` lists in your site config instead. Other tags you set on an AP are preserved.
+#### The Meraki vendor block
 
-#### Slot pinning on import
-
-A Meraki network has 15 fixed SSID slots (0–14). When you `import api site`, each live
-SSID is captured with its slot in a vendor block on the WLAN template:
+`import api site` captures everything Meraki-specific that the portable WLAN template
+can't represent losslessly into a `meraki:` block, so a re-apply changes nothing:
 
 ```json
 "office--corp-secure": {
-  "ssid": "CorpNet", "enabled": true, "auth": { "type": "psk" },
-  "meraki:": { "number": 3 }
+  "ssid": "CorpNet", "enabled": true, "band": "dual", "auth": { "type": "eap" },
+  "meraki:": {
+    "number": 3,
+    "band": "Dual band operation with Band Steering",
+    "auth": { "type": "8021x-radius" },
+    "availabilityTags": ["lobby"],
+    "availableOnAllAps": false
+  }
 }
 ```
 
-On the next `apply`, that pinned slot is the join key: wifimgr updates **slot 3** in
-place rather than matching on SSID name. This means **renaming the SSID edits its own
-slot** instead of consuming a fresh one and orphaning the old. Resolution order is
-pinned slot → SSID-name match → allocate a free slot (only for genuinely new WLANs with
-no `meraki:` block). The `meraki:` block is Meraki-only; Mist WLANs are first-class
-objects with stable IDs and need no pin.
+- **`number`** pins the SSID slot. On apply it's the join key: wifimgr updates **slot 3**
+  in place rather than matching on SSID name, so **renaming the SSID edits its own slot**
+  instead of consuming a fresh one and orphaning the old. Resolution order is pinned slot
+  → SSID-name match → allocate a free slot (only for genuinely new WLANs).
+- **`band` / `auth.type`** carry the exact Meraki tokens. The portable fields stay
+  canonical (`"dual"`, `"eap"`) for cross-vendor readability, but canonical can't tell
+  Meraki's `"Dual band operation"` from `"Dual band operation with Band Steering"`, so the
+  block holds the raw value and apply uses it. They appear only when canonicalization
+  would otherwise lose information.
+- **`availabilityTags` / `availableOnAllAps`** are the real availability model, preserved
+  verbatim.
+
+The `meraki:` block is Meraki-only; Mist WLANs are first-class objects keyed by stable
+UUID and assigned to APs via `ap_ids`, so they need no block.
 
 ## Aggregation Display
 
