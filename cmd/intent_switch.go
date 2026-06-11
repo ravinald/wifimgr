@@ -190,11 +190,11 @@ func runIntentSwitch(cmd *cobra.Command, args []string) error {
 						continue
 					}
 
-					// Add site_id field if we can resolve it
-					if cacheAccessor, err := cmdutils.GetCacheAccessor(); err == nil {
-						if site, err := cacheAccessor.GetSiteByName(siteName); err == nil && site != nil && site.ID != "" {
-							sw["site_id"] = site.ID
-						}
+					// Add site_id field if we can resolve it. ResolveSite refuses
+					// an ambiguous (duplicate) name, so enrichment is skipped
+					// rather than stamping an arbitrary site's ID.
+					if ref, err := cmdutils.ResolveSite(siteName, ""); err == nil {
+						sw["site_id"] = ref.SiteID
 					}
 
 					// Apply field resolution if enabled
