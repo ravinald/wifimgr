@@ -38,7 +38,7 @@ single site. Mist returns band natively and is a no-op for this command.`,
 
 // refreshClientSiteCmd represents `refresh client site <site-name>`.
 var refreshClientSiteCmd = &cobra.Command{
-	Use:   "site <site-name> [api <api-label>]",
+	Use:   "site <site-name> [target <api-label>]",
 	Short: "Refresh per-client detail for a single site",
 	Long: `Populate the per-client detail cache for the named site.
 
@@ -48,11 +48,11 @@ to enrich the local cache.
 
 Arguments:
   site-name    Required. The site name. Typo suggestions are returned on miss.
-  api          Optional. Keyword followed by API label to disambiguate when the
+  target       Optional. Keyword followed by API label to disambiguate when the
                same site name exists in more than one configured API.`,
 	Example: `  wifimgr refresh client site US-LAB-01
   wifimgr refresh client site "MX - Av. Ejercito Nacional Mexicano 904"
-  wifimgr refresh client site US-LAB-01 api meraki-corp`,
+  wifimgr refresh client site US-LAB-01 target meraki-corp`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		for _, arg := range args {
 			if strings.ToLower(arg) == "help" {
@@ -85,7 +85,7 @@ func runRefreshClientSite(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("site name required")
 	}
 
-	site, err := resolveSiteForRefresh(parsed.SiteName, parsed.APIName)
+	site, err := resolveSiteForRefresh(parsed.SiteName, parsed.Target)
 	if err != nil {
 		return err
 	}

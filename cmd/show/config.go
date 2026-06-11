@@ -419,3 +419,16 @@ func getVLANFromConfigMap(config map[string]interface{}) string {
 
 	return ""
 }
+
+// getConfigString extracts a string value from a config map.
+func getConfigString(config map[string]interface{}, key string) string {
+	if config == nil {
+		return ""
+	}
+	if val, ok := config[key]; ok {
+		if s, ok := val.(string); ok {
+			return s
+		}
+	}
+	return ""
+}

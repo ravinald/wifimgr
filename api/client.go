@@ -45,7 +45,6 @@ type Client interface {
 
 	// Inventory API
 	DeleteDevicesFromSite(ctx context.Context, macs []string) error
-	GetInventoryConfig(inventoryPath string) (*InventoryConfig, error)
 	GetInventory(ctx context.Context, orgID string, deviceType string) ([]*MistInventoryItem, error)
 	GetInventoryItem(ctx context.Context, orgID string, itemID string) (*MistInventoryItem, error)
 	GetInventoryItemByMAC(ctx context.Context, orgID string, macAddress string) (*MistInventoryItem, error)
