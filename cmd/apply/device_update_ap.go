@@ -47,17 +47,20 @@ func (a *APUpdater) GetConfiguredDevices(siteConfig SiteConfig) []string {
 }
 
 // FindDevicesInventoryStatus checks AP status in inventory and cache
-func (a *APUpdater) FindDevicesInventoryStatus(client api.Client, cfg *config.Config, configuredAPs []string) ([]DeviceInventoryStatus, error) {
+func (a *APUpdater) FindDevicesInventoryStatus(client api.Client, cfg *config.Config, configuredAPs []string, siteName string) ([]DeviceInventoryStatus, error) {
 	ctx := context.Background()
 
-	// Create inventory checker once for reuse
-	inventoryChecker, err := NewInventoryChecker(ctx, client, cfg, a.deviceType)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create inventory checker: %w", err)
+	// Reuse the shared checker from the apply orchestrator; build one scoped to
+	// this site only if it is missing.
+	inventoryChecker := a.GetInventoryChecker()
+	if inventoryChecker == nil {
+		var err error
+		inventoryChecker, err = NewInventoryChecker(ctx, client, cfg, a.deviceType, siteName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create inventory checker: %w", err)
+		}
+		a.SetInventoryChecker(inventoryChecker)
 	}
-
-	// Store it for later use in UpdateDeviceConfigurations (using base method)
-	a.SetInventoryChecker(inventoryChecker)
 
 	statusList := make([]DeviceInventoryStatus, 0, len(configuredAPs))
 
@@ -181,7 +184,7 @@ func (a *APUpdater) UpdateDeviceConfigurations(ctx context.Context, client api.C
 	inventoryChecker := a.GetInventoryChecker()
 	if inventoryChecker == nil {
 		var inventoryErr error
-		inventoryChecker, inventoryErr = NewInventoryChecker(ctx, client, cfg, a.deviceType)
+		inventoryChecker, inventoryErr = NewInventoryChecker(ctx, client, cfg, a.deviceType, siteNameFromConfig(siteConfig))
 		if inventoryErr != nil {
 			logging.Warnf("Could not create inventory checker for safety validation: %v", inventoryErr)
 		}

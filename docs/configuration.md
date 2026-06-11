@@ -116,41 +116,53 @@ The local inventory configuration serves as a **mandatory allowlist and fail-saf
 - This provides a second layer of protection against unintended changes
 
 **Read Operations** (show, search, list):
-- Devices only need to exist in the API inventory
-- You can view and search all devices without any allowlist restriction
-- This allows you to discover devices before deciding to add them to your local inventory
+- Default `show`/`search` output is the managed set — the devices armed in the inventory below
+- Add the `all` keyword to widen any `show` to every device the API knows about
+- This keeps the daily view to what you manage while discovery stays one keyword away
 
 ### Inventory Configuration
 
-The local inventory is defined in your configuration file (e.g., `inventory.json`):
+The allowlist is **scoped per site**: a MAC is armed for the named site only. Scoping the
+allowlist to a site keeps the write blast radius narrow and means the decision to modify a device
+never depends on the (possibly stale) cached site assignment.
 
 ```json
 {
-  "version": 1.0,
+  "version": 1,
   "config": {
     "inventory": {
-      "ap": [
-        "aa:bb:cc:dd:ee:01",
-        "aa:bb:cc:dd:ee:02"
-      ],
-      "switch": [
-        "aa:bb:cc:dd:ee:03"
-      ],
-      "gateway": [
-        "aa:bb:cc:dd:ee:04"
-      ]
+      "site": {
+        "US-LAB-01": {
+          "ap": [
+            "aa:bb:cc:dd:ee:01",
+            "aa:bb:cc:dd:ee:02"
+          ],
+          "switch": [
+            "aa:bb:cc:dd:ee:03"
+          ],
+          "gateway": []
+        },
+        "US-LAB-02": {
+          "ap": ["aa:bb:cc:dd:ee:05"]
+        }
+      }
     }
   }
 }
 ```
 
+> **Migration:** the previous global layout (`config.inventory.ap/switch/gateway`) is no longer
+> accepted. Loading a file in the old shape fails loud rather than silently treating a flat list as
+> "every site" — that would widen the blast radius instead of narrowing it. Move each MAC under the
+> site it belongs to.
+
 ### Typical Workflow
 
-1. **Discover devices**: Use `show` or `search` commands to view all available devices
-2. **Review devices**: Identify which devices you want to manage
-3. **Add to inventory**: Update your local inventory file to allowlist those device MACs
-4. **Apply changes**: Now `apply` commands will work on those allowlisted devices
-5. **Add more devices**: As you onboard new devices, add them to the inventory file
+1. **Discover devices**: Run `show ap all` (or `search`) to view every device the API knows
+2. **Review devices**: Identify which devices you want to manage, and at which site
+3. **Arm them**: Add each MAC under its site in `config.inventory.site.<SITE>.<type>`
+4. **Apply changes**: `apply site <SITE> <type>` now operates on those armed devices
+5. **Add more devices**: As you onboard new devices, arm them under their site
 
 ### Why This Safety Mechanism?
 
@@ -167,7 +179,7 @@ If you try to modify a device that's not in your local inventory, you'll see an 
 SAFETY CHECK FAILED: Device aa:bb:cc:dd:ee:ff is not in inventory - refusing to update
 ```
 
-This means the device exists in your Mist/Meraki/Ubiquiti account but is not in your local `inventory.json` file. Add it to the appropriate list (ap, switch, or gateway) to allowlist it and enable write operations.
+This means the device exists in your Mist/Meraki/Ubiquiti account but is not armed in your local `inventory.json` for that site. Add its MAC under `config.inventory.site.<SITE>.<type>` to allowlist it and enable write operations.
 
 ## Command-Line Flags and Configuration
 
@@ -205,7 +217,7 @@ The application supports multiple ways to provide the API token:
 
 1. **Configuration File**: The API token can be stored (encrypted) in the configuration file
 2. **Environment File**: The API token can be provided in a file called `.env.wifimgr` in the current directory
-3. **Command-line Flag**: Use the `-e` flag to load the API token from the .env.wifimgr file (e.g., `./wifimgr -e show api sites`)
+3. **Command-line Flag**: Use the `-e` flag to load the API token from the .env.wifimgr file (e.g., `./wifimgr -e show sites`)
 4. **Interactive Input**: The application will prompt for the API token if not found in the config or env file
 
 ### Using .env.wifimgr for API Token
@@ -213,7 +225,7 @@ The application supports multiple ways to provide the API token:
 For easier testing, use the `-e` flag to load the token from this file:
 
 ```
-./wifimgr -e show api sites
+./wifimgr -e show sites
 ```
 
 The application will automatically read this file during startup and use the token for all API operations. This is particularly useful for:
@@ -335,7 +347,7 @@ For CI/CD pipelines, automated scripts, or non-interactive usage, provide the de
 
 ```bash
 export WIFIMGR_PASSWORD="your-decryption-password"
-wifimgr show api sites
+wifimgr show sites
 ```
 
 Or in `.env.wifimgr`:
@@ -503,7 +515,7 @@ The `cache_ttl` setting (in seconds) controls when the cache is considered stale
 
 Check cache status with:
 ```bash
-wifimgr show api status
+wifimgr show status
 ```
 
 Output shows cache state per API: `ok`, `stale`, `corrupted`, or `missing`.
@@ -512,8 +524,9 @@ Output shows cache state per API: `ok`, `stale`, `corrupted`, or `missing`.
 
 Refresh the cache manually:
 ```bash
-wifimgr refresh device              # Refresh all APIs
-wifimgr refresh device mist-prod    # Refresh specific API
+wifimgr refresh                   # Managed devices, all APIs
+wifimgr refresh target mist-prod  # Managed devices, specific API
+wifimgr refresh all               # Everything the API has, all APIs
 ```
 
 **Cache Age Tracking:**

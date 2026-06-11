@@ -23,33 +23,31 @@ import (
 
 // apiGatewayCmd represents the "show api gateway" command
 var apiGatewayCmd = &cobra.Command{
-	Use:   "gateway [name-or-mac] [site site-name] [target api-label] [format json|csv] [all] [no-resolve]",
-	Short: "Show gateway information from API cache",
-	Long: `Show gateway information retrieved from the local API cache.
+	Use:   "gateway [name-or-mac] [site site-name] [target api-label] [all] [detail|extensive] [format json|csv] [no-resolve]",
+	Short: "Show gateways wifimgr manages (add 'all' for every gateway the API knows)",
+	Long: `Show gateway data from the local API cache.
 
-This command displays gateway device data from the local cache with connection status indicators.
-
-When multiple APIs are configured:
-  - Without target: Aggregates gateways from all APIs
-  - With target: Shows gateways from the specified API only
+By default this lists only the gateways armed in your per-site inventory, with a
+'*' marker when local intent has drifted from the cached config. Add 'all' to
+widen the view to every gateway the API knows about (managed ones highlighted).
 
 Arguments:
   name-or-mac  - Optional gateway name or MAC address filter
   site         - Keyword followed by site name for filtering
   target       - Keyword followed by API label to target specific API
+  all          - Show every gateway the API has, not just managed
+  detail       - Reserved verbosity level (field set unchanged for now)
+  extensive    - Show all cache fields
   format       - Output format: "json" or "csv" (default: table)
-  all          - Show all fields (json format only)
   no-resolve   - Disable field ID to name resolution
 
 Examples:
-  wifimgr show api gateway                          - Show all gateways
-  wifimgr show api gateway site US-LAB-01           - Show gateways for specific site
-  wifimgr show api gateway GW-NAME                  - Show specific gateway by name
-  wifimgr show api gateway 00:11:22:33:44:55        - Show specific gateway by MAC address
-  wifimgr show api gateway format json              - Show all gateways in JSON format
-  wifimgr show api gateway GW-NAME format json all  - Show all fields for gateway in JSON
-  wifimgr show api gateway format json no-resolve   - Show JSON with raw IDs
-  wifimgr show api gateway target mist-prod         - Show gateways from mist-prod only`,
+  wifimgr show gateway                          - Managed gateways
+  wifimgr show gateway all                      - Every gateway the API knows
+  wifimgr show gateway site US-LAB-01           - Managed gateways in a site
+  wifimgr show gateway GW-NAME                  - A managed gateway by name
+  wifimgr show gateway format json extensive    - Managed gateways, all fields, JSON
+  wifimgr show gateway target mist-prod         - Managed gateways from mist-prod only`,
 	Args: cmdutils.ValidateShowAPArgs, // Reuse same validation
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Check for help keyword in positional arguments
@@ -71,5 +69,5 @@ Examples:
 }
 
 func init() {
-	apiCmd.AddCommand(apiGatewayCmd)
+	showCmd.AddCommand(apiGatewayCmd)
 }

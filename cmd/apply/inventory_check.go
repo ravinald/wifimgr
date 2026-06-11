@@ -2,9 +2,8 @@ package apply
 
 import (
 	"context"
+	"errors"
 	"fmt"
-
-	"github.com/spf13/viper"
 
 	"github.com/ravinald/wifimgr/api"
 	"github.com/ravinald/wifimgr/internal/config"
@@ -22,9 +21,11 @@ type InventoryChecker struct {
 	client         api.Client // Reference to client for site name lookups
 }
 
-// NewInventoryChecker creates an inventory checker for the specified device type.
-// Uses multi-vendor cache for inventory data.
-func NewInventoryChecker(_ context.Context, client api.Client, cfg *config.Config, deviceType string) (*InventoryChecker, error) {
+// NewInventoryChecker creates an inventory checker for a device type at a site.
+// API inventory comes from the multi-vendor cache; the local allowlist is the
+// per-site armed list from inventory.json. siteName scopes the allowlist so a
+// MAC armed for one site can never authorize a write at another.
+func NewInventoryChecker(_ context.Context, client api.Client, cfg *config.Config, deviceType, siteName string) (*InventoryChecker, error) {
 	accessor := vendors.GetGlobalCacheAccessor()
 	if accessor == nil {
 		return nil, fmt.Errorf("cache accessor not initialized")
@@ -70,41 +71,26 @@ func NewInventoryChecker(_ context.Context, client api.Client, cfg *config.Confi
 	}
 	logging.Debugf("Loaded %d %s devices from cache", len(checker.apiInventory), deviceType)
 
-	// Load local inventory file
-	// Get inventory file path from Viper (since cfg.Files.Inventory might not be populated)
-	inventoryPath := viper.GetString("files.inventory")
-	if inventoryPath == "" {
-		inventoryPath = cfg.Files.Inventory // Fallback to config struct
-	}
-
-	logging.Infof("Loading local inventory from path: %s", inventoryPath)
-	invConfig, err := client.GetInventoryConfig(inventoryPath)
+	// Load the per-site armed allowlist. A legacy-schema file is fatal: the
+	// caller must abort the write rather than proceed against an ambiguous
+	// allowlist. A missing/unreadable file is non-fatal here — localInventory
+	// stays empty, so writes fail closed (IsInInventory returns false).
+	inventoryPath := config.InventoryPath(cfg)
+	logging.Infof("Loading armed inventory for site %s from path: %s", siteName, inventoryPath)
+	invFile, err := config.LoadInventoryFile(inventoryPath)
 	if err != nil {
-		logging.Errorf("Failed to load inventory config: %v", err)
-	}
-	if err == nil && invConfig != nil {
-		logging.Debugf("Inventory config loaded successfully, checking for %s devices", deviceType)
-		var localInventory []string
-		switch deviceType {
-		case "ap":
-			localInventory = invConfig.Config.Inventory.AP
-			logging.Debugf("Found %d AP devices in inventory config", len(localInventory))
-		case "switch":
-			localInventory = invConfig.Config.Inventory.Switch
-		case "gateway":
-			localInventory = invConfig.Config.Inventory.Gateway
+		if errors.Is(err, config.ErrLegacyInventorySchema) {
+			return nil, err
 		}
-
-		for _, mac := range localInventory {
+		logging.Warnf("Could not load local inventory configuration: %v", err)
+	} else {
+		for _, mac := range invFile.MACsForSite(siteName, deviceType) {
 			normalizedMAC := macaddr.NormalizeOrEmpty(mac)
 			if normalizedMAC != "" {
 				checker.localInventory[normalizedMAC] = true
-				logging.Debugf("Added %s to local inventory (normalized: %s)", mac, normalizedMAC)
 			}
 		}
-		logging.Debugf("Loaded %d %s devices from local inventory", len(checker.localInventory), deviceType)
-	} else {
-		logging.Warnf("Could not load local inventory configuration: %v", err)
+		logging.Debugf("Loaded %d %s devices armed for site %s", len(checker.localInventory), deviceType, siteName)
 	}
 
 	logging.Infof("Inventory checker initialized: %d devices in API inventory, %d in local inventory",

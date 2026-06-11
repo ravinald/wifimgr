@@ -4,26 +4,6 @@ import (
 	"time"
 )
 
-// InventoryConfig represents the structure of the inventory configuration file
-type InventoryConfig struct {
-	Version  int `json:"version"`
-	Metadata struct {
-		Description string `json:"description"`
-	} `json:"metadata"`
-	Config struct {
-		Inventory struct {
-			AP      []string `json:"ap"`
-			Switch  []string `json:"switch"`
-			Gateway []string `json:"gateway"`
-		} `json:"inventory"`
-	} `json:"config"`
-	AvailableFields struct {
-		AP      []string `json:"ap,omitempty"`
-		Switch  []string `json:"switch,omitempty"`
-		Gateway []string `json:"gateway,omitempty"`
-	} `json:"available_fields,omitempty"`
-}
-
 // UUID type for Mist IDs
 type UUID string
 

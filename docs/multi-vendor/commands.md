@@ -16,7 +16,7 @@ With multiple APIs configured, commands that target remote resources need clear 
 Use the `target` positional keyword to direct a command at a specific API:
 
 ```
-wifimgr show api ap target mist-prod
+wifimgr show ap target mist-prod
 ```
 
 ## Command Behavior Matrix
@@ -25,20 +25,19 @@ wifimgr show api ap target mist-prod
 
 | Command | Default Behavior | With `target` |
 |---------|------------------|---------------|
-| `show api ap` | Aggregate from all APIs | Filter to specific API |
-| `show api bssid` | Aggregate from all APIs | Filter to specific API |
-| `show api sites` | Aggregate from all APIs | Filter to specific API |
-| `show api switch` | Aggregate from all APIs | Filter to specific API |
-| `show api wlans` | Aggregate from all APIs | Filter to specific API |
-| `show api rf-profiles` | Aggregate from all APIs | Filter to specific API |
-| `show api device-profiles` | Aggregate from all APIs | Filter to specific API |
-| `show inventory ap` | Aggregate from all APIs | Filter to specific API |
+| `show ap` | Aggregate from all APIs | Filter to specific API |
+| `show bssid` | Aggregate from all APIs | Filter to specific API |
+| `show sites` | Aggregate from all APIs | Filter to specific API |
+| `show switch` | Aggregate from all APIs | Filter to specific API |
+| `show wlans` | Aggregate from all APIs | Filter to specific API |
+| `show rf-profiles` | Aggregate from all APIs | Filter to specific API |
+| `show device-profiles` | Aggregate from all APIs | Filter to specific API |
 | `show site <name>` | Show from all APIs with that name | Show from specific API |
 | `search wired <text>` | Search all APIs | Search specific API |
 | `search wireless <text>` | Search all APIs | Search specific API |
-| `refresh device` | Refresh all APIs (parallel) | `api <label>` filters to one API; `site <name>` scopes per-device fetches to one site |
-| `refresh all` | `refresh device` + per-client detail | `api <label>` filters to one API; `site <name>` runs both steps for one site only |
-| `refresh client site <name>` | Refresh per-client detail for one site | `api <label>` disambiguates when site exists in multiple APIs |
+| `refresh` | Managed devices, all APIs (parallel) | `site <name>` scopes to one site; `target <label>` filters to one API |
+| `refresh all` | Everything the API has, all sites + client detail | `site <name>` runs for one site only; `target <label>` filters to one API |
+| `refresh client site <name>` | Refresh per-client detail for one site | `target <label>` disambiguates when site exists in multiple APIs |
 
 ### Write Commands
 
@@ -62,7 +61,7 @@ When showing data from multiple APIs, include source columns:
 ### Example: Show APs from All APIs
 
 ```
-$ wifimgr show api ap
+$ wifimgr show ap
 
 NAME            MAC               MODEL    SITE           STATUS      API
 MIST-AP-01      aa:bb:cc:dd:ee:ff AP43     US-CAMPUS-01   connected   mist-prod
@@ -76,7 +75,7 @@ Showing 4 devices from 2 APIs
 ### Example: Show Filtered to Single API
 
 ```
-$ wifimgr show api ap target mist-prod
+$ wifimgr show ap target mist-prod
 
 NAME         MAC               MODEL    SITE           STATUS
 MIST-AP-01   aa:bb:cc:dd:ee:ff AP43     US-CAMPUS-01   connected
@@ -102,7 +101,7 @@ Found site "US-CAMPUS-01" in 2 APIs
 ### Default: Refresh All APIs (Parallel)
 
 ```
-$ wifimgr refresh device
+$ wifimgr refresh
 
 Refreshing all APIs...
   mist-prod: refreshing sites... done (12 sites)
@@ -118,7 +117,7 @@ Rebuilt cross-API index
 ### Specific API Refresh
 
 ```
-$ wifimgr refresh device api mist-prod
+$ wifimgr refresh target mist-prod
 
 Refreshing mist-prod...
   sites: done (12 sites)
@@ -132,17 +131,18 @@ Rebuilt cross-API index
 
 ### Site-Scoped Refresh
 
-The `site <name>` form keeps the cheap org-scoped fetches (sites, inventory,
-templates, statuses, WLANs) but limits the expensive per-device config loops
-to devices that belong to the named site. Configs for devices in other sites
-are preserved from the prior cache, so the saved file is not a regression.
+`refresh site <name>` keeps the cheap org-scoped fetches (sites, inventory,
+templates, statuses, WLANs) but limits the expensive per-device config loops to
+the site's **managed** devices. Configs for everything else are preserved from
+the prior cache, so the saved file is not a regression. Add `all` to fetch every
+device the API reports for the site instead of just the managed ones.
 
 This matters most on Meraki, where each device's config is its own API call.
 
 ```
-$ wifimgr refresh device site US-LAB-01
+$ wifimgr refresh site US-LAB-01
 
-Refreshing device cache for US-LAB-01 (meraki-corp)...
+Refreshing cache for US-LAB-01 (meraki-corp)...
   [meraki-corp] Refreshing meraki API (site US-LAB-01)...
     Fetching sites... 12 sites
     Fetching APs... 156 devices
@@ -152,19 +152,19 @@ Refreshing device cache for US-LAB-01 (meraki-corp)...
 Successfully refreshed meraki-corp for site US-LAB-01
 ```
 
-If the same site name exists in more than one configured API, add `api <label>`:
+If the same site name exists in more than one configured API, add `target <label>`:
 
 ```
-$ wifimgr refresh device site US-LAB-01 api meraki-corp
+$ wifimgr refresh site US-LAB-01 target meraki-corp
 ```
 
-The same `site <name>` form also works on `refresh all`, which additionally
-runs per-client detail for that site (a no-op for vendors without a
-ClientDetail service).
+Add `detail` to also pull per-client detail for the site, or `all` to fetch
+every device the API has for the site plus client detail.
 
-> **Note:** the bare `refresh device <api-label>` form (no `api` keyword) and
-> the legacy `target <api-label>` keyword on `refresh client site` have both
-> been removed. Use `api <api-label>` everywhere.
+> **Note:** the `api <api-label>` selector keyword has been removed from refresh.
+> Use `target <api-label>` (matching `show`). `refresh device` and the old
+> `refresh all` subcommand are gone — `refresh` is the managed default and
+> `refresh all` now means the full org pull.
 
 ### Implementation
 
@@ -361,7 +361,7 @@ func handleShowProfiles(ctx context.Context) error {
 ### Unknown API Label
 
 ```
-$ wifimgr show api ap target typo-api
+$ wifimgr show ap target typo-api
 Error: API "typo-api" not found
 
 Available APIs: mist-prod, mist-lab, meraki-corp

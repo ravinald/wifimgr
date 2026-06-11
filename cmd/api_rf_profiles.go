@@ -55,7 +55,7 @@ Examples:
 }
 
 func init() {
-	apiCmd.AddCommand(apiRFProfilesCmd)
+	showCmd.AddCommand(apiRFProfilesCmd)
 }
 
 func runShowAPIRFProfiles(cmd *cobra.Command, args []string) error {

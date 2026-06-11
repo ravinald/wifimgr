@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -198,8 +199,14 @@ func applySiteGeneric(ctx context.Context, client api.Client, cfg *configPkg.Con
 
 	// Step 5.5: Create InventoryChecker ONCE for reuse throughout the apply workflow
 	// This eliminates multiple redundant GetInventory API calls
-	inventoryChecker, err := NewInventoryChecker(ctx, client, cfg, deviceType)
+	inventoryChecker, err := NewInventoryChecker(ctx, client, cfg, deviceType, siteName)
 	if err != nil {
+		// A legacy-schema inventory file is fatal — proceeding would write
+		// against an ambiguous allowlist. Other load failures degrade to
+		// fail-closed (no devices armed), so only warn.
+		if errors.Is(err, configPkg.ErrLegacyInventorySchema) {
+			return err
+		}
 		logging.Warnf("Could not create inventory checker: %v - some safety checks may be skipped", err)
 	} else {
 		// Store on updater for reuse in FindDevicesInventoryStatus and UpdateDeviceConfigurations
@@ -218,7 +225,7 @@ func applySiteGeneric(ctx context.Context, client api.Client, cfg *configPkg.Con
 	}
 
 	// Step 7: Check inventory status
-	deviceStatus, err := updater.FindDevicesInventoryStatus(client, cfg, configuredDevices)
+	deviceStatus, err := updater.FindDevicesInventoryStatus(client, cfg, configuredDevices, siteName)
 	if err != nil {
 		logging.Errorf("Error checking inventory status for %ss: %v", deviceType, err)
 		return fmt.Errorf("error checking inventory status for %ss: %v", deviceType, err)

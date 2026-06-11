@@ -73,7 +73,7 @@ Examples:
 }
 
 func init() {
-	apiCmd.AddCommand(apiWLANsCmd)
+	showCmd.AddCommand(apiWLANsCmd)
 }
 
 func runShowAPIWLANs(cmd *cobra.Command, args []string) error {
@@ -327,7 +327,7 @@ func outputWLANsTable(wlans []*vendors.WLAN, cacheAccessor *vendors.CacheAccesso
 	}
 
 	// Create command path for config lookup
-	commandPath := "show.api.wlans"
+	commandPath := "show.wlans"
 
 	// Check if there's a command-specific format in the config
 	displayCommands := viper.GetStringMap("display.commands")

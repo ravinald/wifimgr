@@ -50,7 +50,7 @@ Examples:
 }
 
 func init() {
-	apiCmd.AddCommand(apiDeviceProfilesCmd)
+	showCmd.AddCommand(apiDeviceProfilesCmd)
 }
 
 func runShowAPIDeviceProfiles(cmd *cobra.Command, args []string) error {

@@ -205,10 +205,10 @@ When using JSON format, you can add the `all` argument to display **all cached f
 
 ```bash
 # Show only configured columns
-wifimgr show api ap AP-NAME format json
+wifimgr show ap AP-NAME format json
 
 # Show ALL fields from cache
-wifimgr show api ap AP-NAME format json all
+wifimgr show ap AP-NAME format json extensive
 ```
 
 This is useful for:
@@ -406,24 +406,24 @@ JSON format can be accessed by adding `json` as the last argument:
 
 ```bash
 # Table format (default)
-wifimgr show api site SITE-NAME
+wifimgr show site SITE-NAME
 
 # JSON format via positional argument
-wifimgr show api site SITE-NAME json
+wifimgr show site SITE-NAME json
 
 # JSON format shows single object for single match
-wifimgr show api site SPECIFIC-SITE json
+wifimgr show site SPECIFIC-SITE json
 # Output: {"id": "...", "name": "SPECIFIC-SITE", ...}
 
 # JSON format shows array for multiple matches  
-wifimgr show api site json
+wifimgr show site json
 # Output: [{"id": "...", "name": "Site1"}, {"id": "...", "name": "Site2"}]
 
 # Works with all show commands
-wifimgr show api ap AP-NAME json
-wifimgr show api ap 00:11:22:33:44:55 json  
-wifimgr show inventory ap json
-wifimgr show inventory site US-LAB-01 json
+wifimgr show ap AP-NAME json
+wifimgr show ap 00:11:22:33:44:55 json  
+wifimgr show ap json
+wifimgr show ap site US-LAB-01 json
 ```
 
 ## Column Width Configuration
@@ -516,12 +516,12 @@ When testing conditional row coloring:
 
 **1. Test in Terminal:**
 ```bash
-./wifimgr -e show api sites  # Should show green rows for configured sites
+./wifimgr -e show sites  # Should show green rows for configured sites
 ```
 
 **2. Test with Redirect:**
 ```bash
-./wifimgr -e show api sites > output.txt  # Should show plain text in file
+./wifimgr -e show sites > output.txt  # Should show plain text in file
 ```
 
 **3. Test Column Alignment:**

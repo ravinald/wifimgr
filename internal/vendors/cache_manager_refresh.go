@@ -9,20 +9,46 @@ import (
 	"github.com/ravinald/wifimgr/internal/logging"
 )
 
+// skipDeviceConfig reports whether a device's per-device config fetch should be
+// skipped (and its prior config carried forward) for this refresh. A device is
+// skipped when it falls outside the site scope, or — under a managed refresh —
+// when its MAC is not in the armed allowlist.
+func skipDeviceConfig(opts RefreshOptions, siteID, mac string) bool {
+	if opts.SiteID != "" && siteID != opts.SiteID {
+		return true
+	}
+	if opts.ManagedMACs != nil && !opts.ManagedMACs[mac] {
+		return true
+	}
+	return false
+}
+
 // RefreshAPI refreshes a single API's cache using its client.
 // This is a convenience wrapper that calls RefreshAPIWithOptions with FetchDeviceConfigs=true.
 func (c *CacheManager) RefreshAPI(ctx context.Context, apiLabel string) error {
 	return c.RefreshAPIWithOptions(ctx, apiLabel, RefreshOptions{FetchDeviceConfigs: true})
 }
 
+// RefreshAPIManaged refreshes a single API but limits per-device config fetches
+// to the armed (managed) MACs. Org-scoped data is still refreshed in full;
+// configs for unmanaged devices are carried forward from the existing cache.
+func (c *CacheManager) RefreshAPIManaged(ctx context.Context, apiLabel string, managed map[string]bool) error {
+	return c.RefreshAPIWithOptions(ctx, apiLabel, RefreshOptions{
+		FetchDeviceConfigs: true,
+		ManagedMACs:        managed,
+	})
+}
+
 // RefreshAPISite refreshes a single API's cache but narrows the per-device
 // config fetches to devices in the named site. Org-scoped data is still
 // refreshed; per-device configs for other sites are copied forward from the
-// existing cache.
-func (c *CacheManager) RefreshAPISite(ctx context.Context, apiLabel, siteID string) error {
+// existing cache. managed, when non-nil, further limits the fetch to armed
+// MACs within the site.
+func (c *CacheManager) RefreshAPISite(ctx context.Context, apiLabel, siteID string, managed map[string]bool) error {
 	return c.RefreshAPIWithOptions(ctx, apiLabel, RefreshOptions{
 		FetchDeviceConfigs: true,
 		SiteID:             siteID,
+		ManagedMACs:        managed,
 	})
 }
 
@@ -83,7 +109,7 @@ func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel strin
 	// nothing to preserve, and the new cache will only have the target site's
 	// configs populated until a full refresh fills in the rest.
 	var existingCache *APICache
-	if opts.SiteID != "" {
+	if opts.SiteID != "" || opts.ManagedMACs != nil {
 		if prior, err := c.GetAPICache(apiLabel); err == nil {
 			existingCache = prior
 		} else {
@@ -295,7 +321,7 @@ func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel strin
 					if item.ID == "" || item.SiteID == "" {
 						continue
 					}
-					if opts.SiteID != "" && item.SiteID != opts.SiteID {
+					if skipDeviceConfig(opts, item.SiteID, mac) {
 						if existingCache != nil {
 							if old, ok := existingCache.Configs.AP[mac]; ok && old != nil {
 								cache.Configs.AP[mac] = old
@@ -330,7 +356,7 @@ func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel strin
 					if item.ID == "" || item.SiteID == "" {
 						continue
 					}
-					if opts.SiteID != "" && item.SiteID != opts.SiteID {
+					if skipDeviceConfig(opts, item.SiteID, mac) {
 						if existingCache != nil {
 							if old, ok := existingCache.Configs.Switch[mac]; ok && old != nil {
 								cache.Configs.Switch[mac] = old
@@ -365,7 +391,7 @@ func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel strin
 					if item.ID == "" || item.SiteID == "" {
 						continue
 					}
-					if opts.SiteID != "" && item.SiteID != opts.SiteID {
+					if skipDeviceConfig(opts, item.SiteID, mac) {
 						if existingCache != nil {
 							if old, ok := existingCache.Configs.Gateway[mac]; ok && old != nil {
 								cache.Configs.Gateway[mac] = old
@@ -413,6 +439,21 @@ func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel strin
 
 // RefreshAllAPIs refreshes all API caches in parallel.
 func (c *CacheManager) RefreshAllAPIs(ctx context.Context) map[string]error {
+	return c.refreshAllAPIs(ctx, func(string) RefreshOptions {
+		return RefreshOptions{FetchDeviceConfigs: true}
+	})
+}
+
+// RefreshAllAPIsManaged refreshes every API in parallel, limiting per-device
+// config fetches to the armed (managed) MACs. The same set is applied to each
+// API; MACs not present in a given API's inventory simply never match.
+func (c *CacheManager) RefreshAllAPIsManaged(ctx context.Context, managed map[string]bool) map[string]error {
+	return c.refreshAllAPIs(ctx, func(string) RefreshOptions {
+		return RefreshOptions{FetchDeviceConfigs: true, ManagedMACs: managed}
+	})
+}
+
+func (c *CacheManager) refreshAllAPIs(ctx context.Context, optsFor func(apiLabel string) RefreshOptions) map[string]error {
 	labels := c.registry.GetAllLabels()
 
 	var wg sync.WaitGroup
@@ -423,7 +464,7 @@ func (c *CacheManager) RefreshAllAPIs(ctx context.Context) map[string]error {
 		wg.Add(1)
 		go func(apiLabel string) {
 			defer wg.Done()
-			if err := c.RefreshAPI(ctx, apiLabel); err != nil {
+			if err := c.RefreshAPIWithOptions(ctx, apiLabel, optsFor(apiLabel)); err != nil {
 				mu.Lock()
 				errors[apiLabel] = err
 				mu.Unlock()

@@ -39,6 +39,13 @@ type RefreshOptions struct {
 	// cache so the saved file isn't a regression. Useful on Meraki, where
 	// the per-device config endpoint is the expensive part of a refresh.
 	SiteID string
+
+	// ManagedMACs, when non-nil, restricts per-device config fetches to the
+	// listed (normalized) MACs — the operator's armed inventory. Devices not
+	// in the set keep their prior cached config (carried forward), so a
+	// managed refresh stays cheap on Meraki without discarding data a full
+	// pass collected. nil means no managed filter: fetch every device in scope.
+	ManagedMACs map[string]bool
 }
 
 // NewCacheManager creates a new cache manager.

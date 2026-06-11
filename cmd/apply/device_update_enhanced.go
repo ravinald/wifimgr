@@ -3,8 +3,6 @@ package apply
 import (
 	"context"
 
-	"github.com/spf13/viper"
-
 	"github.com/ravinald/wifimgr/api"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/logging"
@@ -50,34 +48,6 @@ func findDevicesToUnassignWithInventoryCheck(ctx context.Context, client api.Cli
 	for _, item := range inventory {
 		if item.MAC != nil {
 			normalizedMAC := macaddr.NormalizeOrEmpty(*item.MAC)
-			if normalizedMAC != "" {
-				inventoryMap[normalizedMAC] = true
-			}
-		}
-	}
-
-	// Also check local inventory file if available
-	// Get inventory file path from Viper (since cfg.Files.Inventory might not be populated)
-	inventoryPath := viper.GetString("files.inventory")
-	if inventoryPath == "" {
-		inventoryPath = cfg.Files.Inventory // Fallback to config struct
-	}
-
-	invConfig, err := client.GetInventoryConfig(inventoryPath)
-	if err == nil && invConfig != nil {
-		// Add devices from local inventory file
-		var localInventory []string
-		switch deviceType {
-		case "ap":
-			localInventory = invConfig.Config.Inventory.AP
-		case "switch":
-			localInventory = invConfig.Config.Inventory.Switch
-		case "gateway":
-			localInventory = invConfig.Config.Inventory.Gateway
-		}
-
-		for _, mac := range localInventory {
-			normalizedMAC := macaddr.NormalizeOrEmpty(mac)
 			if normalizedMAC != "" {
 				inventoryMap[normalizedMAC] = true
 			}
