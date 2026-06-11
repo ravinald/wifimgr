@@ -250,11 +250,6 @@ func (a *APUpdater) UpdateDeviceConfigurations(ctx context.Context, client api.C
 			continue
 		}
 
-		// For Meraki: merge wifimgr-managed WLAN availability tags into AP tags
-		if config.GetVendorFromAPILabel(apiLabel) == "meraki" {
-			apConfig = mergeWifimgrTagsForAP(mac, apConfig, device.ToConfigMap())
-		}
-
 		deviceID := *device.ID
 		deviceName := "<unnamed>"
 		if device.Name != nil {

@@ -53,6 +53,120 @@ wifimgr show ap target mist-prod
 | `show intent ap` | Local config only, no API involved |
 | `show intent sites` | Local config only, no API involved |
 
+## Applying WLANs to APs
+
+The intent config is the same regardless of vendor — that's the point of the
+vendor-agnostic UX. You declare WLAN template labels at up to three levels, and
+`apply ap <site>` translates them to each vendor's native model.
+
+| Level | Key | Purpose |
+|-------|-----|---------|
+| Create | `profiles.wlan` | WLANs to **create** at the site/network |
+| Site-wide | `wlan` (site-level) | Apply to **all** APs by default |
+| Per-AP | `devices.ap[mac].wlan` | Apply to **specific** APs (overrides the site default for that AP) |
+
+Every label used at the site or per-AP level must be declared in `profiles.wlan`
+and must resolve to a WLAN template. `apply` validates this before pushing.
+
+### Site-wide and per-AP example
+
+```json
+{
+  "config": {
+    "sites": {
+      "site1": {
+        "site_config": { "name": "US-NYC-OFFICE", "api": "mist-prod" },
+        "profiles": { "wlan": ["corp-secure", "guest-open", "iot-network"] },
+        "wlan": ["corp-secure", "guest-open"],
+        "devices": {
+          "ap": {
+            "aa:bb:cc:dd:ee:f1": { "name": "NYC-AP-LOBBY" },
+            "aa:bb:cc:dd:ee:f2": { "name": "NYC-AP-WAREHOUSE", "wlan": ["iot-network"] }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+- **LOBBY** inherits the site default → broadcasts `corp-secure` + `guest-open`.
+- **WAREHOUSE** has an explicit `wlan` → broadcasts only `iot-network` (the per-AP
+  list replaces the site default for that AP, it does not merge).
+
+Run it the same way for any vendor — the API comes from the site's `api` field:
+
+```bash
+wifimgr apply ap US-NYC-OFFICE diff      # preview first, always
+wifimgr apply ap US-NYC-OFFICE           # push
+```
+
+### What each vendor does under the hood
+
+The three-level intent config maps to each vendor's native availability model — wifimgr
+never invents a mechanism the vendor doesn't already use.
+
+| Vendor | Site-wide | Per-AP |
+|--------|-----------|--------|
+| **Mist** | WLAN object with `apply_to: "site"` | WLAN object with `apply_to: "aps"` and `ap_ids` resolved from the AP MACs (`devices.ap[mac].wlan`) |
+| **Meraki** | SSID slot with `availableOnAllAps: true` (the native default) | SSID slot with real Meraki `availabilityTags` + `availableOnAllAps: false`, matched by the APs' own `tags` |
+| **Ubiquiti** | Not supported (read-only Phase 1) | Not supported (read-only Phase 1) |
+
+Ubiquiti Phase 1 is read-only via the Site Manager API; WLAN/SSID apply arrives in
+Phase 2 on the Network API. Until then `apply ap` against a Ubiquiti site reports the
+capability as unsupported.
+
+### Meraki SSID assignment
+
+Meraki SSIDs are network-wide and live in 15 fixed slots (0–14) — there's no per-AP SSID
+object like Mist. wifimgr respects Meraki's native model rather than overlaying its own:
+
+- **Default is all-APs.** A WLAN with no availability restriction is written with
+  `availableOnAllAps: true` — exactly Meraki's default. No tags, nothing to maintain.
+- **Restriction uses real tags.** To scope an SSID to a subset of APs, Meraki intersects
+  the SSID's `availabilityTags` with each AP's `tags`. wifimgr preserves whatever tags
+  already exist — it does not invent or manage a tag scheme of its own. The SSID's
+  `availabilityTags` and `availableOnAllAps: false` ride in the WLAN's `meraki:` vendor
+  block; the APs keep their `tags` through their device config.
+
+So per-AP availability on Meraki is expressed entirely through real Meraki tags, captured
+on import and pushed back verbatim on apply — a functional no-op. Managing membership
+going forward means editing the AP's `tags` (keep `tags` in `managed_keys.ap`) and the
+SSID's `availabilityTags`.
+
+#### The Meraki vendor block
+
+`import api site` captures everything Meraki-specific that the portable WLAN template
+can't represent losslessly into a `meraki:` block, so a re-apply changes nothing:
+
+```json
+"office--corp-secure": {
+  "ssid": "CorpNet", "enabled": true, "band": "dual", "auth": { "type": "eap" },
+  "meraki:": {
+    "number": 3,
+    "band": "Dual band operation with Band Steering",
+    "auth": { "type": "8021x-radius" },
+    "availabilityTags": ["lobby"],
+    "availableOnAllAps": false
+  }
+}
+```
+
+- **`number`** pins the SSID slot. On apply it's the join key: wifimgr updates **slot 3**
+  in place rather than matching on SSID name, so **renaming the SSID edits its own slot**
+  instead of consuming a fresh one and orphaning the old. Resolution order is pinned slot
+  → SSID-name match → allocate a free slot (only for genuinely new WLANs).
+- **`band` / `auth.type`** carry the exact Meraki tokens. The portable fields stay
+  canonical (`"dual"`, `"eap"`) for cross-vendor readability, but canonical can't tell
+  Meraki's `"Dual band operation"` from `"Dual band operation with Band Steering"`, so the
+  block holds the raw value and apply uses it. They appear only when canonicalization
+  would otherwise lose information.
+- **`availabilityTags` / `availableOnAllAps`** are the real availability model, preserved
+  verbatim.
+
+The `meraki:` block is Meraki-only; Mist WLANs are first-class objects keyed by stable
+UUID and assigned to APs via `ap_ids`, so they need no block.
+
 ## Aggregation Display
 
 When showing data from multiple APIs, include source columns:
