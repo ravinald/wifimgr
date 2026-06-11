@@ -1458,11 +1458,17 @@ func applyWLANsMeraki(ctx context.Context, _ *configPkg.Config, siteConfig SiteC
 		existingWLANs = nil
 	}
 
-	// Build lookup by SSID
+	// Build lookups by SSID name and by slot. The slot index is the durable
+	// join key: an imported WLAN pins its slot (the meraki: number block), so a
+	// rename updates that exact slot in place instead of burning a fresh one.
 	existingBySSID := make(map[string]*vendors.WLAN)
+	existingBySlot := make(map[int]*vendors.WLAN)
 	for _, w := range existingWLANs {
 		if w.SSID != "" {
 			existingBySSID[w.SSID] = w
+		}
+		if slot, ok := pinnedSlotFromConfig(w.Config); ok {
+			existingBySlot[slot] = w
 		}
 	}
 	logging.Debugf("Found %d existing Meraki SSIDs in network", len(existingBySSID))
@@ -1509,21 +1515,29 @@ func applyWLANsMeraki(ctx context.Context, _ *configPkg.Config, siteConfig SiteC
 			logging.Debugf("WLAN '%s' (profile-only) will broadcast on all APs", templateLabel)
 		}
 
-		existing, exists := existingBySSID[ssid]
+		// Resolve which slot this WLAN binds to. A pinned slot (from the
+		// imported meraki: number block) is the durable join key and wins over
+		// name matching, so a renamed SSID updates its own slot in place.
+		action, existing, targetID, pinnedSlot := resolveMerakiWLANTarget(siteID, ssid, wlan.Config, existingBySSID, existingBySlot)
 
-		if exists {
+		switch action {
+		case merakiWLANUpdate:
+			// Slot is active. Update in place (rename-safe — a name delta is a change).
 			needsUpdate := merakiWLANNeedsUpdate(existing, wlan)
+			renamed := existing.SSID != wlan.SSID
 			if needsUpdate || force {
 				if diffMode {
-					if force && !needsUpdate {
+					switch {
+					case renamed:
+						fmt.Printf("Would rename WLAN slot %d '%s' → '%s' (template: %s)\n", pinnedSlot, existing.SSID, ssid, templateLabel)
+					case force && !needsUpdate:
 						fmt.Printf("Would force update WLAN '%s' (template: %s) - no changes detected\n", ssid, templateLabel)
-					} else {
+					default:
 						fmt.Printf("Would update WLAN '%s' (template: %s)\n", ssid, templateLabel)
 					}
 				} else {
 					logging.Infof("Updating Meraki SSID '%s' (template: %s)", ssid, templateLabel)
-					_, err := wlansSvc.Update(ctx, existing.ID, wlan)
-					if err != nil {
+					if _, err := wlansSvc.Update(ctx, targetID, wlan); err != nil {
 						logging.Errorf("Failed to update Meraki SSID '%s': %v", ssid, err)
 						fmt.Printf("%s Failed to update WLAN '%s': %v\n", symbols.ErrorPrefix(), ssid, err)
 						continue
@@ -1534,13 +1548,28 @@ func applyWLANsMeraki(ctx context.Context, _ *configPkg.Config, siteConfig SiteC
 			} else {
 				logging.Debugf("Meraki SSID '%s' is up to date", ssid)
 			}
-		} else {
+		case merakiWLANConfigureSlot:
+			// Pinned to a slot that is currently inactive/empty. Write straight to
+			// it instead of letting Create() pick an arbitrary free slot.
+			if diffMode {
+				fmt.Printf("Would configure WLAN '%s' in slot %d (template: %s)\n", ssid, pinnedSlot, templateLabel)
+			} else {
+				logging.Infof("Configuring Meraki SSID '%s' in pinned slot %d (template: %s)", ssid, pinnedSlot, templateLabel)
+				if _, err := wlansSvc.Update(ctx, targetID, wlan); err != nil {
+					logging.Errorf("Failed to configure Meraki SSID '%s' in slot %d: %v", ssid, pinnedSlot, err)
+					fmt.Printf("%s Failed to configure WLAN '%s': %v\n", symbols.ErrorPrefix(), ssid, err)
+					continue
+				}
+				fmt.Printf("%s Configured WLAN '%s' in slot %d\n", symbols.SuccessPrefix(), ssid, pinnedSlot)
+			}
+			changeCount++
+		case merakiWLANCreate:
+			// Brand-new SSID with no pin and no name match: allocate a free slot.
 			if diffMode {
 				fmt.Printf("Would create WLAN '%s' (template: %s)\n", ssid, templateLabel)
 			} else {
 				logging.Infof("Creating Meraki SSID '%s' (template: %s)", ssid, templateLabel)
-				_, err := wlansSvc.Create(ctx, wlan)
-				if err != nil {
+				if _, err := wlansSvc.Create(ctx, wlan); err != nil {
 					logging.Errorf("Failed to create Meraki SSID '%s': %v", ssid, err)
 					fmt.Printf("%s Failed to create WLAN '%s': %v\n", symbols.ErrorPrefix(), ssid, err)
 					continue
@@ -1706,6 +1735,56 @@ func getBoolFromConfig(config map[string]interface{}, key string) bool {
 		return true
 	default:
 		return true
+	}
+}
+
+// merakiWLANAction is how an expanded WLAN binds to the network's SSID slots.
+type merakiWLANAction int
+
+const (
+	merakiWLANUpdate        merakiWLANAction = iota // update an active slot in place (existing/targetID set)
+	merakiWLANConfigureSlot                         // write to a pinned but currently inactive slot
+	merakiWLANCreate                                // no pin, no name match: allocate a free slot
+)
+
+// resolveMerakiWLANTarget decides how a desired WLAN binds to a Meraki network's
+// SSID slots. Precedence: a pinned slot (the imported meraki: number block) wins
+// over SSID-name matching, which keeps a renamed SSID on its own slot instead of
+// burning a fresh one; with no pin we fall back to name match, then to create.
+// When pinned, targetID is always the pinned slot and pinnedSlot is its number.
+func resolveMerakiWLANTarget(
+	networkID, ssid string,
+	cfg map[string]interface{},
+	existingBySSID map[string]*vendors.WLAN,
+	existingBySlot map[int]*vendors.WLAN,
+) (action merakiWLANAction, existing *vendors.WLAN, targetID string, pinnedSlot int) {
+	if slot, ok := pinnedSlotFromConfig(cfg); ok {
+		targetID = fmt.Sprintf("%s:%d", networkID, slot)
+		if e := existingBySlot[slot]; e != nil {
+			return merakiWLANUpdate, e, targetID, slot
+		}
+		return merakiWLANConfigureSlot, nil, targetID, slot
+	}
+	if e, ok := existingBySSID[ssid]; ok {
+		return merakiWLANUpdate, e, e.ID, 0
+	}
+	return merakiWLANCreate, nil, "", 0
+}
+
+// pinnedSlotFromConfig reads the Meraki SSID slot an imported WLAN was pinned
+// to (the "number" key from the meraki: vendor block). JSON-loaded templates
+// carry it as float64; hand-authored ints are honored too.
+func pinnedSlotFromConfig(config map[string]interface{}) (int, bool) {
+	if config == nil {
+		return 0, false
+	}
+	switch val := config["number"].(type) {
+	case int:
+		return val, true
+	case float64:
+		return int(val), true
+	default:
+		return 0, false
 	}
 }
 
