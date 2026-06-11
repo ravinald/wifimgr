@@ -322,7 +322,7 @@ func applySiteGeneric(ctx context.Context, client api.Client, cfg *configPkg.Con
 		if err != nil {
 			logging.Errorf("Error applying WLANs: %v", err)
 			// Don't fail the whole apply, just warn
-			fmt.Printf("Warning: Failed to apply WLANs: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Warning: Failed to apply WLANs: %v\n", err)
 		} else {
 			wlanChanges = wlanChangeCount
 		}

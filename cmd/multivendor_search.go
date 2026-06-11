@@ -14,6 +14,7 @@ import (
 	"github.com/maruel/natural"
 	"golang.org/x/term"
 
+	"github.com/ravinald/wifimgr/internal/cmdutils"
 	"github.com/ravinald/wifimgr/internal/formatter"
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
@@ -90,7 +91,7 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 		results, err := searchSvc.SearchWirelessClients(ctx, searchText, opts)
 		if err != nil {
 			// Log error but continue with other APIs
-			fmt.Printf("WARN  Search failed for %s: %v\n", apiLabel, err)
+			fmt.Fprintf(os.Stderr, "WARN  Search failed for %s: %v\n", apiLabel, err)
 			continue
 		}
 
@@ -384,7 +385,7 @@ func searchWiredMultiVendor(ctx context.Context, searchText, siteID, format stri
 		results, err := searchSvc.SearchWiredClients(ctx, searchText, opts)
 		if err != nil {
 			// Log error but continue with other APIs
-			fmt.Printf("WARN  Search failed for %s: %v\n", apiLabel, err)
+			fmt.Fprintf(os.Stderr, "WARN  Search failed for %s: %v\n", apiLabel, err)
 			continue
 		}
 
@@ -678,8 +679,16 @@ func isInteractive() bool {
 	return term.IsTerminal(int(os.Stdin.Fd())) // #nosec G115 -- file descriptors are small non-negative integers
 }
 
-// confirmPrompt reads user input and returns true if they confirm.
+// confirmPrompt reads user input and returns true if they confirm. The
+// operational flags short-circuit it: --yes approves for automation, --no-input
+// denies without ever blocking on stdin.
 func confirmPrompt() bool {
+	if cmdutils.AssumeYes() {
+		return true
+	}
+	if cmdutils.NoInput() {
+		return false
+	}
 	reader := bufio.NewReader(os.Stdin)
 	input, err := reader.ReadString('\n')
 	if err != nil {

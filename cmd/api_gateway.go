@@ -21,7 +21,7 @@ import (
 	"github.com/ravinald/wifimgr/internal/cmdutils"
 )
 
-// apiGatewayCmd represents the "show api gateway" command
+// apiGatewayCmd represents the "show gateway" command
 var apiGatewayCmd = &cobra.Command{
 	Use:   "gateway [name-or-mac] [site site-name] [target api-label] [all] [detail|extensive] [format json|csv] [no-resolve]",
 	Short: "Show gateways wifimgr manages (add 'all' for every gateway the API knows)",

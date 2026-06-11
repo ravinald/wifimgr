@@ -126,6 +126,10 @@ The allowlist is **scoped per site**: a MAC is armed for the named site only. Sc
 allowlist to a site keeps the write blast radius narrow and means the decision to modify a device
 never depends on the (possibly stale) cached site assignment.
 
+MACs are stored as lowercase bare hex (the canonical on-disk form `import ... inventory` writes).
+You may hand-edit in any accepted format — colon, hyphen, dot, or bare, any case — since the file
+is normalized on read; the bare form just keeps keys unambiguous.
+
 ```json
 {
   "version": 1,
@@ -134,16 +138,16 @@ never depends on the (possibly stale) cached site assignment.
       "site": {
         "US-LAB-01": {
           "ap": [
-            "aa:bb:cc:dd:ee:01",
-            "aa:bb:cc:dd:ee:02"
+            "aabbccddee01",
+            "aabbccddee02"
           ],
           "switch": [
-            "aa:bb:cc:dd:ee:03"
+            "aabbccddee03"
           ],
           "gateway": []
         },
         "US-LAB-02": {
-          "ap": ["aa:bb:cc:dd:ee:05"]
+          "ap": ["aabbccddee05"]
         }
       }
     }
@@ -188,9 +192,24 @@ This means the device exists in your Mist/Meraki/Ubiquiti account but is not arm
 With the Cobra migration, the CLI uses a **simplified flag structure** backed by Viper for configuration management:
 
 **Global Flags (Available on all commands):**
-- `-d, --debug` - Enable debug mode and debug-level logging
-- `-e, --env` - Read API token from .env.wifimgr file instead of config
+
+Flags are reserved for *operational* concerns — how the app runs — while what you
+ask it to do is expressed with positional keywords.
+
+- `-c, --config <path>` - Use an alternate config file
+- `-d, --debug` - Enable debug-level logging (`--dd` / `--ddd` for more)
+- `-e, --env` - Read API token from `.env.wifimgr` instead of config
 - `-h, --help` - Show help for any command
+- `-q, --quiet` - Suppress non-essential output (progress and status notices)
+- `-y, --yes` - Assume "yes" to confirmation prompts (for automation)
+- `--no-input` - Never prompt; fail with guidance instead of blocking
+- `--no-color` - Disable colored output (also honored: `NO_COLOR`, `TERM=dumb`,
+  and a non-terminal stdout)
+- `--version` - Print version, commit, and build time
+
+**Output streams:** primary output (tables, CSV, JSON) goes to stdout; logs,
+warnings, and status notices go to stderr. `format json` and `format csv` are
+always plain — no color escapes — so `... format json | jq` is safe.
 
 **Configuration Management:**
 - Most configuration options are handled through **Viper** and configuration files
@@ -419,7 +438,7 @@ The main configuration file (`~/.config/wifimgr/wifimgr-config.json`) supports t
       "time":   { "hex": "#00FF00", "ansi256": "46",  "ansi": "2" }
     },
     "commands": {
-      "show.api.sites": {
+      "show.sites": {
         "format": "table",
         "title": "Sites",
         "fields": [...]
@@ -515,7 +534,7 @@ The `cache_ttl` setting (in seconds) controls when the cache is considered stale
 
 Check cache status with:
 ```bash
-wifimgr show status
+wifimgr show api status
 ```
 
 Output shows cache state per API: `ok`, `stale`, `corrupted`, or `missing`.

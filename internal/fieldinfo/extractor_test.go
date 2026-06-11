@@ -84,22 +84,22 @@ func TestGetFieldsForCommand(t *testing.T) {
 		minFields int
 	}{
 		{
-			name:      "show.api.ap",
-			cmdPath:   "show.api.ap",
+			name:      "show.ap",
+			cmdPath:   "show.ap",
 			wantErr:   false,
 			wantType:  "DeviceInfo",
 			minFields: 10,
 		},
 		{
-			name:      "show.inventory.switch",
-			cmdPath:   "show.inventory.switch",
+			name:      "show.wlans",
+			cmdPath:   "show.wlans",
 			wantErr:   false,
-			wantType:  "InventoryItem",
+			wantType:  "WLAN",
 			minFields: 5,
 		},
 		{
-			name:      "show.api.sites",
-			cmdPath:   "show.api.sites",
+			name:      "show.sites",
+			cmdPath:   "show.sites",
 			wantErr:   false,
 			wantType:  "SiteInfo",
 			minFields: 5,
@@ -182,9 +182,10 @@ func TestListCommands(t *testing.T) {
 
 	// Check that expected commands are present
 	expectedCommands := []string{
-		"show.api.ap",
-		"show.api.sites",
-		"show.inventory.ap",
+		"show.ap",
+		"show.sites",
+		"show.wlans",
+		"show.bssid",
 		"show.intent.site",
 		"show.intent.ap",
 		"show.intent.switch",

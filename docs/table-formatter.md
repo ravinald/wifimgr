@@ -75,7 +75,7 @@ The table formatter uses a **3-tier hierarchy** for defining which columns to di
 
 When a command displays table data, it follows this process:
 
-1. **Configuration Check**: Commands call `LoadColumnsFromConfig()` which uses Viper to check for column definitions at the command path (e.g., `display.commands.show.api.ap`)
+1. **Configuration Check**: Commands call `LoadColumnsFromConfig()` which uses Viper to check for column definitions at the command path (e.g., `display.commands.show.ap`)
 
 2. **Configuration Found**: If configuration exists, columns are loaded from the config file:
    ```go
@@ -83,7 +83,7 @@ When a command displays table data, it follows this process:
    printer := formatter.GenericTablePrinter{
        Config: formatter.TableConfig{
            Format:      formatType,
-           CommandPath: "show.api.ap",  // Path to look up in config
+           CommandPath: "show.ap",  // Path to look up in config
        },
    }
    printer.LoadColumnsFromConfig()  // Loads from wifimgr-config.json
@@ -110,7 +110,7 @@ When a command displays table data, it follows this process:
 {
   "display": {
     "commands": {
-      "show.api.ap": {
+      "show.ap": {
         "format": "table",
         "title": "Access Points:",
         "fields": [
@@ -150,7 +150,7 @@ Columns can reference **nested data from the cache** using special `cache.*` fie
 {
   "display": {
     "commands": {
-      "show.api.ap": {
+      "show.ap": {
         "format": "table",
         "title": "Access Points with Radio Info:",
         "fields": [
@@ -387,11 +387,11 @@ keyHex := viper.GetString("display.jsoncolor.key.hex") // "#0000FF"
 {
   "display": {
     "commands": {
-      "show.api.site": {
+      "show.sites": {
         "format": "table",
         "fields": {...}
       },
-      "show.api.ap": {
+      "show.ap": {
         "format": "json",
         "fields": {...}
       }

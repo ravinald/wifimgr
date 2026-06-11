@@ -224,10 +224,10 @@ func runIntentSwitch(cmd *cobra.Command, args []string) error {
 			return nil
 		} else if len(rawSwitches) == 1 {
 			// Single switch - output just the object
-			jsonData, err = formatter.MarshalJSONWithColorIndent(rawSwitches[0], "", "  ")
+			jsonData, err = formatter.MarshalJSONIndent(rawSwitches[0], "", "  ")
 		} else {
 			// Multiple switches - output as array
-			jsonData, err = formatter.MarshalJSONWithColorIndent(rawSwitches, "", "  ")
+			jsonData, err = formatter.MarshalJSONIndent(rawSwitches, "", "  ")
 		}
 
 		if err != nil {

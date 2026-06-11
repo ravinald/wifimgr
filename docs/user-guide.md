@@ -14,7 +14,6 @@ Complete reference for configuring and using wifimgr.
   - [search](#search)
   - [refresh](#refresh)
   - [init](#init)
-  - [set](#set)
   - [reset](#reset)
   - [encrypt](#encrypt)
 - [Site Configuration](#site-configuration)
@@ -41,8 +40,8 @@ wifimgr uses Junos-style positional keywords instead of flags for most options. 
 | `diff`           | Preview changes without applying | `wifimgr apply ap US-LAB-01 diff`         |
 | `site <name>`    | Filter by site                   | `wifimgr show ap site US-LAB-01`          |
 | `all`            | Widen scope to every device/site the API has (not just managed) | `wifimgr show ap all` |
-| `essid <name>`   | Filter by SSID name              | `wifimgr show bssid essid Corp-WiFi`      |
-| `sort <field>`   | Secondary sort (essid, ap)       | `wifimgr show bssid sort essid`           |
+| `essid <name>`   | Filter by SSID name              | `wifimgr show api bssid essid Corp-WiFi`      |
+| `sort <field>`   | Secondary sort (essid, ap)       | `wifimgr show api bssid sort essid`           |
 | `detail` / `extensive` | Field verbosity (extensive = all cache fields) | `wifimgr show ap extensive`     |
 | `format <type>`  | Output format (`json`, `csv`)    | `wifimgr show ap format csv`              |
 | `no-resolve`     | Show raw IDs instead of names    | `wifimgr show ap no-resolve`              |
@@ -82,9 +81,11 @@ wifimgr show ap Lobby-AP format json  # A single AP as JSON
 | `show <noun>` | API cache         | Managed devices/sites by default; `all` widens to everything |
 | `show intent` | Site config files | Desired state from local config              |
 
-Nouns: `ap`, `switch`, `gateway`, `site`, `wlans`, `bssid`, `rf-profiles`, `device-profiles`,
-`config`, `status`. (The former `show api <noun>` and `show inventory` are gone — `show <noun>` is
-the managed view; `all` is the everything view.)
+Resource nouns are flat and managed-first: `show ap`, `show switch`, `show gateway`, `show sites`
+(`all` widens to everything the API knows). Vendor/API introspection lives under `show api`:
+`show api status`, `show api bssid`, `show api wlans`, `show api rf-profiles`,
+`show api device-profiles`. Local desired state is `show intent <noun>`; cached device configs are
+`show config`. (The old `show inventory` view folded into the managed default of `show <noun>`.)
 
 ### Common Recipes
 
@@ -107,20 +108,20 @@ wifimgr show ap format json extensive     # Full JSON, all fields
 wifimgr show sites target mist-prod
 
 # Show WLANs / device profiles
-wifimgr show wlans
-wifimgr show wlans site US-LAB-01
-wifimgr show device-profiles
+wifimgr show api wlans
+wifimgr show api wlans site US-LAB-01
+wifimgr show api device-profiles
 
 # Show BSSIDs
-wifimgr show bssid                          # All BSSIDs
-wifimgr show bssid site US-LAB-01           # BSSIDs at specific site
-wifimgr show bssid essid Corp-WiFi          # BSSIDs broadcasting Corp-WiFi
-wifimgr show bssid essid "Guest WiFi"       # SSID with spaces
-wifimgr show bssid AP-NAME essid Corp-WiFi  # AP filter + SSID filter
-wifimgr show bssid sort essid               # Sort by site, then SSID
-wifimgr show bssid sort ap                  # Sort by site, then AP name
-wifimgr show bssid aa:bb:cc:dd:ee:ff        # Find specific BSSID
-wifimgr show bssid format alias             # <bssid>,<ap_name> lines
+wifimgr show api bssid                          # All BSSIDs
+wifimgr show api bssid site US-LAB-01           # BSSIDs at specific site
+wifimgr show api bssid essid Corp-WiFi          # BSSIDs broadcasting Corp-WiFi
+wifimgr show api bssid essid "Guest WiFi"       # SSID with spaces
+wifimgr show api bssid AP-NAME essid Corp-WiFi  # AP filter + SSID filter
+wifimgr show api bssid sort essid               # Sort by site, then SSID
+wifimgr show api bssid sort ap                  # Sort by site, then AP name
+wifimgr show api bssid aa:bb:cc:dd:ee:ff        # Find specific BSSID
+wifimgr show api bssid format alias             # <bssid>,<ap_name> lines
 ```
 
 #### BSSID Alias Format
@@ -128,11 +129,11 @@ wifimgr show bssid format alias             # <bssid>,<ap_name> lines
 `format alias` emits header-less `<bssid>,<ap_name>` lines — one per BSSID — for wireless survey
 and scanning tools that map a radio's BSSID to a friendly AP name. Feed it to
 [NetSpot](https://www.netspotapp.com/) or [Intuitibits](https://www.intuitibits.com/) tools like
-WiFi Explorer as a custom AP-name alias list. It is supported only on `show bssid`; other
+WiFi Explorer as a custom AP-name alias list. It is supported only on `show api bssid`; other
 commands reject it.
 
 ```bash
-wifimgr show bssid format alias > ap-aliases.csv
+wifimgr show api bssid format alias > ap-aliases.csv
 ```
 
 ### Positional Arguments
@@ -240,6 +241,28 @@ wifimgr import api site US-LAB-01 save    # Write <config_dir>/import/us-lab-01_
 
 Useful when taking over a site: import the current state, register the file
 in `files.imports`, then edit locally and re-apply.
+
+### What to Import: config / inventory / all
+
+A second keyword picks *what* the import produces:
+
+```bash
+wifimgr import api site US-LAB-01 config      # Translate vendor config -> import envelope (default)
+wifimgr import api site US-LAB-01 inventory    # Arm discovered devices into inventory.json
+wifimgr import api site US-LAB-01 all          # Both
+```
+
+- **config** (default) — the long-standing behavior: emit the loadable `ImportFile`.
+- **inventory** — write the discovered devices straight into the per-site armed
+  allowlist (`inventory.json`) as lowercase bare-hex MACs, de-duplicated and
+  idempotent on re-run. This is the fast path to arming a site you just imported.
+- **all** — do both.
+
+**Template-managed devices:** when a vendor manages devices through a template or
+profile (a Meraki network bound to a configuration template, or Mist device
+profiles), wifimgr's direct-to-device push can't fully own them. The import still
+runs, prints a `WARN` to stderr, and stamps a `_note` into the written file and
+section so the limitation is recorded where you'll see it.
 
 ### Scope Options
 
@@ -488,7 +511,7 @@ Run this after making changes outside wifimgr, or when cache data is stale.
 View cache age and status for all configured APIs:
 
 ```bash
-wifimgr show status
+wifimgr show api status
 ```
 
 Output example:
@@ -529,7 +552,7 @@ wifimgr refresh site US-LAB-01 target meraki-corp
 wifimgr refresh client site US-LAB-01
 
 # Check cache status before operations
-wifimgr show status
+wifimgr show api status
 ```
 
 ### Cache Data Types
@@ -563,15 +586,6 @@ Creates `./config/US-LAB-01.json` with empty site config and device sections, an
 wifimgr init site US-LAB-01 api mist-prod file sites/us-lab.json
 
 # Creates ./config/sites/us-lab.json
-```
-
-## set
-
-Interactive commands for device management.
-
-```bash
-# Assign APs to site interactively
-wifimgr set ap site US-LAB-01
 ```
 
 ## reset
@@ -1241,7 +1255,7 @@ Customize the table output for each command.
 {
   "display": {
     "commands": {
-      "show.api.ap": {
+      "show.ap": {
         "format": "table",
         "title": "AP Devices",
         "fields": [
@@ -1271,7 +1285,7 @@ Customize the table output for each command.
 |---------------------|---------------------|
 | `show.sites`        | `show sites`        |
 | `show.ap`           | `show ap`           |
-| `show.bssid`        | `show bssid`        |
+| `show.bssid`        | `show api bssid`        |
 | `show.intent.sites` | `show intent sites` |
 
 ## JSON Colors

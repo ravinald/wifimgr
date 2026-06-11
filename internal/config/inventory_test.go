@@ -70,6 +70,67 @@ func TestLoadInventoryFile_LegacySchemaFailsLoud(t *testing.T) {
 	}
 }
 
+func TestArmSiteDevices_CreatesAndNormalizes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inventory.json")
+
+	// File absent -> created. Mixed input formats -> stored bare hex.
+	if err := ArmSiteDevices(path, "ZZ-TMP-SITE",
+		[]string{"68:3A:1E:54:49:0F", "aabb.ccdd.eeff"}, nil, nil, ""); err != nil {
+		t.Fatalf("ArmSiteDevices create: %v", err)
+	}
+
+	f, err := LoadInventoryFile(path)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	got := f.MACsForSite("ZZ-TMP-SITE", "ap")
+	want := []string{"683a1e54490f", "aabbccddeeff"}
+	if len(got) != len(want) {
+		t.Fatalf("ap MACs = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("ap[%d] = %q, want %q (bare hex)", i, got[i], want[i])
+		}
+	}
+}
+
+func TestArmSiteDevices_IdempotentAndPreservesOtherSites(t *testing.T) {
+	path := writeTempInventory(t, `{
+	  "version": 1,
+	  "config": {"inventory": {"site": {
+	    "OTHER": {"ap": ["112233445566"], "switch": [], "gateway": []}
+	  }}}
+	}`)
+
+	arm := func(note string) {
+		if err := ArmSiteDevices(path, "ZZ-TMP-SITE", []string{"68:3a:1e:54:49:0f"}, nil, nil, note); err != nil {
+			t.Fatalf("arm: %v", err)
+		}
+	}
+	arm("")
+	arm("") // re-run must not duplicate
+
+	f, err := LoadInventoryFile(path)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if got := f.MACsForSite("ZZ-TMP-SITE", "ap"); len(got) != 1 || got[0] != "683a1e54490f" {
+		t.Errorf("idempotent arm produced %v", got)
+	}
+	if got := f.MACsForSite("OTHER", "ap"); len(got) != 1 || got[0] != "112233445566" {
+		t.Errorf("other site clobbered: %v", got)
+	}
+
+	// A note stamps onto the site section.
+	arm("managed by Meraki config template Lab-Template")
+	f, _ = LoadInventoryFile(path)
+	si, _ := f.site("ZZ-TMP-SITE")
+	if si.Note == "" {
+		t.Error("expected _note to be stamped")
+	}
+}
+
 func TestLoadInventoryFile_EmptyIsValid(t *testing.T) {
 	path := writeTempInventory(t, `{"version": 1, "config": {"inventory": {}}}`)
 

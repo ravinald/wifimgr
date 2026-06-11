@@ -158,11 +158,12 @@ func convertNetworkToSiteInfo(network *meraki.ResponseItemOrganizationsGetOrgani
 	}
 
 	return &vendors.SiteInfo{
-		ID:           network.ID,
-		Name:         network.Name,
-		Timezone:     network.TimeZone,
-		Notes:        network.Notes,
-		SourceVendor: "meraki",
+		ID:                    network.ID,
+		Name:                  network.Name,
+		Timezone:              network.TimeZone,
+		Notes:                 network.Notes,
+		BoundToConfigTemplate: network.IsBoundToConfigTemplate != nil && *network.IsBoundToConfigTemplate,
+		SourceVendor:          "meraki",
 	}
 }
 
