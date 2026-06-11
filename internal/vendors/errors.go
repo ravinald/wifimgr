@@ -161,34 +161,23 @@ func (e *SiteNotFoundError) UserMessage() string {
 	return msg
 }
 
-// DuplicateSiteError indicates multiple sites with the same name.
-// This can occur within one API or across multiple APIs.
+// DuplicateSiteError indicates multiple sites share a name within one API.
+// Mist does not enforce site-name uniqueness within an org (UniFi display names
+// can collide too), so name-based resolution would otherwise bind to an
+// arbitrary site; callers refuse instead.
 type DuplicateSiteError struct {
 	SiteName   string
-	APILabel   string   // Set if duplicates are within one API
-	APIs       []string // Set if duplicates are across multiple APIs
+	APILabel   string
 	MatchCount int
 }
 
 func (e *DuplicateSiteError) Error() string {
-	if len(e.APIs) > 0 {
-		return fmt.Sprintf("site %q exists in multiple APIs: %v", e.SiteName, e.APIs)
-	}
 	return fmt.Sprintf("site %q has %d matches in API %q - duplicate site names not supported",
 		e.SiteName, e.MatchCount, e.APILabel)
 }
 
 // UserMessage returns a user-friendly error message with remediation advice.
 func (e *DuplicateSiteError) UserMessage() string {
-	if len(e.APIs) > 0 {
-		return fmt.Sprintf(`Site "%s" exists in multiple APIs: %v
-
-To resolve this:
-  1. Use --api <label> to specify which API to use
-  2. Add 'api' field to the site config to set a default
-  3. Rename one of the sites to avoid conflicts`,
-			e.SiteName, e.APIs)
-	}
 	return fmt.Sprintf(`Site "%s" has %d matches in API "%s" - skipping site
 
 Duplicate site names within a vendor are not supported.
