@@ -252,10 +252,15 @@ Most features are available across all vendors. Some advanced features are vendo
 | Device Profiles        | ✓      | -        | -        |
 | RF Templates           | ✓      | -        | -        |
 | Gateway Templates      | ✓      | -        | -        |
-| WLAN Templates         | ✓      | -        | -        |
+| WLAN Templates¹        | ✓      | -        | -        |
+| WLAN/SSID Apply²       | ✓      | ✓        | -        |
 | Gateway/Switch Apply   | -      | -        | -        |
 
-**Note:** Ubiquiti Phase 1 provides read-only access via the Site Manager API. Search, configs, and write operations are planned for Phase 2 via the Network API.
+**Note:** Ubiquiti Phase 1 provides read-only access via the Site Manager API. Search, configs, and write operations (including WLAN/SSID apply) are planned for Phase 2 via the Network API.
+
+¹ **WLAN Templates** = *org-level vendor template objects* (Mist org WLAN templates). Meraki has no shared WLAN object — SSIDs live inside each network — so there is nothing to import at the org level.
+
+² **WLAN/SSID Apply** = pushing a wifimgr WLAN template to APs/sites. This works on Meraki too: wifimgr writes the SSID into a network slot, broadcasting on all APs by default or restricted to specific APs via the network's own Meraki tags. See [Meraki SSID Assignment](commands.md#meraki-ssid-assignment).
 
 ### Search on Both Platforms
 
