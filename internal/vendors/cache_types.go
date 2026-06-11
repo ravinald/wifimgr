@@ -17,6 +17,12 @@ type APICacheMeta struct {
 type APICacheSiteIndex struct {
 	ByName map[string]string `json:"by_name"` // site name -> site ID
 	ByID   map[string]string `json:"by_id"`   // site ID -> site name
+
+	// Duplicates records site names that resolve to more than one ID within
+	// this API. Mist (and UniFi display names) allow same-named sites in one
+	// org; a name -> single-ID map can't represent that, so lookups consult
+	// this first and refuse rather than binding to an arbitrary site.
+	Duplicates map[string][]string `json:"duplicates,omitempty"` // site name -> all colliding IDs
 }
 
 // APICache represents a single API's cache file structure.
@@ -179,16 +185,32 @@ func (c *APICache) UpdateItemCounts() {
 	c.Meta.ItemCounts["device_status"] = len(c.DeviceStatus)
 }
 
-// RebuildSiteIndex rebuilds the site index from the sites data.
+// RebuildSiteIndex rebuilds the site index from the sites data. When two
+// distinct site IDs share a name, the name is recorded in Duplicates instead
+// of letting the later entry silently overwrite the earlier in ByName.
 func (c *APICache) RebuildSiteIndex() {
 	c.SiteIndex.ByName = make(map[string]string)
 	c.SiteIndex.ByID = make(map[string]string)
+	c.SiteIndex.Duplicates = nil
 
 	for _, site := range c.Sites.Info {
-		if site.Name != "" && site.ID != "" {
-			c.SiteIndex.ByName[site.Name] = site.ID
-			c.SiteIndex.ByID[site.ID] = site.Name
+		if site.Name == "" || site.ID == "" {
+			continue
 		}
+		c.SiteIndex.ByID[site.ID] = site.Name
+
+		existingID, seen := c.SiteIndex.ByName[site.Name]
+		if seen && existingID != site.ID {
+			if c.SiteIndex.Duplicates == nil {
+				c.SiteIndex.Duplicates = make(map[string][]string)
+			}
+			if len(c.SiteIndex.Duplicates[site.Name]) == 0 {
+				c.SiteIndex.Duplicates[site.Name] = []string{existingID}
+			}
+			c.SiteIndex.Duplicates[site.Name] = append(c.SiteIndex.Duplicates[site.Name], site.ID)
+			continue
+		}
+		c.SiteIndex.ByName[site.Name] = site.ID
 	}
 }
 
