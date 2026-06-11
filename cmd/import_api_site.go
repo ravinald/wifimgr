@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -593,8 +594,9 @@ func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.Sit
 	// WLANs always processed first so label references are ready to attach.
 	var wlanLabels []string
 	var wlanTemplates map[string]map[string]any
+	var wlanAssign map[string][]string
 	if scope == ScopeFull || scope == ScopeWLANs {
-		wlanLabels, wlanTemplates = buildWLANsExport(cacheAccessor, site.ID, siteSlug, includeSecrets)
+		wlanLabels, wlanTemplates, wlanAssign = buildWLANsExport(cacheAccessor, site.ID, siteSlug, includeSecrets)
 	}
 
 	env := &importEnvelope{
@@ -650,14 +652,73 @@ func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.Sit
 		}
 	}
 
+	// Declare every imported WLAN in profiles.wlan so the file is apply-ready
+	// (apply rejects site/device wlan labels not declared here). Availability is
+	// expressed natively: Meraki via the WLAN's vendor block, Mist via per-AP
+	// device-level wlan placement below. We deliberately leave site-level `wlan`
+	// empty so a re-apply doesn't impose a site-wide assignment.
 	if len(wlanLabels) > 0 {
-		siteBody.WLAN = wlanLabels
+		siteBody.Profiles.WLAN = wlanLabels
+	}
+	if len(wlanAssign) > 0 {
+		attachDeviceWLANs(siteBody, wlanAssign)
 	}
 
 	env.Config = &siteConfigEnvelope{
 		Sites: map[string]*siteObjExport{site.Name: siteBody},
 	}
 	return env, nil
+}
+
+// attachDeviceWLANs wires Mist per-AP WLAN assignments (label → AP MACs) into the
+// site's device bodies as MAC-keyed device-level wlan lists — the form wifimgr
+// authors and apply resolves back to ap_ids. Output is deterministic (labels and
+// MACs sorted) so re-importing the same site yields a byte-stable file.
+func attachDeviceWLANs(siteBody *siteObjExport, assign map[string][]string) {
+	if siteBody.Devices == nil {
+		siteBody.Devices = &devicesExport{}
+	}
+	if siteBody.Devices.AP == nil {
+		siteBody.Devices.AP = make(map[string]map[string]any)
+	}
+
+	labels := make([]string, 0, len(assign))
+	for label := range assign {
+		labels = append(labels, label)
+	}
+	sort.Strings(labels)
+
+	for _, label := range labels {
+		macs := append([]string(nil), assign[label]...)
+		sort.Strings(macs)
+		for _, mac := range macs {
+			ap := siteBody.Devices.AP[mac]
+			if ap == nil {
+				ap = make(map[string]any)
+				siteBody.Devices.AP[mac] = ap
+			}
+			ap["wlan"] = append(toStringList(ap["wlan"]), label)
+		}
+	}
+}
+
+// toStringList coerces a raw wlan-list value (nil, []string, or post-JSON []any)
+// into []string for accumulation.
+func toStringList(v any) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, e := range t {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func buildDevicesExport(cacheAccessor *vendors.CacheAccessor, siteID string, sourceVendor string, scope ImportScope) (*devicesExport, error) {
@@ -904,13 +965,18 @@ func buildDevicesExport(cacheAccessor *vendors.CacheAccessor, siteID string, sou
 }
 
 // buildWLANsExport converts vendor-normalized WLANs for a site into the
-// Mist-canonical pair of (label list, label→template body map). The template
-// body is the JSON shape of a WLANProfile rendered back to a raw map so it
-// drops straight into the Templates.WLAN section of the ImportFile envelope.
-func buildWLANsExport(cacheAccessor *vendors.CacheAccessor, siteID, siteSlug string, includeSecrets bool) ([]string, map[string]map[string]any) {
-	labels, profiles, vendorBlocks := synthesizeWLANLabels(cacheAccessor.GetWLANsBySite(siteID), siteSlug, includeSecrets)
+// Mist-canonical triple of (label list, label→template body map, label→assigned
+// AP MACs). The template body is the JSON shape of a WLANProfile rendered back to
+// a raw map so it drops straight into the Templates.WLAN section of the
+// ImportFile envelope. The assignment map is non-empty only for Mist WLANs scoped
+// to specific APs (apply_to=aps); the caller wires those into device-level wlan
+// lists so apply resolves them back to the same ap_ids — a functional no-op.
+// Meraki carries its availability inside the WLAN's vendor block instead.
+func buildWLANsExport(cacheAccessor *vendors.CacheAccessor, siteID, siteSlug string, includeSecrets bool) ([]string, map[string]map[string]any, map[string][]string) {
+	wlans := cacheAccessor.GetWLANsBySite(siteID)
+	labels, profiles, vendorBlocks := synthesizeWLANLabels(wlans, siteSlug, includeSecrets)
 	if len(profiles) == 0 {
-		return labels, nil
+		return labels, nil, nil
 	}
 	templates := make(map[string]map[string]any, len(profiles))
 	for label, p := range profiles {
@@ -919,15 +985,58 @@ func buildWLANsExport(cacheAccessor *vendors.CacheAccessor, siteID, siteSlug str
 			logging.Warnf("Failed to serialize WLAN profile %q: %v", label, err)
 			continue
 		}
-		// Pin the vendor's native identity (e.g. Meraki SSID slot) alongside
-		// the portable profile so apply rebinds to the exact slot instead of
-		// matching on SSID name and risking an orphaned slot on rename.
+		// Pin the vendor's native identity (Meraki slot, raw band/auth, availability)
+		// alongside the portable profile so apply round-trips without drift.
 		for k, v := range vendorBlocks[label] {
 			m[k] = v
 		}
 		templates[label] = m
 	}
-	return labels, templates
+
+	// labels[i] corresponds to wlans[i] (synthesizeWLANLabels appends one label
+	// per WLAN in order), so we can recover each label's source WLAN to resolve
+	// Mist per-AP assignment without threading it through the pure synthesizer.
+	idToMAC := apIDToMAC(cacheAccessor, siteID)
+	assign := make(map[string][]string)
+	for i, w := range wlans {
+		if macs := mistAssignedMACs(w, idToMAC); len(macs) > 0 {
+			assign[labels[i]] = macs
+		}
+	}
+	return labels, templates, assign
+}
+
+// apIDToMAC builds a vendor-AP-ID → MAC map for a site, used to translate Mist
+// WLAN ap_ids back into the MAC-keyed device-level wlan lists wifimgr authors.
+func apIDToMAC(cacheAccessor *vendors.CacheAccessor, siteID string) map[string]string {
+	out := make(map[string]string)
+	for _, ap := range cacheAccessor.GetAllAPs() {
+		if ap.SiteID == siteID && ap.ID != "" {
+			out[ap.ID] = vendors.NormalizeMAC(ap.MAC)
+		}
+	}
+	return out
+}
+
+// mistAssignedMACs returns the APs a Mist WLAN is restricted to (apply_to=aps),
+// resolved from ap_ids to MACs. Returns nil for site-wide WLANs and non-Mist
+// vendors (Meraki expresses availability via its vendor block, not placement).
+func mistAssignedMACs(w *vendors.WLAN, idToMAC map[string]string) []string {
+	if w.SourceVendor != "mist" {
+		return nil
+	}
+	if applyTo, _ := w.Config["apply_to"].(string); applyTo != "aps" {
+		return nil
+	}
+	var macs []string
+	for _, id := range configStrings(w.Config, "ap_ids") {
+		if mac, ok := idToMAC[id]; ok {
+			macs = append(macs, mac)
+		} else {
+			logging.Warnf("Mist WLAN %q: ap_id %s not found among site APs; assignment dropped", w.SSID, id)
+		}
+	}
+	return macs
 }
 
 // profileToMap renders a WLANProfile as a loose map so it fits the
@@ -978,21 +1087,80 @@ func synthesizeWLANLabels(vendorWLANs []*vendors.WLAN, siteSlug string, includeS
 	return labels, profiles, vendorBlocks
 }
 
-// vendorBlockForWLAN captures the vendor-native binding that the portable
-// WLANProfile drops, shaped as a template vendor block (e.g. "meraki:").
-// For Meraki it pins the SSID slot (0-14) so apply rebinds to that exact slot
-// rather than name-matching — which keeps a rename in place instead of burning
-// a fresh slot and orphaning the old one. Returns nil when there's nothing to
-// pin (e.g. Mist, whose WLANs are first-class objects with stable UUIDs).
+// vendorBlockForWLAN captures the vendor-native attributes the portable
+// WLANProfile can't represent losslessly, shaped as a template vendor block
+// (e.g. "meraki:") that apply merges over the canonical fields. For Meraki this
+// makes import → apply a functional no-op:
+//   - number: the SSID slot (0-14), so apply rebinds to that exact slot.
+//   - band/auth.type: the raw Meraki enum tokens, kept only when canonicalization
+//     would otherwise lose them ("Dual band operation with Band Steering" → "dual",
+//     "8021x-radius" → "eap"). The portable profile still carries the canonical
+//     form for cross-vendor readability.
+//   - availabilityTags/availableOnAllAps: the real Meraki availability model,
+//     preserved verbatim so apply never invents synthetic tags.
+//
+// Returns nil for vendors with nothing to pin (e.g. Mist, whose WLANs are
+// first-class objects keyed by stable UUID and assigned to APs via ap_ids).
 func vendorBlockForWLAN(w *vendors.WLAN) map[string]any {
 	if w.SourceVendor != "meraki" {
 		return nil
 	}
-	slot, ok := merakiSlot(w)
-	if !ok {
+
+	block := map[string]any{}
+	if slot, ok := merakiSlot(w); ok {
+		block["number"] = slot
+	}
+	// Raw band/auth only when the canonical form drops information — otherwise the
+	// canonical value already round-trips and the block stays minimal.
+	if w.Band != "" && normalizeBand(w.Band) != w.Band {
+		block["band"] = w.Band
+	}
+	if w.AuthType != "" && normalizeAuthType(w.AuthType) != w.AuthType {
+		block["auth"] = map[string]any{"type": w.AuthType}
+	}
+	if tags := configStrings(w.Config, "availabilityTags"); len(tags) > 0 {
+		block["availabilityTags"] = tags
+	}
+	if b, ok := configBool(w.Config, "availableOnAllAps"); ok {
+		block["availableOnAllAps"] = b
+	}
+
+	if len(block) == 0 {
 		return nil
 	}
-	return map[string]any{"meraki:": map[string]any{"number": slot}}
+	return map[string]any{"meraki:": block}
+}
+
+// configStrings extracts a []string from a raw config value that may be []string
+// or (after JSON round-trip) []any.
+func configStrings(m map[string]any, key string) []string {
+	switch v := m[key].(type) {
+	case []string:
+		return v
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+// configBool reads a bool config value (handles bool and *bool).
+func configBool(m map[string]any, key string) (bool, bool) {
+	switch v := m[key].(type) {
+	case bool:
+		return v, true
+	case *bool:
+		if v != nil {
+			return *v, true
+		}
+	}
+	return false, false
 }
 
 // merakiSlot extracts the SSID slot number from a Meraki WLAN, preferring the

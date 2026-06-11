@@ -679,9 +679,10 @@ func applyWLANs(ctx context.Context, client api.Client, cfg *configPkg.Config, s
 		return 0, nil
 	}
 
-	// Meraki: use vendor-agnostic WLANs service with availability tags
+	// Meraki: SSIDs are network-wide; availability rides in each WLAN's vendor
+	// block, so the device mapping isn't needed here.
 	if vendor == "meraki" {
-		return applyWLANsMeraki(ctx, cfg, siteConfig, siteID, apiLabel, wlanLabels, wlanToDevices, desiredWLANs, diffMode, force)
+		return applyWLANsMeraki(ctx, cfg, siteConfig, siteID, apiLabel, desiredWLANs, diffMode, force)
 	}
 
 	// Get existing WLANs for this site from API
@@ -1434,8 +1435,8 @@ func containsIgnoreCase(s, substr string) bool {
 
 // applyWLANsMeraki applies WLAN configurations for Meraki using the vendors.Client interface.
 // Uses availability tags for per-AP WLAN assignment instead of Mist's ap_ids/apply_to model.
-func applyWLANsMeraki(ctx context.Context, _ *configPkg.Config, siteConfig SiteConfig, siteID, apiLabel string,
-	_ []string, wlanToDevices map[string][]string, desiredWLANs []map[string]any, diffMode, force bool) (int, error) {
+func applyWLANsMeraki(ctx context.Context, _ *configPkg.Config, _ SiteConfig, siteID, apiLabel string,
+	desiredWLANs []map[string]any, diffMode, force bool) (int, error) {
 
 	// Get vendor client from global registry
 	registry := vendors.GetGlobalRegistry()
@@ -1473,10 +1474,6 @@ func applyWLANsMeraki(ctx context.Context, _ *configPkg.Config, siteConfig SiteC
 	}
 	logging.Debugf("Found %d existing Meraki SSIDs in network", len(existingBySSID))
 
-	// Build AP tag mapping for device update phase
-	tagMapping := buildAPTagMapping(wlanToDevices)
-	setAPTagMapping(tagMapping)
-
 	changeCount := 0
 
 	for _, desired := range desiredWLANs {
@@ -1492,27 +1489,15 @@ func applyWLANsMeraki(ctx context.Context, _ *configPkg.Config, siteConfig SiteC
 			delete(desired, "_template_label")
 		}
 
-		// Build vendor WLAN from expanded template config
+		// Build vendor WLAN from expanded template config. Availability is the
+		// real Meraki model carried in the meraki: vendor block (availabilityTags /
+		// availableOnAllAps) and already sits in wlan.Config — wifimgr does not
+		// synthesize tags. Default to Meraki's native all-APs broadcast only when
+		// the template specifies neither tags nor an explicit flag.
 		wlan := buildVendorWLANFromConfig(desired, siteID)
-
-		// Set availability tags based on device mapping
-		if deviceMACs, hasDevices := wlanToDevices[templateLabel]; hasDevices && len(deviceMACs) > 0 {
-			// WLAN is assigned to specific APs
-			tag := generateWLANAvailabilityTag(templateLabel)
-			wlan.Config["availabilityTags"] = []string{tag}
-			wlan.Config["availableOnAllAps"] = false
-			logging.Infof("WLAN '%s' restricted to %d AP(s) via tag '%s'", templateLabel, len(deviceMACs), tag)
-		} else if slices.Contains(siteConfig.WLAN, templateLabel) {
-			// Site-level WLAN but all APs have overrides (no applicable APs)
-			tag := generateWLANAvailabilityTag(templateLabel)
-			wlan.Config["availabilityTags"] = []string{tag}
-			wlan.Config["availableOnAllAps"] = false
-			logging.Infof("WLAN '%s' (site-level, no applicable APs) via tag '%s'", templateLabel, tag)
-		} else {
-			// Profile-only WLAN: available on all APs
-			allAPs := true
-			wlan.Config["availableOnAllAps"] = allAPs
-			logging.Debugf("WLAN '%s' (profile-only) will broadcast on all APs", templateLabel)
+		if _, set := wlan.Config["availableOnAllAps"]; !set {
+			tags := extractStringSliceFromConfig(wlan.Config, "availabilityTags")
+			wlan.Config["availableOnAllAps"] = len(tags) == 0
 		}
 
 		// Resolve which slot this WLAN binds to. A pinned slot (from the
