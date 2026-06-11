@@ -123,20 +123,32 @@ func (s *sitesService) Get(ctx context.Context, id string) (*vendors.SiteInfo, e
 	}, nil
 }
 
-// ByName finds a network by its name.
+// ByName finds a network by its name. Meraki enforces network-name uniqueness
+// per org, so a collision here means the cache is stale or the org was mutated
+// mid-flight — either way, refuse rather than guess.
 func (s *sitesService) ByName(ctx context.Context, name string) (*vendors.SiteInfo, error) {
 	sites, err := s.List(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	var match *vendors.SiteInfo
+	count := 0
 	for _, site := range sites {
 		if site.Name == name {
-			return site, nil
+			match = site
+			count++
 		}
 	}
 
-	return nil, &vendors.SiteNotFoundError{SiteName: name, APILabel: "meraki"}
+	switch count {
+	case 0:
+		return nil, &vendors.SiteNotFoundError{SiteName: name, APILabel: "meraki"}
+	case 1:
+		return match, nil
+	default:
+		return nil, &vendors.DuplicateSiteError{SiteName: name, APILabel: "meraki", MatchCount: count}
+	}
 }
 
 // Create creates a new network.

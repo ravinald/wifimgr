@@ -151,6 +151,14 @@ func (c *CacheManager) GetSiteIDByName(apiLabel, siteName string) (string, error
 		return "", err
 	}
 
+	if ids := cache.SiteIndex.Duplicates[siteName]; len(ids) > 1 {
+		return "", &DuplicateSiteError{
+			SiteName:   siteName,
+			APILabel:   apiLabel,
+			MatchCount: len(ids),
+		}
+	}
+
 	siteID, found := cache.SiteIndex.ByName[siteName]
 	if !found {
 		candidates := make([]string, 0, len(cache.SiteIndex.ByName))

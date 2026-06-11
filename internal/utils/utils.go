@@ -56,6 +56,9 @@ func ResolveSiteID(ctx context.Context, client api.Client, cfg *config.Config, i
 		siteCode := strings.ToUpper(identifier)
 		site, err := client.GetSiteByName(ctx, siteCode, cfg.API.Credentials.OrgID)
 		if err != nil {
+			if errors.Is(err, api.ErrDuplicateSite) {
+				return "", err
+			}
 			if errors.Is(err, api.ErrNotFound) {
 				return "", fmt.Errorf("no site found matching code '%s'", siteCode)
 			}
@@ -67,6 +70,9 @@ func ResolveSiteID(ctx context.Context, client api.Client, cfg *config.Config, i
 	// 3. Otherwise, search by name as entered
 	site, err := client.GetSiteByName(ctx, identifier, cfg.API.Credentials.OrgID)
 	if err != nil {
+		if errors.Is(err, api.ErrDuplicateSite) {
+			return "", err
+		}
 		if errors.Is(err, api.ErrNotFound) {
 			return "", fmt.Errorf("no site found matching name '%s'", identifier)
 		}
@@ -99,6 +105,9 @@ func ResolveSiteIDViper(ctx context.Context, client api.Client, identifier strin
 		siteCode := strings.ToUpper(identifier)
 		site, err := client.GetSiteByName(ctx, siteCode, orgID)
 		if err != nil {
+			if errors.Is(err, api.ErrDuplicateSite) {
+				return "", err
+			}
 			if errors.Is(err, api.ErrNotFound) {
 				return "", fmt.Errorf("no site found matching code '%s'", siteCode)
 			}
@@ -110,6 +119,9 @@ func ResolveSiteIDViper(ctx context.Context, client api.Client, identifier strin
 	// 3. Otherwise, search by name as entered
 	site, err := client.GetSiteByName(ctx, identifier, orgID)
 	if err != nil {
+		if errors.Is(err, api.ErrDuplicateSite) {
+			return "", err
+		}
 		if errors.Is(err, api.ErrNotFound) {
 			return "", fmt.Errorf("no site found matching name '%s'", identifier)
 		}

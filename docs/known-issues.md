@@ -29,6 +29,20 @@ MAX_RETRIES: 1
 
 ---
 
+## Duplicate Site Names Within One API
+
+**Severity:** Low - Refused, not silently mishandled
+
+**Issue:** Two sites with the same name in a single vendor org cannot be addressed by name. `show`, `refresh`, and `apply` against that name fail with a duplicate-site error.
+
+**Cause:** wifimgr keys sites by their human-readable name. Mist does not enforce site-name uniqueness within an org (and UniFi display names can also collide), so a name can resolve to more than one site ID. Meraki enforces network-name uniqueness, so this does not occur there.
+
+**Status:** By design. The tool refuses an ambiguous name rather than binding to whichever site the API happened to return first — a silent guess could land a write on the wrong physical site.
+
+**Workaround:** Rename one of the colliding sites in the vendor dashboard so each name is unique within the org, then `wifimgr refresh`.
+
+---
+
 ## Reporting New Issues
 
 If you encounter issues with wifimgr that are not listed here, please report them:
