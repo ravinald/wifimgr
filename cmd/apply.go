@@ -64,10 +64,10 @@ Use 'wifimgr apply <subcommand> --help' for detailed information about each oper
 			switch parsed.Operation {
 			case "rollback", "list-backups", "cleanup-backups", "validate-backup":
 				// These are backup operations, pass through
-				return apply.HandleCommand(globalContext, globalClient, globalConfig, args, "", false)
+				return apply.HandleCommand(globalContext, vendorClientForApply(""), globalConfig, args, "", false)
 			default:
 				// Device type operation, pass through
-				return apply.HandleCommand(globalContext, globalClient, globalConfig, args, "", false)
+				return apply.HandleCommand(globalContext, vendorClientForApply(""), globalConfig, args, "", false)
 			}
 		}
 

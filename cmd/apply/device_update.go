@@ -16,7 +16,12 @@ import (
 // Where possible, methods have been updated to use the multi-vendor
 // cache accessor instead of making direct API calls.
 
-// DeviceUpdater defines the interface for device update operations
+// DeviceUpdater defines the interface for device update operations.
+//
+// The client is the vendor-agnostic vendors.Client. Portable operations (device
+// config push, site assignment) route through its service interfaces so apply
+// works across vendors; Mist-only operations reach the legacy client through
+// legacyClient(), which returns nil for other vendors.
 type DeviceUpdater interface {
 	// GetDeviceType returns the device type (ap, switch, gateway)
 	GetDeviceType() string
@@ -25,37 +30,50 @@ type DeviceUpdater interface {
 	GetConfiguredDevices(siteConfig SiteConfig) []string
 
 	// GetAssignedDevices gets MAC addresses of devices assigned to a site from cache
-	GetAssignedDevices(ctx context.Context, client api.Client, siteID string) ([]string, error)
+	GetAssignedDevices(ctx context.Context, client vendors.Client, siteID string) ([]string, error)
 
 	// FindDevicesInventoryStatus checks device status in inventory and cache
-	FindDevicesInventoryStatus(client api.Client, cfg *config.Config, configuredDevices []string, siteName string) ([]DeviceInventoryStatus, error)
+	FindDevicesInventoryStatus(client vendors.Client, cfg *config.Config, configuredDevices []string, siteName string) ([]DeviceInventoryStatus, error)
 
 	// UnassignDevices removes devices from a site
-	UnassignDevices(ctx context.Context, client api.Client, cfg *config.Config, macs []string) error
+	UnassignDevices(ctx context.Context, client vendors.Client, cfg *config.Config, macs []string) error
 
 	// AssignDevices assigns devices to a site
-	AssignDevices(ctx context.Context, client api.Client, cfg *config.Config, macs []string, siteID string) error
+	AssignDevices(ctx context.Context, client vendors.Client, cfg *config.Config, macs []string, siteID string) error
 
 	// FindDevicesToAssign identifies devices that need to be assigned to the site
-	FindDevicesToAssign(client api.Client, cfg *config.Config, configuredDevices []string, siteID string) ([]string, error)
+	FindDevicesToAssign(client vendors.Client, cfg *config.Config, configuredDevices []string, siteID string) ([]string, error)
 
 	// FindDevicesToUpdate identifies devices that need configuration updates
-	FindDevicesToUpdate(ctx context.Context, client api.Client, cfg *config.Config, siteConfig SiteConfig, configuredDevices []string, siteID string, apiLabel string) ([]string, error)
+	FindDevicesToUpdate(ctx context.Context, client vendors.Client, cfg *config.Config, siteConfig SiteConfig, configuredDevices []string, siteID string, apiLabel string) ([]string, error)
 
 	// UpdateDeviceConfigurations applies configuration updates to devices
-	UpdateDeviceConfigurations(ctx context.Context, client api.Client, cfg *config.Config, siteConfig SiteConfig, macs []string, siteID string, apiLabel string) error
+	UpdateDeviceConfigurations(ctx context.Context, client vendors.Client, cfg *config.Config, siteConfig SiteConfig, macs []string, siteID string, apiLabel string) error
 
 	// GetDeviceConfigFromSite extracts device-specific config from site configuration
 	GetDeviceConfigFromSite(siteConfig SiteConfig, mac string) (map[string]any, bool)
 
 	// ExportCurrentDeviceConfiguration exports current device config for backup
-	ExportCurrentDeviceConfiguration(ctx context.Context, client api.Client, mac string, siteID string) (map[string]any, error)
+	ExportCurrentDeviceConfiguration(ctx context.Context, client vendors.Client, mac string, siteID string) (map[string]any, error)
 
 	// SetInventoryChecker sets the inventory checker for reuse across operations
 	SetInventoryChecker(checker *InventoryChecker)
 
 	// GetInventoryChecker returns the stored inventory checker
 	GetInventoryChecker() *InventoryChecker
+}
+
+// legacyClient extracts the Mist api.Client a vendors.Client wraps, or nil when
+// the vendor exposes no legacy client (Meraki, Ubiquiti). Mist-only apply steps
+// (device profiles, org-level WLAN, cache repopulation) use this and skip when
+// it is nil.
+func legacyClient(client vendors.Client) api.Client {
+	if acc, ok := client.(vendors.LegacyClientAccessor); ok {
+		if lc, ok := acc.LegacyClient().(api.Client); ok {
+			return lc
+		}
+	}
+	return nil
 }
 
 // DeviceInventoryStatus represents the status of a device in relation to inventory and cache
@@ -107,7 +125,7 @@ func siteNameFromConfig(sc SiteConfig) string {
 }
 
 // GetAssignedDevices gets MAC addresses of devices assigned to a site from cache
-func (b *BaseDeviceUpdater) GetAssignedDevices(_ context.Context, _ api.Client, siteID string) ([]string, error) {
+func (b *BaseDeviceUpdater) GetAssignedDevices(_ context.Context, _ vendors.Client, siteID string) ([]string, error) {
 	accessor := vendors.GetGlobalCacheAccessor()
 	if accessor == nil {
 		return nil, fmt.Errorf("cache accessor not initialized")
@@ -126,19 +144,19 @@ func (b *BaseDeviceUpdater) GetAssignedDevices(_ context.Context, _ api.Client, 
 }
 
 // UnassignDevices removes devices from a site
-func (b *BaseDeviceUpdater) UnassignDevices(ctx context.Context, client api.Client, cfg *config.Config, macs []string) error {
-	return client.UnassignDevicesFromSite(ctx, cfg.API.Credentials.OrgID, macs)
+func (b *BaseDeviceUpdater) UnassignDevices(ctx context.Context, client vendors.Client, _ *config.Config, macs []string) error {
+	return client.Inventory().UnassignFromSite(ctx, macs)
 }
 
 // AssignDevices assigns devices to a site
-func (b *BaseDeviceUpdater) AssignDevices(ctx context.Context, client api.Client, cfg *config.Config, macs []string, siteID string) error {
-	return client.AssignDevicesToSite(ctx, cfg.API.Credentials.OrgID, siteID, macs, true)
+func (b *BaseDeviceUpdater) AssignDevices(ctx context.Context, client vendors.Client, _ *config.Config, macs []string, siteID string) error {
+	return client.Inventory().AssignToSite(ctx, siteID, macs)
 }
 
 // FindDevicesToAssign identifies devices that need to be assigned to the site.
 // NOTE: This only returns devices that are in the API inventory to ensure we don't
 // try to assign devices that aren't managed by this system.
-func (b *BaseDeviceUpdater) FindDevicesToAssign(_ api.Client, _ *config.Config, configuredDevices []string, siteID string) ([]string, error) {
+func (b *BaseDeviceUpdater) FindDevicesToAssign(_ vendors.Client, _ *config.Config, configuredDevices []string, siteID string) ([]string, error) {
 	accessor := vendors.GetGlobalCacheAccessor()
 	if accessor == nil {
 		return nil, fmt.Errorf("cache accessor not initialized")
@@ -200,7 +218,7 @@ func (b *BaseDeviceUpdater) FindDevicesToAssign(_ api.Client, _ *config.Config, 
 }
 
 // ExportCurrentDeviceConfiguration exports current device config for backup
-func (b *BaseDeviceUpdater) ExportCurrentDeviceConfiguration(_ context.Context, _ api.Client, mac string, _ string) (map[string]any, error) {
+func (b *BaseDeviceUpdater) ExportCurrentDeviceConfiguration(_ context.Context, _ vendors.Client, mac string, _ string) (map[string]any, error) {
 	logging.Debugf("Exporting current configuration for %s %s", b.deviceType, mac)
 
 	accessor := vendors.GetGlobalCacheAccessor()

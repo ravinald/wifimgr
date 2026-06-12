@@ -8,11 +8,11 @@ import (
 	"github.com/ravinald/jsondiff/pkg/jsondiff"
 	"github.com/spf13/viper"
 
-	"github.com/ravinald/wifimgr/api"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/macaddr"
 	"github.com/ravinald/wifimgr/internal/symbols"
+	"github.com/ravinald/wifimgr/internal/vendors"
 )
 
 // SwitchUpdater implements DeviceUpdater for Switches
@@ -48,7 +48,7 @@ func (s *SwitchUpdater) GetConfiguredDevices(siteConfig SiteConfig) []string {
 }
 
 // FindDevicesInventoryStatus checks Switch status in inventory and cache
-func (s *SwitchUpdater) FindDevicesInventoryStatus(client api.Client, cfg *config.Config, configuredSwitches []string, siteName string) ([]DeviceInventoryStatus, error) {
+func (s *SwitchUpdater) FindDevicesInventoryStatus(client vendors.Client, cfg *config.Config, configuredSwitches []string, siteName string) ([]DeviceInventoryStatus, error) {
 	ctx := context.Background()
 
 	// Reuse the shared checker from the apply orchestrator; build one scoped to
@@ -89,7 +89,7 @@ func (s *SwitchUpdater) FindDevicesInventoryStatus(client api.Client, cfg *confi
 }
 
 // FindDevicesToUpdate identifies Switches that need configuration updates
-func (s *SwitchUpdater) FindDevicesToUpdate(ctx context.Context, client api.Client, _ *config.Config, siteConfig SiteConfig, configuredSwitches []string, siteID string, apiLabel string) ([]string, error) {
+func (s *SwitchUpdater) FindDevicesToUpdate(ctx context.Context, client vendors.Client, _ *config.Config, siteConfig SiteConfig, configuredSwitches []string, siteID string, apiLabel string) ([]string, error) {
 	// Create batch loader for efficient device lookups and store for reuse in UpdateDeviceConfigurations
 	batchLoader, err := NewDeviceBatchLoader(ctx, client, siteID, s.deviceType)
 	if err != nil {
@@ -164,7 +164,7 @@ func (s *SwitchUpdater) FindDevicesToUpdate(ctx context.Context, client api.Clie
 }
 
 // UpdateDeviceConfigurations applies configuration updates to Switches
-func (s *SwitchUpdater) UpdateDeviceConfigurations(ctx context.Context, client api.Client, cfg *config.Config, siteConfig SiteConfig, macs []string, siteID string, apiLabel string) error {
+func (s *SwitchUpdater) UpdateDeviceConfigurations(ctx context.Context, client vendors.Client, cfg *config.Config, siteConfig SiteConfig, macs []string, siteID string, apiLabel string) error {
 	logging.Infof("Updating configuration for %d switches in site %s", len(macs), siteID)
 
 	// Reuse existing batch loader if available (from FindDevicesToUpdate), otherwise create new one
@@ -280,7 +280,11 @@ func (s *SwitchUpdater) UpdateDeviceConfigurations(ctx context.Context, client a
 			logging.Debugf("Preserved site ID %s for device %s during configuration update", siteID, mac)
 		}
 
-		updatedResult, err := client.UpdateDevice(ctx, siteID, deviceID, &updatedDevice)
+		lc := legacyClient(client)
+		if lc == nil {
+			return fmt.Errorf("switch apply requires the Mist API; not supported for this vendor")
+		}
+		updatedResult, err := lc.UpdateDevice(ctx, siteID, deviceID, &updatedDevice)
 		if err != nil {
 			logging.Errorf("Error updating Switch %s configuration via API: %v", mac, err)
 			failedDevices = append(failedDevices, mac)

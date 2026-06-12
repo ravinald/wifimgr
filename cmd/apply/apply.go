@@ -13,7 +13,6 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/ravinald/wifimgr/api"
 	"github.com/ravinald/wifimgr/internal/cmdutils"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/logging"
@@ -24,7 +23,7 @@ import (
 )
 
 // HandleCommand processes apply-related subcommands
-func HandleCommand(ctx context.Context, client api.Client, cfg *config.Config, args []string, apiLabel string, force bool) error {
+func HandleCommand(ctx context.Context, client vendors.Client, cfg *config.Config, args []string, apiLabel string, force bool) error {
 	if len(args) < 2 {
 		logging.Error("Not enough parameters provided for apply command")
 		return fmt.Errorf("apply command requires at least 2 parameters: <site_name> <device_type|all>")
@@ -96,7 +95,7 @@ func HandleCommand(ctx context.Context, client api.Client, cfg *config.Config, a
 }
 
 // applyDeviceToSite applies a specific device type configuration to a site
-func applyDeviceToSite(ctx context.Context, client api.Client, cfg *config.Config, siteName string, deviceType string, apiLabel string, force bool, diffMode bool, refreshAPI bool) error {
+func applyDeviceToSite(ctx context.Context, client vendors.Client, cfg *config.Config, siteName string, deviceType string, apiLabel string, force bool, diffMode bool, refreshAPI bool) error {
 	// Use the new generic framework
 	return applySiteGeneric(ctx, client, cfg, siteName, deviceType, apiLabel, force, diffMode, refreshAPI)
 }
@@ -190,7 +189,7 @@ func getSiteNameFromConfig(siteConfig SiteConfig) (string, bool) {
 
 // getSiteIDByName gets the site ID for a site name.
 // First checks the multi-vendor cache, then falls back to API lookup.
-func getSiteIDByName(client api.Client, siteName string) (string, error) {
+func getSiteIDByName(client vendors.Client, siteName string) (string, error) {
 	// Cache first (multi-vendor, duplicate-safe). A duplicate site name is fatal
 	// here — applying to the wrong same-named site is exactly the hazard the
 	// refusal guards against, so it must not fall through to a live lookup.
@@ -204,18 +203,17 @@ func getSiteIDByName(client api.Client, siteName string) (string, error) {
 		return "", err
 	}
 
-	// Cache miss — fall back to a live API lookup.
+	// Cache miss — fall back to a live lookup through the vendor-agnostic API.
 	ctx := context.Background()
-	site, err := client.GetSiteByIdentifier(ctx, siteName)
+	site, err := client.Sites().ByName(ctx, siteName)
 	if err != nil {
 		return "", fmt.Errorf("failed to get site by name '%s': %w", siteName, err)
 	}
-
-	if site.ID == nil {
+	if site == nil || site.ID == "" {
 		return "", fmt.Errorf("site '%s' has no ID", siteName)
 	}
 
-	return *site.ID, nil
+	return site.ID, nil
 }
 
 // ConfigurationBackup represents a backup of device configurations for rollback
@@ -252,7 +250,7 @@ func cleanupOldBackups(cfg *config.Config, _ int) error {
 // handleRollbackCommand handles file-based rollback of intent configuration
 // This does NOT send anything to the API - it only manipulates config files.
 // The operator can then review, edit, diff, and explicitly apply when ready.
-func handleRollbackCommand(_ context.Context, _ api.Client, cfg *config.Config, siteName string, args []string) error {
+func handleRollbackCommand(_ context.Context, _ vendors.Client, cfg *config.Config, siteName string, args []string) error {
 	// Parse backup index (default 0 = most recent backup)
 	backupIndex := 0
 	if len(args) > 0 {
@@ -501,8 +499,15 @@ func handleValidateBackupCommand(args []string) error {
 }
 
 // applyDeviceProfiles applies device profile configurations to APs in a site
-func applyDeviceProfiles(ctx context.Context, client api.Client, cfg *config.Config, siteName string, deviceFilter string, force bool, diffMode bool) error {
+func applyDeviceProfiles(ctx context.Context, client vendors.Client, cfg *config.Config, siteName string, deviceFilter string, force bool, diffMode bool) error {
 	logging.Infof("Applying device profile configuration to site: %s, device filter: %s", siteName, deviceFilter)
+
+	// Device profiles are a Mist-only concept and run entirely against the
+	// legacy client; other vendors have no equivalent.
+	lc := legacyClient(client)
+	if lc == nil {
+		return fmt.Errorf("device profiles are not supported for this vendor")
+	}
 
 	// Step 1: Get the site configuration
 	configFiles := cfg.Files.SiteConfigs
@@ -570,7 +575,7 @@ func applyDeviceProfiles(ctx context.Context, client api.Client, cfg *config.Con
 
 	// Step 4: Get device profile name to ID mapping
 	profileNameToID := make(map[string]string)
-	profiles, err := client.GetDeviceProfiles(ctx, cfg.API.Credentials.OrgID, "")
+	profiles, err := lc.GetDeviceProfiles(ctx, cfg.API.Credentials.OrgID, "")
 	if err != nil {
 		logging.Errorf("Error getting device profiles: %v", err)
 		return fmt.Errorf("error getting device profiles: %v", err)
@@ -583,7 +588,7 @@ func applyDeviceProfiles(ctx context.Context, client api.Client, cfg *config.Con
 	}
 
 	// Step 5: Get current device profile assignments
-	devices, err := client.GetDevicesByType(ctx, siteID, "ap")
+	devices, err := lc.GetDevicesByType(ctx, siteID, "ap")
 	if err != nil {
 		logging.Errorf("Error getting devices: %v", err)
 		return fmt.Errorf("error getting devices: %v", err)
@@ -682,7 +687,7 @@ func applyDeviceProfiles(ctx context.Context, client api.Client, cfg *config.Con
 		} else {
 			logging.Infof("Unassigning device profiles from %d APs", totalToUnassign)
 			for profileID, macs := range toUnassign {
-				err := client.UnassignDeviceProfiles(ctx, cfg.API.Credentials.OrgID, profileID, macs)
+				err := lc.UnassignDeviceProfiles(ctx, cfg.API.Credentials.OrgID, profileID, macs)
 				if err != nil {
 					logging.Errorf("Error unassigning device profile %s: %v", profileID, err)
 					return fmt.Errorf("error unassigning device profile: %v", err)
@@ -714,7 +719,7 @@ func applyDeviceProfiles(ctx context.Context, client api.Client, cfg *config.Con
 			}
 		} else {
 			logging.Infof("Assigning device profile '%s' to %d APs", profileName, len(macs))
-			result, err := client.AssignDeviceProfile(ctx, cfg.API.Credentials.OrgID, profileID, macs)
+			result, err := lc.AssignDeviceProfile(ctx, cfg.API.Credentials.OrgID, profileID, macs)
 			if err != nil {
 				logging.Errorf("Error assigning device profile: %v", err)
 				return fmt.Errorf("error assigning device profile '%s': %v", profileName, err)
@@ -777,7 +782,7 @@ func applyDeviceProfiles(ctx context.Context, client api.Client, cfg *config.Con
 	} else {
 		// Refresh cache for APs in this site after changes
 		logging.Infof("Refreshing cache for site %s APs after device profile changes", siteName)
-		err := client.UpdateCacheForTypes(ctx, []string{"ap"}, []string{siteName})
+		err := lc.UpdateCacheForTypes(ctx, []string{"ap"}, []string{siteName})
 		if err != nil {
 			logging.Warnf("Failed to refresh cache after device profile changes: %v", err)
 			// Don't fail the operation, just warn

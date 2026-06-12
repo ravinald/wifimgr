@@ -80,7 +80,7 @@ func isManagedKeysConfigured(apiLabel, deviceType string) bool {
 // applySiteGeneric applies device configuration to a site using the generic framework.
 // When refreshAPI is true, the cache is refreshed from the API before applying changes.
 // When refreshAPI is false (default), the existing cache is used for efficiency.
-func applySiteGeneric(ctx context.Context, client api.Client, cfg *configPkg.Config, siteName string, deviceType string, apiLabel string, force bool, diffMode bool, refreshAPI bool) error {
+func applySiteGeneric(ctx context.Context, client vendors.Client, cfg *configPkg.Config, siteName string, deviceType string, apiLabel string, force bool, diffMode bool, refreshAPI bool) error {
 	// Get the appropriate device updater
 	updater, err := getDeviceUpdater(deviceType)
 	if err != nil {
@@ -159,10 +159,10 @@ func applySiteGeneric(ctx context.Context, client api.Client, cfg *configPkg.Con
 	// By default, skip cache refresh and use existing cached data for efficiency.
 	// Use "refresh-api" positional argument to force a fresh API refresh when drift detection is needed.
 	if refreshAPI {
-		if vendors.GetGlobalCacheAccessor() == nil {
-			// Legacy mode: use the legacy client to populate cache
+		if lc := legacyClient(client); vendors.GetGlobalCacheAccessor() == nil && lc != nil {
+			// Legacy mode: use the legacy Mist client to populate cache
 			logging.Infof("Refreshing cache from API for site %s, device type %s...", siteName, deviceType)
-			if err := client.PopulateDeviceCacheForSite(ctx, siteID, deviceType); err != nil {
+			if err := lc.PopulateDeviceCacheForSite(ctx, siteID, deviceType); err != nil {
 				logging.Errorf("Error updating site-specific cache: %v", err)
 				return fmt.Errorf("error updating site-specific cache: %v", err)
 			}
@@ -431,10 +431,12 @@ func applySiteGeneric(ctx context.Context, client api.Client, cfg *configPkg.Con
 		}
 	}
 
-	// Log cache performance statistics
-	if deviceCache := client.GetDeviceCache(); deviceCache != nil {
-		hits, misses, hitRate := deviceCache.GetCacheStats()
-		logging.Debugf("Cache performance - Hits: %d, Misses: %d, Hit Rate: %.2f%%", hits, misses, hitRate)
+	// Log cache performance statistics (Mist legacy client only)
+	if lc := legacyClient(client); lc != nil {
+		if deviceCache := lc.GetDeviceCache(); deviceCache != nil {
+			hits, misses, hitRate := deviceCache.GetCacheStats()
+			logging.Debugf("Cache performance - Hits: %d, Misses: %d, Hit Rate: %.2f%%", hits, misses, hitRate)
+		}
 	}
 
 	return nil
@@ -613,7 +615,7 @@ func getSiteConfiguration(cfg *configPkg.Config, configFiles []string, siteName 
 // Collects WLANs from both site profiles AND device configs to ensure all referenced WLANs exist.
 // For Mist: sets ap_ids and apply_to based on which devices reference the WLAN.
 // Returns the number of WLANs created or updated.
-func applyWLANs(ctx context.Context, client api.Client, cfg *configPkg.Config, siteConfig SiteConfig, siteID string, apiLabel string, diffMode bool, force bool) (int, error) {
+func applyWLANs(ctx context.Context, client vendors.Client, cfg *configPkg.Config, siteConfig SiteConfig, siteID string, apiLabel string, diffMode bool, force bool) (int, error) {
 	// Collect ALL WLAN labels from both site profiles and device configs
 	wlanLabels := collectAllWLANLabels(siteConfig)
 
@@ -671,8 +673,17 @@ func applyWLANs(ctx context.Context, client api.Client, cfg *configPkg.Config, s
 		return applyWLANsMeraki(ctx, cfg, siteConfig, siteID, apiLabel, desiredWLANs, diffMode, force)
 	}
 
+	// The remaining path is Mist's org/site WLAN model, reached through the
+	// legacy client. Vendors without one (e.g. Ubiquiti) have no equivalent, so
+	// WLAN apply is skipped rather than failing the device apply.
+	lc := legacyClient(client)
+	if lc == nil {
+		logging.Warnf("WLAN apply is not supported for this vendor; skipping")
+		return 0, nil
+	}
+
 	// Get existing WLANs for this site from API
-	existingWLANs, err := client.GetSiteWLANs(ctx, siteID)
+	existingWLANs, err := lc.GetSiteWLANs(ctx, siteID)
 	if err != nil {
 		logging.Warnf("Failed to get existing WLANs for site %s: %v", siteID, err)
 		existingWLANs = nil // Treat as empty
@@ -760,7 +771,7 @@ func applyWLANs(ctx context.Context, client api.Client, cfg *configPkg.Config, s
 					} else {
 						logging.Infof("Updating WLAN '%s' (template: %s)", ssid, templateLabel)
 					}
-					if err := updateWLAN(ctx, client, siteID, *existing.ID, desired); err != nil {
+					if err := updateWLAN(ctx, lc, siteID, *existing.ID, desired); err != nil {
 						logging.Errorf("Failed to update WLAN '%s': %v", ssid, err)
 						printWLANError("update", ssid, templateLabel, desired, err)
 						continue
@@ -778,7 +789,7 @@ func applyWLANs(ctx context.Context, client api.Client, cfg *configPkg.Config, s
 				showWLANConfig(desired)
 			} else {
 				logging.Infof("Creating WLAN '%s' (template: %s)", ssid, templateLabel)
-				if err := createWLAN(ctx, client, siteID, desired); err != nil {
+				if err := createWLAN(ctx, lc, siteID, desired); err != nil {
 					logging.Errorf("Failed to create WLAN '%s': %v", ssid, err)
 					printWLANError("create", ssid, templateLabel, desired, err)
 					continue

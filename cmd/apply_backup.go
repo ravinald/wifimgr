@@ -73,7 +73,7 @@ Examples:
 			legacyArgs = append(legacyArgs, args[1])
 		}
 
-		return apply.HandleCommand(globalContext, globalClient, globalConfig, legacyArgs, "", false)
+		return apply.HandleCommand(globalContext, vendorClientForApply(""), globalConfig, legacyArgs, "", false)
 	},
 }
 
@@ -105,7 +105,7 @@ Example:
 			}
 		}
 		legacyArgs := []string{args[0], "list-backups"}
-		return apply.HandleCommand(globalContext, globalClient, globalConfig, legacyArgs, "", false)
+		return apply.HandleCommand(globalContext, vendorClientForApply(""), globalConfig, legacyArgs, "", false)
 	},
 }
 
@@ -150,7 +150,7 @@ Examples:
 		}
 
 		legacyArgs := []string{"placeholder", "cleanup-backups", strconv.Itoa(days)}
-		return apply.HandleCommand(globalContext, globalClient, globalConfig, legacyArgs, "", false)
+		return apply.HandleCommand(globalContext, vendorClientForApply(""), globalConfig, legacyArgs, "", false)
 	},
 }
 
@@ -182,7 +182,7 @@ Example:
 			}
 		}
 		legacyArgs := []string{"placeholder", "validate-backup", args[0]} // First arg is ignored
-		return apply.HandleCommand(globalContext, globalClient, globalConfig, legacyArgs, "", false)
+		return apply.HandleCommand(globalContext, vendorClientForApply(""), globalConfig, legacyArgs, "", false)
 	},
 }
 
