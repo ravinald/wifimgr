@@ -27,6 +27,54 @@ type APICacheSiteIndex struct {
 
 // APICache represents a single API's cache file structure.
 // Each API (mist-prod, meraki-corp, etc.) has its own cache file.
+// stampIfZero sets RefreshedAt to t only if it is still zero, so freshly-fetched
+// objects get this pass's time while objects carried forward from a prior cache keep
+// their original (older) timestamp. Promoted to every type that embeds ObjectMeta.
+func (m *ObjectMeta) stampIfZero(t time.Time) {
+	if m.RefreshedAt.IsZero() {
+		m.RefreshedAt = t
+	}
+}
+
+// stampMap stamps RefreshedAt on the pointer-valued cache maps.
+func stampMap[T interface{ stampIfZero(time.Time) }](m map[string]T, t time.Time) {
+	for _, v := range m {
+		v.stampIfZero(t)
+	}
+}
+
+// StampFreshObjects sets RefreshedAt = t on every cached object whose RefreshedAt is
+// still zero — the objects fetched in this refresh pass. Carried-forward objects
+// already carry their original timestamp and are left untouched, keeping per-object
+// freshness honest across a site-scoped refresh.
+func (c *APICache) StampFreshObjects(t time.Time) {
+	for i := range c.Sites.Info {
+		c.Sites.Info[i].stampIfZero(t)
+	}
+	for i := range c.Templates.RF {
+		c.Templates.RF[i].stampIfZero(t)
+	}
+	for i := range c.Templates.Gateway {
+		c.Templates.Gateway[i].stampIfZero(t)
+	}
+	for i := range c.Templates.WLAN {
+		c.Templates.WLAN[i].stampIfZero(t)
+	}
+	for i := range c.Profiles.Devices {
+		c.Profiles.Devices[i].stampIfZero(t)
+	}
+	stampMap(c.Inventory.AP, t)
+	stampMap(c.Inventory.Switch, t)
+	stampMap(c.Inventory.Gateway, t)
+	stampMap(c.Configs.AP, t)
+	stampMap(c.Configs.Switch, t)
+	stampMap(c.Configs.Gateway, t)
+	stampMap(c.WLANs, t)
+	stampMap(c.BSSIDs, t)
+	stampMap(c.DeviceStatus, t)
+	stampMap(c.ClientDetail, t)
+}
+
 type APICache struct {
 	Version   int               `json:"version"`
 	APILabel  string            `json:"api_label"`

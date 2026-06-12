@@ -2,9 +2,28 @@ package vendors
 
 import "time"
 
+// Apply states recorded on a cached object after a push.
+const (
+	ApplyStateVerified           = "verified"            // pushed 2xx and read-back matched intent
+	ApplyStateAppliedUnvalidated = "applied_unvalidated" // pushed 2xx, no read-back (trust mode)
+	ApplyStateDivergent          = "divergent"           // pushed 2xx but read-back != intent
+)
+
+// ObjectMeta carries per-object cache freshness and apply state. It is embedded in
+// every cached object so freshness is tracked uniformly: RefreshedAt is when the
+// object was last fetched from the vendor (ground truth), while AppliedAt and
+// ApplyState are set only for device configs that apply has pushed. The whole-API
+// timestamp (APICacheMeta.LastRefresh) is the baseline; these are per-object deltas.
+type ObjectMeta struct {
+	RefreshedAt time.Time `json:"refreshed_at,omitzero"` // omitzero: omitempty does not detect a zero time.Time
+	AppliedAt   time.Time `json:"applied_at,omitzero"`
+	ApplyState  string    `json:"apply_state,omitempty"`
+}
+
 // SiteInfo represents a site/network in a vendor-agnostic way.
 // In Mist this maps to a Site, in Meraki this maps to a Network.
 type SiteInfo struct {
+	ObjectMeta // per-object cache freshness + apply state
 	// ID is the vendor-specific identifier (UUID for Mist, L_XXXXX for Meraki)
 	ID string `json:"id"`
 
@@ -60,6 +79,7 @@ type NetBoxDeviceExtension struct {
 // InventoryItem represents a device in the organization's inventory.
 // This is a device that has been claimed but may or may not be assigned to a site.
 type InventoryItem struct {
+	ObjectMeta // per-object cache freshness + apply state
 	// ID is the vendor-specific device identifier
 	// For Mist: UUID, for Meraki: serial number
 	ID string `json:"id,omitempty"`
@@ -144,12 +164,13 @@ type DeviceInfo struct {
 // DeviceProfile represents a device configuration template.
 // This is primarily a Mist concept.
 type DeviceProfile struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Type    string `json:"type"` // "ap", "switch", or "gateway"
-	OrgID   string `json:"org_id,omitempty"`
-	ForSite bool   `json:"for_site,omitempty"` // true if site-level profile
-	SiteID  string `json:"site_id,omitempty"`
+	ObjectMeta        // per-object cache freshness + apply state
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Type       string `json:"type"` // "ap", "switch", or "gateway"
+	OrgID      string `json:"org_id,omitempty"`
+	ForSite    bool   `json:"for_site,omitempty"` // true if site-level profile
+	SiteID     string `json:"site_id,omitempty"`
 
 	// Provenance tracks where this data came from (set by loader, not serialized)
 	SourceAPI    string `json:"-"`
@@ -221,15 +242,17 @@ type WirelessClient struct {
 // Meraki's primary search response already carries it live, so re-using
 // cached status would invite staleness bugs.
 type ClientDetail struct {
-	MAC       string    `json:"mac"`
-	SiteID    string    `json:"site_id,omitempty"`
-	Band      string    `json:"band,omitempty"` // "2.4" / "5" / "6"
-	FetchedAt time.Time `json:"fetched_at"`
+	ObjectMeta           // per-object cache freshness + apply state
+	MAC        string    `json:"mac"`
+	SiteID     string    `json:"site_id,omitempty"`
+	Band       string    `json:"band,omitempty"` // "2.4" / "5" / "6"
+	FetchedAt  time.Time `json:"fetched_at"`
 }
 
 // DeviceStatus represents the current status of a device.
 // This is stored separately from inventory to allow independent refresh.
 type DeviceStatus struct {
+	ObjectMeta // per-object cache freshness + apply state
 	// Status is the normalized device status: "online", "offline", "alerting", "dormant"
 	Status string `json:"status"`
 
@@ -245,6 +268,7 @@ type DeviceStatus struct {
 
 // BSSIDEntry represents a single BSSID and its associated AP, SSID, and radio details.
 type BSSIDEntry struct {
+	ObjectMeta            // per-object cache freshness + apply state
 	BSSID          string `json:"bssid"` // normalized MAC (no separators)
 	APName         string `json:"ap_name"`
 	APSerial       string `json:"ap_serial"`
@@ -264,6 +288,7 @@ type BSSIDEntry struct {
 // For Mist: org-level templates that can be applied to sites.
 // For Meraki: per-network (site) RF profiles.
 type RFTemplate struct {
+	ObjectMeta                          // per-object cache freshness + apply state
 	ID           string                 `json:"id"`
 	Name         string                 `json:"name"`
 	OrgID        string                 `json:"org_id,omitempty"`
@@ -275,6 +300,7 @@ type RFTemplate struct {
 
 // GatewayTemplate represents a gateway configuration template (Mist-specific).
 type GatewayTemplate struct {
+	ObjectMeta          // per-object cache freshness + apply state
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	OrgID        string `json:"org_id,omitempty"`
@@ -284,6 +310,7 @@ type GatewayTemplate struct {
 
 // WLANTemplate represents a WLAN configuration template (Mist-specific).
 type WLANTemplate struct {
+	ObjectMeta          // per-object cache freshness + apply state
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	OrgID        string `json:"org_id,omitempty"`
@@ -295,6 +322,7 @@ type WLANTemplate struct {
 // For Mist: This can be an org-level WLAN or a site-level WLAN.
 // For Meraki: This is a per-network SSID (numbered 0-14).
 type WLAN struct {
+	ObjectMeta                            // per-object cache freshness + apply state
 	ID             string                 `json:"id"`   // UUID (Mist) or SSID number 0-14 (Meraki)
 	SSID           string                 `json:"ssid"` // SSID name visible to users
 	OrgID          string                 `json:"org_id,omitempty"`
@@ -321,6 +349,7 @@ type RadiusServer struct {
 
 // APConfig represents the full configuration for an access point.
 type APConfig struct {
+	ObjectMeta                          // per-object cache freshness + apply state
 	ID           string                 `json:"id"`
 	Name         string                 `json:"name"`
 	MAC          string                 `json:"mac"`
@@ -332,6 +361,7 @@ type APConfig struct {
 
 // SwitchConfig represents the full configuration for a switch.
 type SwitchConfig struct {
+	ObjectMeta                          // per-object cache freshness + apply state
 	ID           string                 `json:"id"`
 	Name         string                 `json:"name"`
 	MAC          string                 `json:"mac"`
@@ -343,6 +373,7 @@ type SwitchConfig struct {
 
 // GatewayConfig represents the full configuration for a gateway/appliance.
 type GatewayConfig struct {
+	ObjectMeta                          // per-object cache freshness + apply state
 	ID           string                 `json:"id"`
 	Name         string                 `json:"name"`
 	MAC          string                 `json:"mac"`
