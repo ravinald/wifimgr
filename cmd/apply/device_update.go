@@ -48,7 +48,7 @@ type DeviceUpdater interface {
 	FindDevicesToUpdate(ctx context.Context, client vendors.Client, cfg *config.Config, siteConfig SiteConfig, configuredDevices []string, siteID string, apiLabel string) ([]string, error)
 
 	// UpdateDeviceConfigurations applies configuration updates to devices
-	UpdateDeviceConfigurations(ctx context.Context, client vendors.Client, cfg *config.Config, siteConfig SiteConfig, macs []string, siteID string, apiLabel string) error
+	UpdateDeviceConfigurations(ctx context.Context, client vendors.Client, cfg *config.Config, siteConfig SiteConfig, macs []string, siteID string, apiLabel string) ([]string, error)
 
 	// GetDeviceConfigFromSite extracts device-specific config from site configuration
 	GetDeviceConfigFromSite(siteConfig SiteConfig, mac string) (map[string]any, bool)
