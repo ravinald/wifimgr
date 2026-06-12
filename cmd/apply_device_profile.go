@@ -89,7 +89,7 @@ Examples:
 			legacyArgs = append(legacyArgs, "diff")
 		}
 
-		return apply.HandleCommand(globalContext, globalClient, globalConfig, legacyArgs, "", force)
+		return apply.HandleCommand(globalContext, vendorClientForApply(""), globalConfig, legacyArgs, "", force)
 	},
 }
 
