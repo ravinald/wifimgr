@@ -87,7 +87,7 @@ func (v *Validator) ValidateFile(name, filePath string) (bool, error) {
 	}
 
 	// Parse JSON
-	var jsonData interface{}
+	var jsonData any
 	if err := json.Unmarshal(data, &jsonData); err != nil {
 		return false, fmt.Errorf("failed to parse JSON from file %s: %w", filePath, err)
 	}
@@ -104,7 +104,7 @@ func (v *Validator) ValidateFile(name, filePath string) (bool, error) {
 // ValidateData validates JSON data against a named schema
 // Returns true if the data is valid, false otherwise
 // If validation fails, a detailed error is returned
-func (v *Validator) ValidateData(name string, jsonData interface{}) (bool, error) {
+func (v *Validator) ValidateData(name string, jsonData any) (bool, error) {
 	// Check if schema exists
 	schema, ok := v.schemas[name]
 	if !ok {
@@ -126,7 +126,7 @@ func formatValidationError(err error, source string) error {
 	if valErr, ok := err.(*jsonschema.ValidationError); ok {
 		// Build detailed error message
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("JSON validation failed for %s:\n", source))
+		fmt.Fprintf(&sb, "JSON validation failed for %s:\n", source)
 
 		// Add basic error message with potential line information
 		errorMsg := valErr.Error()
@@ -135,26 +135,26 @@ func formatValidationError(err error, source string) error {
 		// Try to extract line number information from the error message if available
 		// Some JSON schema libraries include location information
 		if strings.Contains(errorMsg, "at") || strings.Contains(errorMsg, "line") {
-			sb.WriteString(fmt.Sprintf("\nFirst validation failure: %s", errorMsg))
+			fmt.Fprintf(&sb, "\nFirst validation failure: %s", errorMsg)
 		}
 
 		sb.WriteString("\n\nDetailed validation errors:\n")
 
 		// Extract basic info from the error
-		sb.WriteString(fmt.Sprintf("- Error: %s\n", valErr.Error()))
+		fmt.Fprintf(&sb, "- Error: %s\n", valErr.Error())
 
 		// Try to provide location information from the instance path
 		if valErr.InstanceLocation != "" {
-			sb.WriteString(fmt.Sprintf("- Location in JSON: %s\n", valErr.InstanceLocation))
+			fmt.Fprintf(&sb, "- Location in JSON: %s\n", valErr.InstanceLocation)
 		}
 
 		// Add causes if available
 		if len(valErr.Causes) > 0 {
 			sb.WriteString("Causes:\n")
 			for i, cause := range valErr.Causes {
-				sb.WriteString(fmt.Sprintf("  %d. %s", i+1, cause.Error()))
+				fmt.Fprintf(&sb, "  %d. %s", i+1, cause.Error())
 				if cause.InstanceLocation != "" {
-					sb.WriteString(fmt.Sprintf(" (at: %s)", cause.InstanceLocation))
+					fmt.Fprintf(&sb, " (at: %s)", cause.InstanceLocation)
 				}
 				sb.WriteString("\n")
 			}
