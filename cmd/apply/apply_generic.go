@@ -120,7 +120,7 @@ func applySiteGeneric(ctx context.Context, client vendors.Client, cfg *configPkg
 	}
 
 	// Step 1: Check if the config files have changed
-	configFiles := cfg.Files.SiteConfigs
+	configFiles := siteConfigFiles(cfg)
 	if len(configFiles) == 0 {
 		logging.Error("No site configuration files defined in config")
 		return fmt.Errorf("no site configuration files defined in config")

@@ -334,6 +334,7 @@ func initializeAPI() error {
 			ConfigDir:   viper.GetString("files.config_dir"),
 			SiteConfigs: viper.GetStringSlice("files.site_configs"),
 			Templates:   viper.GetStringSlice("files.templates"),
+			Imports:     viper.GetStringSlice("files.imports"),
 			Cache:       cachePath,
 			Inventory:   viper.GetString("files.inventory"),
 			LogFile:     viper.GetString("files.log_file"),

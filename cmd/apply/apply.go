@@ -131,6 +131,18 @@ type ConfigWrapper struct {
 	Sites map[string]SiteConfig `json:"sites"`
 }
 
+// siteConfigFiles returns every file apply should read for managed site configs:
+// the explicit site_configs plus the import envelopes. Import files carry a
+// Config.Sites section the same as site_configs (extra source/templates fields
+// are ignored on parse), and the global site registry already merges both, so
+// apply must read both to find a site activated through import.
+func siteConfigFiles(cfg *config.Config) []string {
+	files := make([]string, 0, len(cfg.Files.SiteConfigs)+len(cfg.Files.Imports))
+	files = append(files, cfg.Files.SiteConfigs...)
+	files = append(files, cfg.Files.Imports...)
+	return files
+}
+
 // getSiteConfigsFromFiles reads and parses site configurations from config files
 func getSiteConfigsFromFiles(configFiles []string) (map[string]SiteConfig, error) {
 	siteConfigs := make(map[string]SiteConfig)
@@ -510,7 +522,7 @@ func applyDeviceProfiles(ctx context.Context, client vendors.Client, cfg *config
 	}
 
 	// Step 1: Get the site configuration
-	configFiles := cfg.Files.SiteConfigs
+	configFiles := siteConfigFiles(cfg)
 	if len(configFiles) == 0 {
 		logging.Error("No site configuration files defined in config")
 		return fmt.Errorf("no site configuration files defined in config")
