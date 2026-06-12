@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/go-resty/resty/v2"
 	meraki "github.com/meraki/dashboard-api-go/v5/sdk"
@@ -386,6 +388,55 @@ func extractMerakiRadioBody(config map[string]interface{}) map[string]any {
 	return nil
 }
 
+// FilterApplicableRadio returns config keeping only the radio fields the Meraki
+// integration can apply, plus the dotted names of what it dropped — derived by
+// default-deny against the supported allowlist. Apply sends and compares only the
+// applicable subset, so configuring a field the API cannot honor (e.g. 6 GHz) neither
+// fails the apply nor reads as perpetual drift. The input map is not mutated. See #23.
+func FilterApplicableRadio(config map[string]interface{}) (map[string]interface{}, []string) {
+	rs, ok := config["radio_settings"].(map[string]any)
+	if !ok {
+		return config, nil
+	}
+	skipped := unsupportedRadioFields(rs)
+	if len(skipped) == 0 {
+		return config, nil
+	}
+
+	cleaned := make(map[string]any, len(rs))
+	for k, v := range rs {
+		cleaned[k] = v
+	}
+	for _, path := range skipped {
+		band, sub, nested := strings.Cut(path, ".")
+		if !nested {
+			delete(cleaned, band)
+			continue
+		}
+		if m, ok := cleaned[band].(map[string]any); ok {
+			nm := make(map[string]any, len(m))
+			for k, v := range m {
+				if k != sub {
+					nm[k] = v
+				}
+			}
+			cleaned[band] = nm
+		}
+	}
+
+	out := make(map[string]interface{}, len(config))
+	for k, v := range config {
+		out[k] = v
+	}
+	out["radio_settings"] = cleaned
+
+	full := make([]string, len(skipped))
+	for i, s := range skipped {
+		full[i] = "radio_settings." + s
+	}
+	return out, full
+}
+
 // parseAgnosticRadioConfig converts a radio_config sub-map into the typed RadioConfig
 // via a JSON round-trip, so the existing translator can render the Meraki body.
 func parseAgnosticRadioConfig(rc any) *vendors.RadioConfig {
@@ -424,22 +475,58 @@ func pruneRadioBody(raw map[string]any) map[string]any {
 	return out
 }
 
-// radioDeferredFields are radio keys the SDK's typed update request cannot carry yet.
-// TODO(meraki-6ghz): bolt on a raw PUT to /devices/{serial}/wireless/radio/settings to
-// send these — the REST endpoint accepts them; only the SDK's typed struct lags.
-var radioDeferredFields = []string{"sixGhzSettings", "flexRadioBand", "perSsidSettings"}
-
-// applyRadioSettings pushes radio settings through the SDK's typed radio endpoint. It
-// covers 2.4/5 GHz manual settings and rfProfile; fields the typed request omits
-// (6 GHz, flex-radio, per-SSID) are logged and skipped, never silently dropped — the
-// closed-loop verify then flags them as divergent until the bolt-on lands.
-func (s *devicesService) applyRadioSettings(ctx context.Context, deviceID string, body map[string]any) error {
-	request, deferred := buildRadioRequest(body)
-	if len(deferred) > 0 {
-		logging.Warnf("[meraki] radio update for %s: deferring field(s) the SDK cannot send yet: %v", deviceID, deferred)
+// supportedRadioBands allowlists, per band block, the radio fields the SDK's typed
+// request can push. supportedRadioTopLevel does the same for top-level radio keys, and
+// ignoredRadioFields are read-only echoes that are neither pushed nor reported. Anything
+// outside these is unsupported by definition — default-deny, so a new or unmapped API
+// field surfaces (and is skipped on push) instead of dropping silently.
+// TODO(meraki-6ghz): widen support via a raw PUT to /devices/{serial}/wireless/radio/settings.
+var (
+	supportedRadioBands = map[string]map[string]bool{
+		"twoFourGhzSettings": {"channel": true, "targetPower": true},
+		"fiveGhzSettings":    {"channel": true, "channelWidth": true, "targetPower": true},
 	}
+	supportedRadioTopLevel = map[string]bool{"rfProfileId": true}
+	ignoredRadioFields     = map[string]bool{"serial": true}
+)
+
+// unsupportedRadioFields returns the dotted names of radio-body fields the typed SDK
+// request cannot push, derived by subtracting the supported allowlist — not an
+// enumerated denylist. Unknown top-level blocks (e.g. sixGhzSettings) and unknown
+// sub-fields of a known band (e.g. fiveGhzSettings.minBitrate) both surface. Sorted for
+// stable output.
+func unsupportedRadioFields(body map[string]any) []string {
+	var out []string
+	for key, val := range body {
+		if supportedRadioTopLevel[key] || ignoredRadioFields[key] {
+			continue
+		}
+		allowed, known := supportedRadioBands[key]
+		if !known {
+			out = append(out, key)
+			continue
+		}
+		if band, ok := val.(map[string]any); ok {
+			for sub := range band {
+				if !allowed[sub] {
+					out = append(out, key+"."+sub)
+				}
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// applyRadioSettings pushes radio settings through the SDK's typed radio endpoint,
+// sending only the allowlisted fields it can express (2.4/5 GHz manual settings and
+// rfProfile). buildRadioRequest drops anything outside that set, so a config carrying
+// fields the integration cannot apply (e.g. 6 GHz) sends the applicable subset rather
+// than failing — the apply layer reports what it skipped.
+func (s *devicesService) applyRadioSettings(ctx context.Context, deviceID string, body map[string]any) error {
+	request := buildRadioRequest(body)
 	if request == nil {
-		return nil // nothing the SDK's typed request can carry
+		return nil // no applicable radio fields to send
 	}
 
 	retryState := NewRetryState(s.retryConfig)
@@ -466,11 +553,10 @@ func (s *devicesService) applyRadioSettings(ctx context.Context, deviceID string
 	}
 }
 
-// buildRadioRequest maps a pruned radio body to the SDK's typed update request. The
-// returned slice names any fields outside the typed request's reach (6 GHz/flex/
-// per-SSID) so the caller can report the deferral. A nil request means the body holds
-// nothing the typed request can send.
-func buildRadioRequest(body map[string]any) (*meraki.RequestWirelessUpdateDeviceWirelessRadioSettings, []string) {
+// buildRadioRequest maps the allowlisted fields of a radio body to the SDK's typed
+// update request. Callers reject unsupported fields before reaching here; a nil result
+// means the body holds nothing to send.
+func buildRadioRequest(body map[string]any) *meraki.RequestWirelessUpdateDeviceWirelessRadioSettings {
 	request := &meraki.RequestWirelessUpdateDeviceWirelessRadioSettings{}
 	populated := false
 
@@ -494,17 +580,10 @@ func buildRadioRequest(body map[string]any) (*meraki.RequestWirelessUpdateDevice
 		populated = true
 	}
 
-	var deferred []string
-	for _, k := range radioDeferredFields {
-		if _, ok := body[k]; ok {
-			deferred = append(deferred, k)
-		}
-	}
-
 	if !populated {
-		return nil, deferred
+		return nil
 	}
-	return request, deferred
+	return request
 }
 
 // toIntPtr coerces a JSON/map scalar to *int, tolerating the float64 from a JSON
