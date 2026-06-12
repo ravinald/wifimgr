@@ -184,11 +184,15 @@ Options:
 
 var applySwitchCmd = &cobra.Command{
 	Use:   "switch <site-name> [diff [split]] [no-refresh] [force]",
-	Short: "Apply switch configuration to a site (not yet supported)",
+	Short: "Apply switch configuration to a site",
 	Long: `Apply switch configuration to a site.
 
-NOTE: Switch configuration is not yet supported. This command is a placeholder
-for a future release. Currently only AP configuration is supported.`,
+When multiple APIs are configured, uses site's 'api' field.
+
+Options:
+  diff        - Show changes without applying them (unified format)
+  split       - Use side-by-side diff format (requires diff)
+  no-refresh  - Skip cache refresh (use existing cache data)`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if cmdutils.ContainsHelp(args) {
 			return nil
@@ -243,11 +247,15 @@ for a future release. Currently only AP configuration is supported.`,
 
 var applyGatewayCmd = &cobra.Command{
 	Use:   "gateway <site-name> [diff [split]] [no-refresh] [force]",
-	Short: "Apply gateway configuration to a site (not yet supported)",
+	Short: "Apply gateway configuration to a site",
 	Long: `Apply gateway configuration to a site.
 
-NOTE: Gateway configuration is not yet supported. This command is a placeholder
-for a future release. Currently only AP configuration is supported.`,
+When multiple APIs are configured, uses site's 'api' field.
+
+Options:
+  diff        - Show changes without applying them (unified format)
+  split       - Use side-by-side diff format (requires diff)
+  no-refresh  - Skip cache refresh (use existing cache data)`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if cmdutils.ContainsHelp(args) {
 			return nil
