@@ -335,6 +335,10 @@ func applySiteGeneric(ctx context.Context, client vendors.Client, cfg *configPkg
 		logging.Infof("Found %d %ss to update in site %s", len(devicesToUpdate), deviceType, siteName)
 	}
 
+	// divergentDevices collects MACs whose running config did not match intent after a
+	// successful push (verify mode) — apply fails if any remain.
+	var divergentDevices []string
+
 	// Step 9.5: Apply all changes (unassign, assign, update)
 	// Note: API state backup is not created by default. The intent config backup (created after apply)
 	// is sufficient for most rollback scenarios. Use "refresh-api" positional argument to refresh
@@ -386,12 +390,19 @@ func applySiteGeneric(ctx context.Context, client vendors.Client, cfg *configPkg
 			}
 		}
 		if len(devicesToUpdate) > 0 {
-			// UpdateDeviceConfigurations now returns the MACs that pushed 2xx; the
-			// post-push verify/trust step (re-fetch + compare to intent, recording
-			// verified/divergent/applied_unvalidated) will consume that set. Not yet wired.
-			if _, err := updater.UpdateDeviceConfigurations(ctx, client, cfg, siteConfig, devicesToUpdate, siteID, apiLabel); err != nil {
-				logging.Errorf("Error updating %s configurations: %v", deviceType, err)
-				return fmt.Errorf("error updating %s configurations: %v", deviceType, err)
+			succeeded, upErr := updater.UpdateDeviceConfigurations(ctx, client, cfg, siteConfig, devicesToUpdate, siteID, apiLabel)
+			// Verify (or trust) the devices that pushed: record per-object state, cache
+			// the running config, and collect any that did not realize intent.
+			if len(succeeded) > 0 {
+				diverged, vErr := recordApplyOutcome(ctx, client, updater, cfg, siteConfig, deviceType, siteID, apiLabel, succeeded)
+				if vErr != nil {
+					logging.Warnf("post-apply verify for %s: %v", deviceType, vErr)
+				}
+				divergentDevices = append(divergentDevices, diverged...)
+			}
+			if upErr != nil {
+				logging.Errorf("Error updating %s configurations: %v", deviceType, upErr)
+				return fmt.Errorf("error updating %s configurations: %w", deviceType, upErr)
 			}
 		}
 	}
@@ -440,6 +451,12 @@ func applySiteGeneric(ctx context.Context, client vendors.Client, cfg *configPkg
 			hits, misses, hitRate := deviceCache.GetCacheStats()
 			logging.Debugf("Cache performance - Hits: %d, Misses: %d, Hit Rate: %.2f%%", hits, misses, hitRate)
 		}
+	}
+
+	// A push the vendor accepted (2xx) but whose running config did not match intent
+	// is a real failure — fail the apply so it never reads as cleanly applied.
+	if len(divergentDevices) > 0 {
+		return fmt.Errorf("%d %s(s) accepted but running config does not match intent: %v", len(divergentDevices), deviceType, divergentDevices)
 	}
 
 	return nil
