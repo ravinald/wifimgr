@@ -208,6 +208,38 @@ func TestExportRadioConfig(t *testing.T) {
 	}
 }
 
+// TestExportRadioConfigBandDual guards the import round-trip: a raw band_dual
+// block (Mist dual/flex radio) must survive export so a freshly-imported config
+// matches the running config instead of showing a spurious delta on apply.
+func TestExportRadioConfigBandDual(t *testing.T) {
+	raw := map[string]any{
+		"band_24":   map[string]any{"disabled": false, "power": float64(5), "bandwidth": float64(20)},
+		"band_5":    map[string]any{"disabled": false, "power": float64(9), "bandwidth": float64(40)},
+		"band_dual": map[string]any{"disabled": false, "radio_mode": float64(24)},
+	}
+
+	rc := exportRadioConfig(raw)
+	if rc == nil || rc.BandDual == nil {
+		t.Fatal("expected BandDual to be exported, got nil")
+	}
+	if rc.BandDual.Disabled == nil || *rc.BandDual.Disabled {
+		t.Errorf("BandDual.Disabled = %v, want false", rc.BandDual.Disabled)
+	}
+	if rc.BandDual.RadioMode == nil || *rc.BandDual.RadioMode != 24 {
+		t.Errorf("BandDual.RadioMode = %v, want 24", rc.BandDual.RadioMode)
+	}
+
+	// Round-trip: ToMap must re-emit band_dual so import output matches the cache.
+	out := rc.ToMap()
+	dual, ok := out["band_dual"].(map[string]any)
+	if !ok {
+		t.Fatalf("ToMap dropped band_dual: %v", out)
+	}
+	if dual["radio_mode"] != 24 {
+		t.Errorf("round-tripped radio_mode = %v, want 24", dual["radio_mode"])
+	}
+}
+
 func TestExportRadioBandConfig(t *testing.T) {
 	tests := []struct {
 		name        string
