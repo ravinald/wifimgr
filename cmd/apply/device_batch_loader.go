@@ -19,7 +19,7 @@ type DeviceBatchLoader struct {
 
 // NewDeviceBatchLoader creates a new batch loader for a specific site and device type.
 // Uses multi-vendor cache for device data.
-func NewDeviceBatchLoader(_ context.Context, _ api.Client, siteID string, deviceType string) (*DeviceBatchLoader, error) {
+func NewDeviceBatchLoader(_ context.Context, _ vendors.Client, siteID string, deviceType string) (*DeviceBatchLoader, error) {
 	loader := &DeviceBatchLoader{
 		devices: make(map[string]*api.UnifiedDevice),
 	}

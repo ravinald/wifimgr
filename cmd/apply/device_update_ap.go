@@ -51,7 +51,7 @@ func (a *APUpdater) GetConfiguredDevices(siteConfig SiteConfig) []string {
 }
 
 // FindDevicesInventoryStatus checks AP status in inventory and cache
-func (a *APUpdater) FindDevicesInventoryStatus(client api.Client, cfg *config.Config, configuredAPs []string, siteName string) ([]DeviceInventoryStatus, error) {
+func (a *APUpdater) FindDevicesInventoryStatus(client vendors.Client, cfg *config.Config, configuredAPs []string, siteName string) ([]DeviceInventoryStatus, error) {
 	ctx := context.Background()
 
 	// Reuse the shared checker from the apply orchestrator; build one scoped to
@@ -93,7 +93,7 @@ func (a *APUpdater) FindDevicesInventoryStatus(client api.Client, cfg *config.Co
 }
 
 // FindDevicesToUpdate identifies APs that need configuration updates
-func (a *APUpdater) FindDevicesToUpdate(ctx context.Context, client api.Client, _ *config.Config, siteConfig SiteConfig, configuredAPs []string, siteID string, apiLabel string) ([]string, error) {
+func (a *APUpdater) FindDevicesToUpdate(ctx context.Context, client vendors.Client, _ *config.Config, siteConfig SiteConfig, configuredAPs []string, siteID string, apiLabel string) ([]string, error) {
 	// Create batch loader for efficient device lookups and store for reuse in UpdateDeviceConfigurations
 	batchLoader, err := NewDeviceBatchLoader(ctx, client, siteID, a.deviceType)
 	if err != nil {
@@ -168,7 +168,7 @@ func (a *APUpdater) FindDevicesToUpdate(ctx context.Context, client api.Client, 
 }
 
 // UpdateDeviceConfigurations applies configuration updates to APs
-func (a *APUpdater) UpdateDeviceConfigurations(ctx context.Context, client api.Client, cfg *config.Config, siteConfig SiteConfig, macs []string, siteID string, apiLabel string) error {
+func (a *APUpdater) UpdateDeviceConfigurations(ctx context.Context, client vendors.Client, cfg *config.Config, siteConfig SiteConfig, macs []string, siteID string, apiLabel string) error {
 	logging.Infof("Updating configuration for %d APs in site %s", len(macs), siteID)
 
 	// Reuse existing batch loader if available (from FindDevicesToUpdate), otherwise create new one
@@ -301,7 +301,16 @@ func (a *APUpdater) UpdateDeviceConfigurations(ctx context.Context, client api.C
 			logging.Debugf("Preserved site ID %s for device %s during configuration update", siteID, mac)
 		}
 
-		updatedResult, err := client.UpdateDevice(ctx, siteID, deviceID, &updatedDevice)
+		// Mist keeps its exact legacy push; other vendors push the managed
+		// config map through the agnostic Devices().UpdateConfig.
+		var updatedResult *api.UnifiedDevice
+		if lc := legacyClient(client); lc != nil {
+			updatedResult, err = lc.UpdateDevice(ctx, siteID, deviceID, &updatedDevice)
+		} else if cfgErr := client.Devices().UpdateConfig(ctx, siteID, deviceID, filteredConfig); cfgErr != nil {
+			err = cfgErr
+		} else {
+			updatedResult = &updatedDevice
+		}
 		if err != nil {
 			logging.Errorf("Error updating AP %s configuration via API: %v", mac, err)
 			failedDevices = append(failedDevices, mac)
@@ -404,10 +413,17 @@ func translateNameFieldsWithCache(config map[string]any, profileNameToID map[str
 
 // buildProfileNameToIDMap fetches device profiles once and builds a name-to-ID lookup map.
 // This should be called once before processing multiple devices.
-func buildProfileNameToIDMap(ctx context.Context, client api.Client, orgID string) (map[string]string, error) {
+func buildProfileNameToIDMap(ctx context.Context, client vendors.Client, orgID string) (map[string]string, error) {
 	profileNameToID := make(map[string]string)
 
-	profiles, err := client.GetDeviceProfiles(ctx, orgID, "")
+	// Device profiles are a Mist concept; other vendors have none, so the map
+	// stays empty and profile-name translation becomes a no-op.
+	lc := legacyClient(client)
+	if lc == nil {
+		return profileNameToID, nil
+	}
+
+	profiles, err := lc.GetDeviceProfiles(ctx, orgID, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get device profiles: %w", err)
 	}

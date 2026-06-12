@@ -3,16 +3,16 @@ package apply
 import (
 	"context"
 
-	"github.com/ravinald/wifimgr/api"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/macaddr"
+	"github.com/ravinald/wifimgr/internal/vendors"
 )
 
 // findDevicesToUnassignWithInventoryCheck finds devices that need to be unassigned from the site
 // but only if they exist in inventory (to avoid touching devices not managed by this system).
 // If inventoryChecker is provided, it is used for O(1) lookups instead of making API calls.
-func findDevicesToUnassignWithInventoryCheck(ctx context.Context, client api.Client, cfg *config.Config,
+func findDevicesToUnassignWithInventoryCheck(ctx context.Context, client vendors.Client, _ *config.Config,
 	assignedDevices, configuredDevices []string, deviceType string, inventoryChecker *InventoryChecker) ([]string, error) {
 
 	devicesToUnassign := make([]string, 0)
@@ -36,9 +36,8 @@ func findDevicesToUnassignWithInventoryCheck(ctx context.Context, client api.Cli
 		return devicesToUnassign, nil
 	}
 
-	// Fallback: Create inventory map from API (for backward compatibility)
-	orgID := cfg.API.Credentials.OrgID
-	inventory, err := client.GetInventory(ctx, orgID, deviceType)
+	// Fallback: build the inventory map through the vendor-agnostic API.
+	inventory, err := client.Inventory().List(ctx, deviceType)
 	if err != nil {
 		return nil, err
 	}
@@ -46,11 +45,9 @@ func findDevicesToUnassignWithInventoryCheck(ctx context.Context, client api.Cli
 	// Create a map of devices in inventory (all items are already of correct type)
 	inventoryMap := make(map[string]bool)
 	for _, item := range inventory {
-		if item.MAC != nil {
-			normalizedMAC := macaddr.NormalizeOrEmpty(*item.MAC)
-			if normalizedMAC != "" {
-				inventoryMap[normalizedMAC] = true
-			}
+		normalizedMAC := macaddr.NormalizeOrEmpty(item.MAC)
+		if normalizedMAC != "" {
+			inventoryMap[normalizedMAC] = true
 		}
 	}
 

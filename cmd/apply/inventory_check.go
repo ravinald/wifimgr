@@ -18,14 +18,14 @@ type InventoryChecker struct {
 	localInventory map[string]bool                   // MAC -> exists in local inventory file
 	inventoryItems map[string]*api.MistInventoryItem // MAC -> full inventory item (for site assignment lookups)
 	deviceType     string
-	client         api.Client // Reference to client for site name lookups
+	client         vendors.Client // for legacy site-name fallback lookups
 }
 
 // NewInventoryChecker creates an inventory checker for a device type at a site.
 // API inventory comes from the multi-vendor cache; the local allowlist is the
 // per-site armed list from inventory.json. siteName scopes the allowlist so a
 // MAC armed for one site can never authorize a write at another.
-func NewInventoryChecker(_ context.Context, client api.Client, cfg *config.Config, deviceType, siteName string) (*InventoryChecker, error) {
+func NewInventoryChecker(_ context.Context, client vendors.Client, cfg *config.Config, deviceType, siteName string) (*InventoryChecker, error) {
 	accessor := vendors.GetGlobalCacheAccessor()
 	if accessor == nil {
 		return nil, fmt.Errorf("cache accessor not initialized")
@@ -201,9 +201,9 @@ func (ic *InventoryChecker) GetSiteAssignment(mac string) (siteID, siteName stri
 			if site, err := accessor.GetSiteByID(siteID); err == nil && site != nil {
 				siteName = site.Name
 			}
-		} else if ic.client != nil {
-			// Fall back to legacy client's cached site data
-			if name, nameFound := ic.client.GetSiteName(siteID); nameFound {
+		} else if lc := legacyClient(ic.client); lc != nil {
+			// Fall back to the legacy Mist client's cached site data.
+			if name, nameFound := lc.GetSiteName(siteID); nameFound {
 				siteName = name
 			}
 		}
