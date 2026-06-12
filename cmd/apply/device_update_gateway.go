@@ -8,11 +8,11 @@ import (
 	"github.com/ravinald/jsondiff/pkg/jsondiff"
 	"github.com/spf13/viper"
 
-	"github.com/ravinald/wifimgr/api"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/macaddr"
 	"github.com/ravinald/wifimgr/internal/symbols"
+	"github.com/ravinald/wifimgr/internal/vendors"
 )
 
 // GatewayUpdater implements DeviceUpdater for Gateways (WAN Edge devices)
@@ -48,7 +48,7 @@ func (g *GatewayUpdater) GetConfiguredDevices(siteConfig SiteConfig) []string {
 }
 
 // FindDevicesInventoryStatus checks Gateway status in inventory and cache
-func (g *GatewayUpdater) FindDevicesInventoryStatus(client api.Client, cfg *config.Config, configuredGateways []string, siteName string) ([]DeviceInventoryStatus, error) {
+func (g *GatewayUpdater) FindDevicesInventoryStatus(client vendors.Client, cfg *config.Config, configuredGateways []string, siteName string) ([]DeviceInventoryStatus, error) {
 	ctx := context.Background()
 
 	// Reuse the shared checker from the apply orchestrator; build one scoped to
@@ -89,7 +89,7 @@ func (g *GatewayUpdater) FindDevicesInventoryStatus(client api.Client, cfg *conf
 }
 
 // FindDevicesToUpdate identifies Gateways that need configuration updates
-func (g *GatewayUpdater) FindDevicesToUpdate(ctx context.Context, client api.Client, _ *config.Config, siteConfig SiteConfig, configuredGateways []string, siteID string, apiLabel string) ([]string, error) {
+func (g *GatewayUpdater) FindDevicesToUpdate(ctx context.Context, client vendors.Client, _ *config.Config, siteConfig SiteConfig, configuredGateways []string, siteID string, apiLabel string) ([]string, error) {
 	// Create batch loader for efficient device lookups and store for reuse in UpdateDeviceConfigurations
 	batchLoader, err := NewDeviceBatchLoader(ctx, client, siteID, g.deviceType)
 	if err != nil {
@@ -164,7 +164,7 @@ func (g *GatewayUpdater) FindDevicesToUpdate(ctx context.Context, client api.Cli
 }
 
 // UpdateDeviceConfigurations applies configuration updates to Gateways
-func (g *GatewayUpdater) UpdateDeviceConfigurations(ctx context.Context, client api.Client, cfg *config.Config, siteConfig SiteConfig, macs []string, siteID string, apiLabel string) error {
+func (g *GatewayUpdater) UpdateDeviceConfigurations(ctx context.Context, client vendors.Client, cfg *config.Config, siteConfig SiteConfig, macs []string, siteID string, apiLabel string) error {
 	logging.Infof("Updating configuration for %d gateways in site %s", len(macs), siteID)
 
 	// Reuse existing batch loader if available (from FindDevicesToUpdate), otherwise create new one
@@ -280,7 +280,11 @@ func (g *GatewayUpdater) UpdateDeviceConfigurations(ctx context.Context, client 
 			logging.Debugf("Preserved site ID %s for device %s during configuration update", siteID, mac)
 		}
 
-		updatedResult, err := client.UpdateDevice(ctx, siteID, deviceID, &updatedDevice)
+		lc := legacyClient(client)
+		if lc == nil {
+			return fmt.Errorf("gateway apply requires the Mist API; not supported for this vendor")
+		}
+		updatedResult, err := lc.UpdateDevice(ctx, siteID, deviceID, &updatedDevice)
 		if err != nil {
 			logging.Errorf("Error updating Gateway %s configuration via API: %v", mac, err)
 			failedDevices = append(failedDevices, mac)

@@ -114,7 +114,7 @@ Examples:
 			legacyArgs = append(legacyArgs, "split")
 		}
 
-		return apply.HandleCommand(globalContext, globalClient, globalConfig, legacyArgs, apiLabel, force)
+		return apply.HandleCommand(globalContext, vendorClientForApply(apiLabel), globalConfig, legacyArgs, apiLabel, force)
 	},
 }
 
@@ -178,7 +178,7 @@ Options:
 			legacyArgs = append(legacyArgs, "split")
 		}
 
-		return apply.HandleCommand(globalContext, globalClient, globalConfig, legacyArgs, apiLabel, force)
+		return apply.HandleCommand(globalContext, vendorClientForApply(apiLabel), globalConfig, legacyArgs, apiLabel, force)
 	},
 }
 
@@ -241,7 +241,7 @@ Options:
 			legacyArgs = append(legacyArgs, "split")
 		}
 
-		return apply.HandleCommand(globalContext, globalClient, globalConfig, legacyArgs, apiLabel, force)
+		return apply.HandleCommand(globalContext, vendorClientForApply(apiLabel), globalConfig, legacyArgs, apiLabel, force)
 	},
 }
 
@@ -304,7 +304,7 @@ Options:
 			legacyArgs = append(legacyArgs, "split")
 		}
 
-		return apply.HandleCommand(globalContext, globalClient, globalConfig, legacyArgs, apiLabel, force)
+		return apply.HandleCommand(globalContext, vendorClientForApply(apiLabel), globalConfig, legacyArgs, apiLabel, force)
 	},
 }
 
@@ -365,7 +365,7 @@ Options:
 			legacyArgs = append(legacyArgs, "split")
 		}
 
-		return apply.HandleCommand(globalContext, globalClient, globalConfig, legacyArgs, apiLabel, force)
+		return apply.HandleCommand(globalContext, vendorClientForApply(apiLabel), globalConfig, legacyArgs, apiLabel, force)
 	},
 }
 

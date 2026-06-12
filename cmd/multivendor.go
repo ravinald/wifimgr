@@ -263,3 +263,15 @@ func createUbiquitiClient(config *vendors.APIConfig) (vendors.Client, error) {
 func SetGlobalVendorClient(client vendors.Client) {
 	globalVendorClient = client
 }
+
+// vendorClientForApply returns the vendors.Client for an API label, falling back
+// to the default client when the label is empty or unregistered. The apply
+// commands use it to drive the vendor-agnostic write path.
+func vendorClientForApply(apiLabel string) vendors.Client {
+	if apiLabel != "" && apiRegistry != nil {
+		if c, err := apiRegistry.GetClient(apiLabel); err == nil {
+			return c
+		}
+	}
+	return globalVendorClient
+}
