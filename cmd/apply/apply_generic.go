@@ -386,7 +386,10 @@ func applySiteGeneric(ctx context.Context, client vendors.Client, cfg *configPkg
 			}
 		}
 		if len(devicesToUpdate) > 0 {
-			if err := updater.UpdateDeviceConfigurations(ctx, client, cfg, siteConfig, devicesToUpdate, siteID, apiLabel); err != nil {
+			// UpdateDeviceConfigurations now returns the MACs that pushed 2xx; the
+			// post-push verify/trust step (re-fetch + compare to intent, recording
+			// verified/divergent/applied_unvalidated) will consume that set. Not yet wired.
+			if _, err := updater.UpdateDeviceConfigurations(ctx, client, cfg, siteConfig, devicesToUpdate, siteID, apiLabel); err != nil {
 				logging.Errorf("Error updating %s configurations: %v", deviceType, err)
 				return fmt.Errorf("error updating %s configurations: %v", deviceType, err)
 			}
