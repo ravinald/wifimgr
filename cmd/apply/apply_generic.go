@@ -36,20 +36,6 @@ type FileHashInfo struct {
 	ModTime time.Time `json:"mod_time"`
 }
 
-// getDeviceUpdater returns the appropriate DeviceUpdater for the device type.
-func getDeviceUpdater(deviceType string) (DeviceUpdater, error) {
-	switch deviceType {
-	case "ap":
-		return NewAPUpdater(), nil
-	case "switch":
-		return NewSwitchUpdater(), nil
-	case "gateway":
-		return NewGatewayUpdater(), nil
-	default:
-		return nil, fmt.Errorf("unknown device type: %s", deviceType)
-	}
-}
-
 // getManagedKeysForDevice returns the managed keys for a device type from the API configPkg.
 // It reads from api.<apiLabel>.managed_keys.<deviceType> in the viper configPkg.
 func getManagedKeysForDevice(apiLabel, deviceType string) []string {

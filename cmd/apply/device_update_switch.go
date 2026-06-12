@@ -21,6 +21,10 @@ type SwitchUpdater struct {
 	batchLoader *DeviceBatchLoader // Reusable batch loader for device lookups
 }
 
+func init() {
+	RegisterDeviceType("switch", func() DeviceUpdater { return NewSwitchUpdater() })
+}
+
 // NewSwitchUpdater creates a new Switch updater
 func NewSwitchUpdater() *SwitchUpdater {
 	return &SwitchUpdater{

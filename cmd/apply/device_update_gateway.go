@@ -21,6 +21,10 @@ type GatewayUpdater struct {
 	batchLoader *DeviceBatchLoader // Reusable batch loader for device lookups
 }
 
+func init() {
+	RegisterDeviceType("gateway", func() DeviceUpdater { return NewGatewayUpdater() })
+}
+
 // NewGatewayUpdater creates a new Gateway updater
 func NewGatewayUpdater() *GatewayUpdater {
 	return &GatewayUpdater{
