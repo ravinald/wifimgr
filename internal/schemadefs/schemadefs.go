@@ -9,6 +9,8 @@ import (
 	"io/fs"
 )
 
+//go:generate go run ./gen
+
 //go:embed *.json
 var fsys embed.FS
 

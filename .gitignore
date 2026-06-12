@@ -71,8 +71,9 @@ docs-internal/
 # Schema source (internal)
 schema-source/
 
-# Mist API schemas (contains example secret patterns)
-schemas/
+# Mist API schemas at the repo root (contain example secret patterns).
+# Anchored so it does not blanket-ignore nested schema dirs (e.g. internal/schemadefs).
+/schemas/
 
 # Test artifacts
 coverage.out
@@ -82,7 +83,6 @@ coverage.html
 *.tmp
 *.bak
 devicetype.json
-setup_schemas.sh
 # BEGIN attic — managed by `attic`, do not edit between markers
 docs-internal
 # END attic
