@@ -421,6 +421,10 @@ func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel strin
 
 	cache.Meta.RefreshDurationMs = time.Since(startTime).Milliseconds()
 
+	// Stamp per-object freshness: objects fetched this pass get startTime; configs
+	// carried forward from the prior cache keep their original (older) timestamp.
+	cache.StampFreshObjects(startTime)
+
 	fmt.Printf("  [%s] Complete in %dms\n", apiLabel, cache.Meta.RefreshDurationMs)
 	logging.Debugf("[cache] Refresh complete for %s in %dms", apiLabel, cache.Meta.RefreshDurationMs)
 
