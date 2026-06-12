@@ -19,9 +19,10 @@ const (
 	KeySize = 32 // AES-256
 	// SaltSize is the size of the salt in bytes
 	SaltSize = 16
-	// Iterations is the number of iterations for PBKDF2
-	// 100,000 iterations provides strong brute-force resistance per OWASP guidelines
-	Iterations = 100000
+	// Iterations is the PBKDF2 round count. 600,000 is OWASP's current floor for
+	// PBKDF2-HMAC-SHA256. The count is not stored with the ciphertext, so changing
+	// it invalidates every existing enc: token — re-encrypt after a bump.
+	Iterations = 600000
 	// Prefix is used to identify encrypted tokens
 	Prefix = "enc:"
 )
