@@ -1,0 +1,380 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "wifimgr Application Configuration Schema",
+  "description": "Schema for the main wifimgr configuration file (wifimgr-config.json)",
+  "type": "object",
+  "required": ["version"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Configuration schema version"
+    },
+    "api": {
+      "type": "object",
+      "description": "API configurations. Each key is an API label (e.g., 'mist-prod', 'meraki-corp')",
+      "additionalProperties": {
+        "$ref": "#/definitions/apiConfig"
+      },
+      "examples": [
+        {
+          "mist-prod": {
+            "vendor": "mist",
+            "url": "https://api.mist.com",
+            "credentials": {
+              "org_id": "your-org-id",
+              "api_token": "your-api-token"
+            }
+          }
+        }
+      ]
+    },
+    "files": {
+      "$ref": "#/definitions/filesConfig"
+    },
+    "display": {
+      "$ref": "#/definitions/displayConfig"
+    },
+    "logging": {
+      "$ref": "#/definitions/loggingConfig"
+    }
+  },
+  "definitions": {
+    "apiConfig": {
+      "type": "object",
+      "description": "Configuration for a single API connection",
+      "required": ["vendor", "credentials"],
+      "properties": {
+        "vendor": {
+          "type": "string",
+          "enum": ["mist", "meraki"],
+          "description": "Vendor type"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "API base URL. Defaults: mist='https://api.mist.com', meraki='https://api.meraki.com'"
+        },
+        "credentials": {
+          "type": "object",
+          "description": "API credentials (vendor-specific)",
+          "properties": {
+            "org_id": {
+              "type": "string",
+              "description": "Organization ID (required for all vendors)"
+            },
+            "api_token": {
+              "type": "string",
+              "description": "API token (Mist)"
+            },
+            "api_key": {
+              "type": "string",
+              "description": "API key (Meraki)"
+            }
+          },
+          "required": ["org_id"]
+        },
+        "rate_limit": {
+          "type": "integer",
+          "description": "Rate limit (requests per second). Defaults: mist=5000, meraki=10",
+          "minimum": 1
+        },
+        "results_limit": {
+          "type": "integer",
+          "description": "Maximum results per API request (default: 100)",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "cache_ttl": {
+          "type": "integer",
+          "description": "Cache time-to-live in seconds. 0=never expire, -1=use default (86400 = 1 day)",
+          "minimum": 0
+        },
+        "managed_keys": {
+          "$ref": "#/definitions/managedKeys"
+        }
+      }
+    },
+    "managedKeys": {
+      "type": "object",
+      "description": "Configuration keys that wifimgr manages for each device type",
+      "properties": {
+        "ap": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "AP configuration keys managed by wifimgr"
+        },
+        "switch": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Switch configuration keys managed by wifimgr"
+        },
+        "gateway": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Gateway configuration keys managed by wifimgr"
+        }
+      }
+    },
+    "filesConfig": {
+      "type": "object",
+      "description": "File path configuration",
+      "properties": {
+        "config_dir": {
+          "type": "string",
+          "description": "Directory containing site configuration files (default: './config')"
+        },
+        "site_configs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of site configuration files relative to config_dir"
+        },
+        "device_profiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of device profile files relative to config_dir"
+        },
+        "cache": {
+          "type": "string",
+          "description": "Legacy single-API cache file path (default: './cache.json')"
+        },
+        "cache_dir": {
+          "type": "string",
+          "description": "Directory for multi-vendor cache files (default: './cache')"
+        },
+        "inventory": {
+          "type": "string",
+          "description": "Inventory file path (default: './inventory.json')"
+        },
+        "log_file": {
+          "type": "string",
+          "description": "Log file path (default: './wifimgr.log')"
+        },
+        "schemas": {
+          "type": "string",
+          "description": "Directory containing JSON schemas (default: './schemas')"
+        },
+        "config_backups": {
+          "type": "integer",
+          "description": "Number of configuration backups to keep per site",
+          "minimum": 0
+        }
+      }
+    },
+    "displayConfig": {
+      "type": "object",
+      "description": "Display and output formatting configuration",
+      "properties": {
+        "sites": {
+          "$ref": "#/definitions/displayFormat"
+        },
+        "aps": {
+          "$ref": "#/definitions/displayFormat"
+        },
+        "inventory": {
+          "$ref": "#/definitions/displayFormat"
+        },
+        "commands": {
+          "type": "object",
+          "description": "Command-specific display settings",
+          "additionalProperties": {
+            "$ref": "#/definitions/commandFormat"
+          }
+        },
+        "jsoncolor": {
+          "$ref": "#/definitions/jsonColorConfig"
+        }
+      }
+    },
+    "displayFormat": {
+      "type": "object",
+      "description": "Display format settings for a category",
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["table", "csv", "json"],
+          "description": "Output format"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Fields to display"
+        },
+        "available_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "All available fields for this category"
+        }
+      }
+    },
+    "commandFormat": {
+      "type": "object",
+      "description": "Display format for a specific command",
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["table", "csv", "json"],
+          "description": "Output format"
+        },
+        "fields": {
+          "type": "array",
+          "description": "Field configuration objects",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "description": "Field name from API/cache"
+              },
+              "title": {
+                "type": "string",
+                "description": "Display title for the field"
+              },
+              "width": {
+                "type": "integer",
+                "description": "Column width for table format"
+              }
+            },
+            "required": ["field"]
+          }
+        },
+        "title": {
+          "type": "string",
+          "description": "Title for the display output"
+        },
+        "available_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "All available fields for this command"
+        }
+      }
+    },
+    "jsonColorConfig": {
+      "type": "object",
+      "description": "JSON output color configuration",
+      "properties": {
+        "null": {
+          "$ref": "#/definitions/colorSpec"
+        },
+        "bool": {
+          "$ref": "#/definitions/colorSpec"
+        },
+        "number": {
+          "$ref": "#/definitions/colorSpec"
+        },
+        "string": {
+          "$ref": "#/definitions/colorSpec"
+        },
+        "key": {
+          "$ref": "#/definitions/colorSpec"
+        },
+        "bytes": {
+          "$ref": "#/definitions/colorSpec"
+        },
+        "time": {
+          "$ref": "#/definitions/colorSpec"
+        }
+      }
+    },
+    "colorSpec": {
+      "type": "object",
+      "description": "Color specification with multiple formats",
+      "properties": {
+        "hex": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "description": "Hex color code (e.g., '#00FF00')"
+        },
+        "ansi256": {
+          "type": "string",
+          "description": "ANSI 256-color code"
+        },
+        "ansi": {
+          "type": "string",
+          "description": "Basic ANSI color code"
+        }
+      }
+    },
+    "loggingConfig": {
+      "type": "object",
+      "description": "Logging configuration",
+      "properties": {
+        "enable": {
+          "type": "boolean",
+          "description": "Enable logging to file (default: false)"
+        },
+        "level": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error"],
+          "description": "Log level (default: 'info')"
+        },
+        "format": {
+          "type": "string",
+          "enum": ["text", "json"],
+          "description": "Log format (default: 'text')"
+        },
+        "stdout": {
+          "type": "boolean",
+          "description": "Also log to stdout (default: true)"
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "version": 1,
+      "api": {
+        "mist-prod": {
+          "vendor": "mist",
+          "url": "https://api.mist.com",
+          "credentials": {
+            "org_id": "12345678-1234-1234-1234-123456789012",
+            "api_token": "your-mist-api-token"
+          },
+          "rate_limit": 5000,
+          "cache_ttl": 86400
+        },
+        "meraki-corp": {
+          "vendor": "meraki",
+          "url": "https://api.meraki.com",
+          "credentials": {
+            "org_id": "123456",
+            "api_key": "your-meraki-api-key"
+          },
+          "rate_limit": 10,
+          "cache_ttl": 86400
+        }
+      },
+      "files": {
+        "config_dir": "./config",
+        "site_configs": [
+          "sites/us-sites.json",
+          "sites/eu-sites.json"
+        ],
+        "cache_dir": "./cache",
+        "log_file": "./wifimgr.log"
+      },
+      "logging": {
+        "enable": true,
+        "level": "info",
+        "format": "text"
+      }
+    }
+  ]
+}

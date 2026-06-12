@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "wifimgr Inventory Schema",
+  "description": "Schema for the inventory.json file used by wifimgr to define managed device inventory",
+  "type": "object",
+  "required": ["version", "config"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "enum": [1],
+      "description": "The schema version"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Metadata about the inventory file",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Description of this inventory file"
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "description": "Configuration container",
+      "required": ["inventory"],
+      "properties": {
+        "inventory": {
+          "type": "object",
+          "description": "Device inventory organized by device type",
+          "properties": {
+            "ap": {
+              "type": "array",
+              "description": "List of access point MAC addresses",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{12}$",
+                "description": "Normalized MAC address (lowercase, no separators)"
+              },
+              "examples": [
+                ["003e7311b0ac", "003e7311b0d9", "a8f7d982dd8e"]
+              ]
+            },
+            "switch": {
+              "type": "array",
+              "description": "List of switch MAC addresses",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{12}$",
+                "description": "Normalized MAC address (lowercase, no separators)"
+              },
+              "examples": [
+                ["3c08cd2c3ed0"]
+              ]
+            },
+            "gateway": {
+              "type": "array",
+              "description": "List of gateway MAC addresses",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{12}$",
+                "description": "Normalized MAC address (lowercase, no separators)"
+              },
+              "examples": [[]]
+            }
+          }
+        }
+      }
+    }
+  }
+}
