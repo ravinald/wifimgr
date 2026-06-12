@@ -132,15 +132,13 @@ func applySiteGeneric(ctx context.Context, client vendors.Client, cfg *configPkg
 		return fmt.Errorf("error checking config file changes: %v", err)
 	}
 
-	// Note: Even if config files haven't changed, we still need to check WLANs
-	// against API state since they might not exist yet on the API.
-	skipDeviceUpdates := !hasChanges && !force && !diffMode
-	if skipDeviceUpdates {
-		logging.Debugf("No config file changes - will skip device updates but still check WLANs")
-	}
-	if !hasChanges && diffMode {
-		logging.Debugf("Diff mode - proceeding to compare against API state")
-	}
+	// Apply always compares cached device state against intent and pushes the
+	// differences: that comparison reads the cache and is cheap. Gating it on the
+	// intent file's hash made diff and apply disagree and silently skip API-side
+	// drift (the device drifted, the file didn't), so the gate is gone. The
+	// expensive lever is the refresh, controlled separately. force re-pushes
+	// intent regardless of the comparison.
+	_ = hasChanges
 
 	// Step 2: Get site configuration first (needed for site ID)
 	siteConfig, err := getSiteConfiguration(cfg, configFiles, siteName)
@@ -282,22 +280,19 @@ func applySiteGeneric(ctx context.Context, client vendors.Client, cfg *configPkg
 	inventoryCheckerForFilter := updater.GetInventoryChecker()
 
 	// Step 8: Find devices to assign
-	var devicesToAssign []string
-	if !skipDeviceUpdates {
-		devicesToAssign, err = updater.FindDevicesToAssign(client, cfg, configuredDevicesFiltered, siteID)
-		if err != nil {
-			logging.Errorf("Error finding %ss to assign: %v", deviceType, err)
-			return fmt.Errorf("error finding %ss to assign: %v", deviceType, err)
-		}
+	devicesToAssign, err := updater.FindDevicesToAssign(client, cfg, configuredDevicesFiltered, siteID)
+	if err != nil {
+		logging.Errorf("Error finding %ss to assign: %v", deviceType, err)
+		return fmt.Errorf("error finding %ss to assign: %v", deviceType, err)
+	}
 
-		// Filter to only assign devices that are in inventory
-		if inventoryCheckerForFilter != nil {
-			devicesToAssign = inventoryCheckerForFilter.FilterByInventory(devicesToAssign)
-		}
+	// Filter to only assign devices that are in inventory
+	if inventoryCheckerForFilter != nil {
+		devicesToAssign = inventoryCheckerForFilter.FilterByInventory(devicesToAssign)
+	}
 
-		if len(devicesToAssign) > 0 {
-			logging.Infof("Found %d %ss to assign to site %s", len(devicesToAssign), deviceType, siteName)
-		}
+	if len(devicesToAssign) > 0 {
+		logging.Infof("Found %d %ss to assign to site %s", len(devicesToAssign), deviceType, siteName)
 	}
 
 	// Step 8.5: Apply WLANs BEFORE device updates (WLANs must exist for device WLAN assignments)
@@ -314,25 +309,30 @@ func applySiteGeneric(ctx context.Context, client vendors.Client, cfg *configPkg
 		}
 	}
 
-	// Step 9: Find devices to update
-	var devicesToUpdate []string
-	if !skipDeviceUpdates {
-		devicesToUpdate, err = updater.FindDevicesToUpdate(ctx, client, cfg, siteConfig, configuredDevicesFiltered, siteID, apiLabel)
-		if err != nil {
-			logging.Errorf("Error finding %ss to update: %v", deviceType, err)
-			return fmt.Errorf("error finding %ss to update: %v", deviceType, err)
-		}
+	// Step 9: Find devices to update. FindDevicesToUpdate also populates the
+	// updater's batch loader and renders the diff, so it runs even under force.
+	devicesToUpdate, err := updater.FindDevicesToUpdate(ctx, client, cfg, siteConfig, configuredDevicesFiltered, siteID, apiLabel)
+	if err != nil {
+		logging.Errorf("Error finding %ss to update: %v", deviceType, err)
+		return fmt.Errorf("error finding %ss to update: %v", deviceType, err)
+	}
 
-		// Filter to only update devices that are in inventory
+	// Filter to only update devices that are in inventory
+	if inventoryCheckerForFilter != nil {
+		devicesToUpdate = inventoryCheckerForFilter.FilterByInventory(devicesToUpdate)
+	}
+
+	// force re-pushes intent to every configured (in-inventory) device, even
+	// where the comparison found no difference — a deliberate "apply anyway".
+	if force {
+		devicesToUpdate = configuredDevicesFiltered
 		if inventoryCheckerForFilter != nil {
 			devicesToUpdate = inventoryCheckerForFilter.FilterByInventory(devicesToUpdate)
 		}
+	}
 
-		if len(devicesToUpdate) > 0 {
-			logging.Infof("Found %d %ss to update in site %s", len(devicesToUpdate), deviceType, siteName)
-		}
-	} else {
-		logging.Debugf("Skipping device update detection - no config file changes")
+	if len(devicesToUpdate) > 0 {
+		logging.Infof("Found %d %ss to update in site %s", len(devicesToUpdate), deviceType, siteName)
 	}
 
 	// Step 9.5: Apply all changes (unassign, assign, update)
