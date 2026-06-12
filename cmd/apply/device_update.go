@@ -350,9 +350,13 @@ func compareDeviceConfigsWithManagedKeys(current, desired map[string]any, manage
 	return false
 }
 
-// compareNestedMaps recursively compares nested map structures
+// compareNestedMaps reports whether the running config diverges from intent within a
+// managed object, using subset semantics: intent declares only the fields it manages,
+// while the API returns the full object including read-only echoes (e.g. a radio
+// block's serial) and auto/empty sub-blocks. A running config realizes intent when
+// every declared field matches; fields present only in the running config are not
+// drift, so a partial intent does not read as perpetually divergent.
 func compareNestedMaps(current, desired map[string]any) bool {
-	// Check all desired fields exist and match in current
 	for key, desiredValue := range desired {
 		currentValue, exists := current[key]
 		if !exists {
@@ -373,13 +377,6 @@ func compareNestedMaps(current, desired map[string]any) bool {
 			if fmt.Sprintf("%v", currentValue) != fmt.Sprintf("%v", desiredValue) {
 				return true
 			}
-		}
-	}
-
-	// Check if current has fields not in desired
-	for key := range current {
-		if _, exists := desired[key]; !exists {
-			return true
 		}
 	}
 
