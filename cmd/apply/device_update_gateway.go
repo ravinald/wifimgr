@@ -164,7 +164,7 @@ func (g *GatewayUpdater) FindDevicesToUpdate(ctx context.Context, client vendors
 }
 
 // UpdateDeviceConfigurations applies configuration updates to Gateways
-func (g *GatewayUpdater) UpdateDeviceConfigurations(ctx context.Context, client vendors.Client, cfg *config.Config, siteConfig SiteConfig, macs []string, siteID string, apiLabel string) error {
+func (g *GatewayUpdater) UpdateDeviceConfigurations(ctx context.Context, client vendors.Client, cfg *config.Config, siteConfig SiteConfig, macs []string, siteID string, apiLabel string) ([]string, error) {
 	logging.Infof("Updating configuration for %d gateways in site %s", len(macs), siteID)
 
 	// Reuse existing batch loader if available (from FindDevicesToUpdate), otherwise create new one
@@ -173,7 +173,7 @@ func (g *GatewayUpdater) UpdateDeviceConfigurations(ctx context.Context, client 
 		var err error
 		batchLoader, err = NewDeviceBatchLoader(ctx, client, siteID, g.deviceType)
 		if err != nil {
-			return fmt.Errorf("failed to create batch loader: %w", err)
+			return nil, fmt.Errorf("failed to create batch loader: %w", err)
 		}
 		logging.Debugf("Batch loader created with %d devices", batchLoader.GetDeviceCount())
 	} else {
@@ -195,7 +195,7 @@ func (g *GatewayUpdater) UpdateDeviceConfigurations(ctx context.Context, client 
 		for _, mac := range macs {
 			if !inventoryChecker.IsInInventory(mac) {
 				logging.Errorf("SAFETY CHECK FAILED: Device %s is not in inventory - refusing to update", mac)
-				return fmt.Errorf("device %s is not in inventory - refusing to update for safety", mac)
+				return nil, fmt.Errorf("device %s is not in inventory - refusing to update for safety", mac)
 			}
 		}
 	}
@@ -212,6 +212,7 @@ func (g *GatewayUpdater) UpdateDeviceConfigurations(ctx context.Context, client 
 
 	var failedDevices []string
 	successCount := 0
+	succeeded := make([]string, 0, len(macs))
 
 	// Build profile name-to-ID map ONCE before processing devices
 	profileNameToID, err := buildProfileNameToIDMap(ctx, client, cfg.API.Credentials.OrgID)
@@ -282,7 +283,7 @@ func (g *GatewayUpdater) UpdateDeviceConfigurations(ctx context.Context, client 
 
 		lc := legacyClient(client)
 		if lc == nil {
-			return fmt.Errorf("gateway apply requires the Mist API; not supported for this vendor")
+			return nil, fmt.Errorf("gateway apply requires the Mist API; not supported for this vendor")
 		}
 		updatedResult, err := lc.UpdateDevice(ctx, siteID, deviceID, &updatedDevice)
 		if err != nil {
@@ -294,6 +295,7 @@ func (g *GatewayUpdater) UpdateDeviceConfigurations(ctx context.Context, client 
 		if updatedResult != nil {
 			logging.Infof("%s Successfully updated configuration for Gateway %s (Name: %s)", symbols.SuccessPrefix(), mac, deviceName)
 			successCount++
+			succeeded = append(succeeded, mac)
 
 			configFields := len(filteredConfig)
 			logging.Debugf("Applied %d configuration fields to Gateway %s", configFields, mac)
@@ -312,12 +314,12 @@ func (g *GatewayUpdater) UpdateDeviceConfigurations(ctx context.Context, client 
 			logging.Errorf("  - Failed device: %s", failedMAC)
 		}
 		logging.Errorf("Tip: To restore previous config, use: apply rollback %s", siteName)
-		return fmt.Errorf("configuration failed for %d out of %d devices", len(failedDevices), len(macs))
+		return succeeded, fmt.Errorf("configuration failed for %d out of %d devices", len(failedDevices), len(macs))
 	}
 
 	logging.Infof("%s Completed configuration updates for %d gateways in site %s (%d successful, %d failed)",
 		symbols.SuccessPrefix(), len(macs), siteID, successCount, len(failedDevices))
-	return nil
+	return succeeded, nil
 }
 
 // GetDeviceConfigFromSite extracts Gateway-specific config from site configuration

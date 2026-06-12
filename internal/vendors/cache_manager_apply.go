@@ -6,6 +6,35 @@ import (
 	"time"
 )
 
+// RefreshDeviceConfigs re-fetches the given devices' running config through the
+// manager and rebuilds the accessor's in-memory indexes, so callers that read back
+// through the accessor (e.g. apply's verify step) see the fresh values in the same
+// process. Delegating method so cmd/apply, which only reaches the global accessor,
+// can drive the post-push re-fetch.
+func (ca *CacheAccessor) RefreshDeviceConfigs(ctx context.Context, apiLabel string, macsByType map[string][]string) error {
+	if ca.manager == nil {
+		return fmt.Errorf("cache accessor has no manager")
+	}
+	if err := ca.manager.RefreshDeviceConfigs(ctx, apiLabel, macsByType); err != nil {
+		return err
+	}
+	ca.RebuildIndexes()
+	return nil
+}
+
+// SetDeviceApplyState records the apply outcome on cached configs through the manager
+// and rebuilds the accessor's indexes so the new state is visible in-process.
+func (ca *CacheAccessor) SetDeviceApplyState(apiLabel string, macsByType map[string][]string, appliedAt time.Time, state string) error {
+	if ca.manager == nil {
+		return fmt.Errorf("cache accessor has no manager")
+	}
+	if err := ca.manager.SetDeviceApplyState(apiLabel, macsByType, appliedAt, state); err != nil {
+		return err
+	}
+	ca.RebuildIndexes()
+	return nil
+}
+
 // RefreshDeviceConfigs re-fetches the running config for specific devices (keyed by
 // device type → MACs) within a site and caches it with a fresh RefreshedAt. It is the
 // read-back apply's verify step uses to capture ground truth for just the pushed
