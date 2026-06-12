@@ -158,6 +158,12 @@ func ConfigureLogging(config LogConfig) error {
 		if err != nil {
 			return fmt.Errorf("failed to open log file: %w", err)
 		}
+		// O_CREATE only applies the mode when the file is new; an existing log keeps its
+		// old (possibly world-readable) permissions. Force 0600 — debug runs append full
+		// request/response diagnostics here.
+		if err := os.Chmod(config.LogFile, 0600); err != nil {
+			return fmt.Errorf("failed to secure log file permissions: %w", err)
+		}
 
 		if config.ToStdout {
 			// Tee diagnostics to the console (stderr) as well as the file.
