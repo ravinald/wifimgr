@@ -28,6 +28,34 @@ func RefreshAPICacheForApply(ctx context.Context, apiLabel string) error {
 	return nil
 }
 
+// RefreshSiteForApply refreshes only the target site's managed devices before an
+// apply. Apply touches one site, and an org-wide refresh is the dominant cost on
+// Meraki (hundreds of per-device config fetches), so apply scopes to the site.
+func RefreshSiteForApply(ctx context.Context, siteName, apiLabel string) error {
+	cacheMgr := GetCacheManager()
+	if cacheMgr == nil {
+		return fmt.Errorf("cache manager not initialized")
+	}
+
+	site, err := resolveSiteForRefresh(siteName, apiLabel)
+	if err != nil {
+		return err
+	}
+
+	managed, err := managedMACs([]string{site.Name})
+	if err != nil {
+		return err
+	}
+
+	cmdutils.Noticef("Refreshing %s cache for site %s to get current running config...", site.SourceAPI, site.Name)
+	if err := cacheMgr.RefreshAPISite(ctx, site.SourceAPI, site.ID, managed); err != nil {
+		return fmt.Errorf("failed to refresh %s for site %s: %w", site.SourceAPI, site.Name, err)
+	}
+	cmdutils.Noticef("Cache refreshed successfully")
+
+	return nil
+}
+
 // ResolveAPIForSite determines which API to use for a site based on:
 // 1. target keyword override (with warning if different from config)
 // 2. Site config's api field
