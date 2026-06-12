@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/ravinald/wifimgr/internal/common"
 	"github.com/ravinald/wifimgr/internal/logging"
 )
 
@@ -101,7 +102,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, query url.V
 			return nil, resp, fmt.Errorf("API error: %s (status %d, body: %s)", resp.Status, resp.StatusCode, truncate(string(body), 200))
 		}
 
-		logging.Debugf("[ubiquiti] Response body (first 1000 chars): %s", truncate(string(body), 1000))
+		logging.Debugf("[ubiquiti] Response body (first 1000 chars): %s", common.RedactJSON([]byte(truncate(string(body), 1000))))
 
 		var apiResp apiResponse
 		if err := json.Unmarshal(body, &apiResp); err != nil {

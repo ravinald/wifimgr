@@ -28,6 +28,24 @@ type ValidationWarning struct {
 	Message string // Human-readable message
 }
 
+// validAPILabel reports whether label is safe to use as a cache/import file-name
+// component. Only letters, digits, '.', '_', and '-' are allowed — a path separator
+// or a bare "." / ".." would let a crafted config write outside the cache directory.
+func validAPILabel(label string) bool {
+	if label == "" || label == "." || label == ".." {
+		return false
+	}
+	for _, r := range label {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '.' || r == '_' || r == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // BuildAPIConfigsFromViper constructs APIConfig objects from Viper configuration.
 // Config format: api.<label>.* where each label has vendor, url, credentials, etc.
 func BuildAPIConfigsFromViper() (map[string]*vendors.APIConfig, []ValidationWarning) {
@@ -43,6 +61,17 @@ func BuildAPIConfigsFromViper() (map[string]*vendors.APIConfig, []ValidationWarn
 	// Note: We read directly from the map because viper.GetString("api.label.field")
 	// doesn't work properly after GetStringMap - Viper doesn't register nested keys
 	for label, value := range apiSection {
+		// The label becomes a cache/import file name (apis/<label>.json). Reject anything
+		// that could escape that directory before it reaches filepath.Join.
+		if !validAPILabel(label) {
+			warnings = append(warnings, ValidationWarning{
+				Level:   "api",
+				API:     label,
+				Message: fmt.Sprintf("API %q has an invalid name (allowed: letters, digits, '.', '_', '-')", label),
+			})
+			continue
+		}
+
 		nested, ok := value.(map[string]interface{})
 		if !ok {
 			warnings = append(warnings, ValidationWarning{

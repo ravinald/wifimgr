@@ -60,7 +60,9 @@ func NewCacheManager(cacheDir string, registry *APIClientRegistry) *CacheManager
 func (c *CacheManager) Initialize() error {
 	// Create cache/apis directory
 	apisDir := filepath.Join(c.cacheDir, "apis")
-	if err := os.MkdirAll(apisDir, 0755); err != nil {
+	// 0700: cache holds org IDs, full MAC inventory, and site topology — infrastructure
+	// enumeration data that other local users have no business reading.
+	if err := os.MkdirAll(apisDir, 0700); err != nil {
 		return fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
@@ -165,7 +167,7 @@ func (c *CacheManager) saveAPICacheLocked(cache *APICache) error {
 		return fmt.Errorf("failed to marshal cache: %w", err)
 	}
 
-	if err := helpers.WriteFileAtomic(cachePath, data, 0644); err != nil {
+	if err := helpers.WriteFileAtomic(cachePath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write cache: %w", err)
 	}
 
