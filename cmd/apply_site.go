@@ -91,7 +91,7 @@ Examples:
 
 		// Refresh API cache unless no-refresh is specified
 		if !opts.NoRefresh {
-			if err := RefreshAPICacheForApply(globalContext, apiLabel); err != nil {
+			if err := RefreshSiteForApply(globalContext, siteName, apiLabel); err != nil {
 				return err
 			}
 
@@ -158,7 +158,7 @@ Options:
 		fmt.Printf("Applying AP config to site '%s' via API '%s'\n", siteName, apiLabel)
 
 		if !opts.NoRefresh {
-			if err := RefreshAPICacheForApply(globalContext, apiLabel); err != nil {
+			if err := RefreshSiteForApply(globalContext, siteName, apiLabel); err != nil {
 				return err
 			}
 			fetchCount, err := EnsureDeviceConfigsForSite(globalContext, apiLabel, siteName, "ap", nil)
@@ -221,7 +221,7 @@ Options:
 		fmt.Printf("Applying switch config to site '%s' via API '%s'\n", siteName, apiLabel)
 
 		if !opts.NoRefresh {
-			if err := RefreshAPICacheForApply(globalContext, apiLabel); err != nil {
+			if err := RefreshSiteForApply(globalContext, siteName, apiLabel); err != nil {
 				return err
 			}
 			fetchCount, err := EnsureDeviceConfigsForSite(globalContext, apiLabel, siteName, "switch", nil)
@@ -284,7 +284,7 @@ Options:
 		fmt.Printf("Applying gateway config to site '%s' via API '%s'\n", siteName, apiLabel)
 
 		if !opts.NoRefresh {
-			if err := RefreshAPICacheForApply(globalContext, apiLabel); err != nil {
+			if err := RefreshSiteForApply(globalContext, siteName, apiLabel); err != nil {
 				return err
 			}
 			fetchCount, err := EnsureDeviceConfigsForSite(globalContext, apiLabel, siteName, "gateway", nil)
@@ -352,7 +352,7 @@ Options:
 		fmt.Printf("Applying all configs to site '%s' via API '%s'\n", siteName, apiLabel)
 
 		if !opts.NoRefresh {
-			if err := RefreshAPICacheForApply(globalContext, apiLabel); err != nil {
+			if err := RefreshSiteForApply(globalContext, siteName, apiLabel); err != nil {
 				return err
 			}
 		}
