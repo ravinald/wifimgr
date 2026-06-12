@@ -19,6 +19,13 @@ import (
 // createRotatedBackup function removed - legacy backup format no longer used
 // Backups are now created by createConfigBackupAfterApply in the format: <config-filename>.json.<index>
 
+// CreateConfigBackup writes a rotated backup of an intent config file in the
+// same format apply rollback consumes. It exists so mutators outside the push
+// path (the set command) leave a recoverable backup through one shared scheme.
+func CreateConfigBackup(cfg *config.Config, configFilePath string) error {
+	return createConfigBackupAfterApply(cfg, "", configFilePath)
+}
+
 // rotateConfigFileBackups rotates existing backup files for a config file
 func rotateConfigFileBackups(backupDir string, baseFileName string, maxBackups int) error {
 	// Get all backup files for this config file
