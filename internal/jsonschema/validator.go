@@ -11,6 +11,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v5"
 
 	"github.com/ravinald/wifimgr/internal/logging"
+	"github.com/ravinald/wifimgr/internal/schemadefs"
 )
 
 // Validator provides JSON schema validation functionality
@@ -35,42 +36,36 @@ func New(schemaDir string) *Validator {
 // name is a unique identifier for the schema
 // schemaPath is the path to the schema file relative to the schema directory
 func (v *Validator) LoadSchema(name, schemaPath string) error {
-	// Resolve full path
+	// A schemaDir copy wins when present, so an operator can override the
+	// shipped schema; otherwise fall back to the schema embedded in the binary,
+	// which is always available and removes the out-of-band install dependency.
 	fullPath := filepath.Join(v.schemaDir, schemaPath)
+	resourceID := fullPath
 
-	// Check if schema file exists
-	_, err := os.Stat(fullPath)
-	if err != nil {
-		return fmt.Errorf("schema file %s does not exist: %w", fullPath, err)
+	var schemaData []byte
+	if data, err := os.ReadFile(fullPath); err == nil { // #nosec G304 -- path from operator-controlled config
+		schemaData = data
+	} else if embedded, embErr := schemadefs.Read(schemaPath); embErr == nil {
+		schemaData = embedded
+		resourceID = "embedded://" + schemaPath
+	} else {
+		return fmt.Errorf("schema %q not found on disk (%s) or embedded: %w", schemaPath, fullPath, err)
 	}
 
-	// Load schema
 	compiler := jsonschema.NewCompiler()
-
-	// Set draft version
 	compiler.Draft = jsonschema.Draft7
 
-	// Load schema file
-	schemaData, err := os.ReadFile(fullPath) // #nosec G304 -- path from operator-controlled config
-	if err != nil {
-		return fmt.Errorf("failed to read schema file %s: %w", fullPath, err)
-	}
-
-	// Add schema - convert bytes to string for compiler.AddResource
-	schemaStr := string(schemaData)
-	if err := compiler.AddResource(fullPath, strings.NewReader(schemaStr)); err != nil {
+	if err := compiler.AddResource(resourceID, strings.NewReader(string(schemaData))); err != nil {
 		return fmt.Errorf("failed to compile schema %s: %w", name, err)
 	}
 
-	// Compile the schema
-	schema, err := compiler.Compile(fullPath)
+	schema, err := compiler.Compile(resourceID)
 	if err != nil {
 		return fmt.Errorf("failed to compile schema %s: %w", name, err)
 	}
 
-	// Store the compiled schema
 	v.schemas[name] = schema
-	logging.Debugf("Loaded schema %s from %s", name, fullPath)
+	logging.Debugf("Loaded schema %s from %s", name, resourceID)
 
 	return nil
 }
