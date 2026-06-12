@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/ravinald/jsondiff/pkg/jsondiff"
 	"github.com/spf13/viper"
@@ -33,6 +34,41 @@ func NewAPUpdater() *APUpdater {
 	return &APUpdater{
 		BaseDeviceUpdater: NewBaseDeviceUpdater("ap"),
 	}
+}
+
+// applicableDesiredConfig resolves a device's intent (templates expanded) and filters
+// it to the fields the target API and device can actually apply, returning the filtered
+// config and the dotted names skipped as not applicable. Apply sends and compares only
+// the applicable subset, so a site-wide field an API or device cannot honor (e.g. 6 GHz
+// on the Meraki integration) is skipped — not failed, and not perpetual drift.
+func applicableDesiredConfig(updater DeviceUpdater, siteConfig SiteConfig, mac, vendorName, deviceType string) (map[string]any, []string, bool) {
+	cfg, ok := updater.GetDeviceConfigFromSite(siteConfig, mac)
+	if !ok {
+		return nil, nil, false
+	}
+	if expanded, err := expandDeviceConfigWithTemplates(cfg, siteConfig); err == nil {
+		cfg = expanded
+	}
+	if vendorName == "meraki" && deviceType == "ap" {
+		filtered, skipped := meraki.FilterApplicableRadio(cfg)
+		return filtered, skipped, true
+	}
+	return cfg, nil, true
+}
+
+// reportSkippedFields prints, by default (not gated behind debug), the configured
+// fields that did not apply to a device's API/hardware and were skipped. It is
+// informational — apply continues and exits clean — so an operator sees a site-wide
+// setting land only where it can.
+func reportSkippedFields(deviceType string, skippedByMAC map[string][]string, nameFor func(string) string) {
+	if len(skippedByMAC) == 0 {
+		return
+	}
+	fmt.Printf("\n%s Some configured %s fields do not apply to the target API/device and were skipped:\n", symbols.WarningPrefix(), deviceType)
+	for mac, fields := range skippedByMAC {
+		fmt.Printf("  - %s: %s\n", nameFor(mac), strings.Join(fields, ", "))
+	}
+	fmt.Println()
 }
 
 // GetConfiguredDevices extracts AP MAC addresses from site configuration
@@ -104,23 +140,20 @@ func (a *APUpdater) FindDevicesToUpdate(ctx context.Context, client vendors.Clie
 
 	// Get managed keys for AP devices from the API-specific config
 	managedKeys := getManagedKeysForDevice(apiLabel, "ap")
+	vendorName := config.GetVendorFromAPILabel(apiLabel)
 
 	apsToUpdate := make([]string, 0)
+	skippedByMAC := make(map[string][]string)
 
 	for _, mac := range configuredAPs {
-		// Get desired config from site configuration
-		desiredConfig, found := a.GetDeviceConfigFromSite(siteConfig, mac)
+		// Desired config, templates expanded and filtered to what this API/device can apply.
+		desiredConfig, skipped, found := applicableDesiredConfig(a, siteConfig, mac, vendorName, "ap")
 		if !found {
 			logging.Warnf("AP %s is in the list but not found in site configuration", mac)
 			continue
 		}
-
-		// Expand template references (radio_profile, device_template, wlans)
-		expandedConfig, err := expandDeviceConfigWithTemplates(desiredConfig, siteConfig)
-		if err != nil {
-			logging.Warnf("Error expanding templates for AP %s: %v - using unexpanded config", mac, err)
-		} else {
-			desiredConfig = expandedConfig
+		if len(skipped) > 0 {
+			skippedByMAC[mac] = skipped
 		}
 
 		// Get current device state
@@ -163,6 +196,13 @@ func (a *APUpdater) FindDevicesToUpdate(ctx context.Context, client vendors.Clie
 			logging.Debugf("AP %s configuration is up to date", mac)
 		}
 	}
+
+	reportSkippedFields("ap", skippedByMAC, func(mac string) string {
+		if d, err := batchLoader.GetDeviceByMAC(mac); err == nil && d.Name != nil && *d.Name != "" {
+			return fmt.Sprintf("%s (%s)", *d.Name, mac)
+		}
+		return mac
+	})
 
 	return apsToUpdate, nil
 }
@@ -229,19 +269,15 @@ func (a *APUpdater) UpdateDeviceConfigurations(ctx context.Context, client vendo
 		profileNameToID = make(map[string]string) // Empty map to avoid nil checks
 	}
 
+	vendorNameForFilter := config.GetVendorFromAPILabel(apiLabel)
+
 	for _, mac := range macs {
-		apConfig, found := a.GetDeviceConfigFromSite(siteConfig, mac)
+		// Intent expanded and filtered to the fields this API/device can apply, so the
+		// push carries only applicable fields (matching the diff and verify comparison).
+		apConfig, _, found := applicableDesiredConfig(a, siteConfig, mac, vendorNameForFilter, "ap")
 		if !found {
 			logging.Warnf("AP %s is in the list to update but not found in site configuration", mac)
 			continue
-		}
-
-		// Expand template references (radio_profile, device_template, wlans)
-		expandedConfig, err := expandDeviceConfigWithTemplates(apConfig, siteConfig)
-		if err != nil {
-			logging.Warnf("Error expanding templates for AP %s: %v - using unexpanded config", mac, err)
-		} else {
-			apConfig = expandedConfig
 		}
 
 		device, err := batchLoader.GetDeviceByMAC(mac)

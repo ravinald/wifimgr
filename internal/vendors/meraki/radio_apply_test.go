@@ -4,9 +4,9 @@ import (
 	"testing"
 )
 
-// TestExtractMerakiRadioBody_PassesThroughFullShape proves the radio push is not
-// truncated to the SDK's typed 2.4/5 GHz subset — 6 GHz, flex-radio, per-SSID, and
-// bitrate fields survive because the raw radio_settings block passes through verbatim.
+// TestExtractMerakiRadioBody_PassesThroughFullShape proves extraction carries the raw
+// radio_settings block verbatim (the applicable-field filter runs downstream): the read
+// path keeps every band, so the apply layer decides what to send and what to skip.
 func TestExtractMerakiRadioBody_PassesThroughFullShape(t *testing.T) {
 	config := map[string]any{
 		"name": "ap-1",
@@ -82,10 +82,10 @@ func TestExtractMerakiRadioBody_NoneWhenAbsentOrEmpty(t *testing.T) {
 	}
 }
 
-// TestBuildRadioRequest_TypedSubsetAndDeferral proves the SDK's typed request carries
-// 2.4/5 GHz + rfProfile, and that 6 GHz/flex/per-SSID surface as deferred (logged, not
-// silently dropped) until the bolt-on lands.
-func TestBuildRadioRequest_TypedSubsetAndDeferral(t *testing.T) {
+// TestBuildRadioRequest_SendsApplicableSubset proves the SDK's typed request carries
+// the allowlisted 2.4/5 GHz + rfProfile fields and silently leaves the rest to the
+// apply-layer filter (it builds only from what it can express).
+func TestBuildRadioRequest_SendsApplicableSubset(t *testing.T) {
 	body := map[string]any{
 		"rfProfileId":        "12345",
 		"twoFourGhzSettings": map[string]any{"channel": 6, "targetPower": 12},
@@ -94,7 +94,7 @@ func TestBuildRadioRequest_TypedSubsetAndDeferral(t *testing.T) {
 		"flexRadioBand":      "six",
 	}
 
-	req, deferred := buildRadioRequest(body)
+	req := buildRadioRequest(body)
 	if req == nil {
 		t.Fatal("request should be populated from 2.4/5 GHz + rfProfile")
 	}
@@ -108,25 +108,72 @@ func TestBuildRadioRequest_TypedSubsetAndDeferral(t *testing.T) {
 	if req.FiveGhzSettings == nil || req.FiveGhzSettings.ChannelWidth == nil || *req.FiveGhzSettings.ChannelWidth != 80 {
 		t.Errorf("5 GHz channelWidth not coerced to 80: %+v", req.FiveGhzSettings)
 	}
+}
 
-	want := map[string]bool{"sixGhzSettings": true, "flexRadioBand": true}
-	if len(deferred) != len(want) {
-		t.Fatalf("deferred = %v, want keys %v", deferred, want)
+func TestBuildRadioRequest_NilWhenNothingApplicable(t *testing.T) {
+	if req := buildRadioRequest(map[string]any{"sixGhzSettings": map[string]any{"channel": 37}}); req != nil {
+		t.Error("request should be nil when only inapplicable fields (6 GHz) are present")
 	}
-	for _, k := range deferred {
-		if !want[k] {
-			t.Errorf("unexpected deferred field %q", k)
+}
+
+// TestUnsupportedRadioFields_DefaultDeny proves detection is allowlist-based: known
+// 2.4/5 GHz + rfProfile pass, while unknown top-level blocks AND unmapped sub-fields of
+// a known band surface — so a new API field is caught, not silently dropped.
+func TestUnsupportedRadioFields_DefaultDeny(t *testing.T) {
+	body := map[string]any{
+		"rfProfileId":        "12345",
+		"serial":             "Q2ZD-BQ32-KPNP", // read-only echo, ignored
+		"twoFourGhzSettings": map[string]any{"channel": 6, "targetPower": 12},
+		"fiveGhzSettings":    map[string]any{"channel": 149, "minBitrate": 12}, // minBitrate unmapped
+		"sixGhzSettings":     map[string]any{"channel": 37},
+		"flexRadioBand":      "six",
+	}
+
+	got := unsupportedRadioFields(body)
+	want := []string{"fiveGhzSettings.minBitrate", "flexRadioBand", "sixGhzSettings"} // sorted
+	if len(got) != len(want) {
+		t.Fatalf("unsupportedRadioFields = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("unsupportedRadioFields[%d] = %q, want %q", i, got[i], want[i])
 		}
 	}
 }
 
-func TestBuildRadioRequest_NilWhenOnlyDeferred(t *testing.T) {
-	req, deferred := buildRadioRequest(map[string]any{"sixGhzSettings": map[string]any{"channel": 37}})
-	if req != nil {
-		t.Error("request should be nil when only 6 GHz is present (nothing the typed request can send)")
+func TestFilterApplicableRadio(t *testing.T) {
+	config := map[string]any{
+		"name": "ap-1",
+		"radio_settings": map[string]any{
+			"fiveGhzSettings": map[string]any{"channel": 40, "minBitrate": 12},
+			"sixGhzSettings":  map[string]any{"channel": 37},
+		},
 	}
-	if len(deferred) != 1 || deferred[0] != "sixGhzSettings" {
-		t.Errorf("deferred = %v, want [sixGhzSettings]", deferred)
+
+	filtered, skipped := FilterApplicableRadio(config)
+	rs := filtered["radio_settings"].(map[string]any)
+	if _, ok := rs["sixGhzSettings"]; ok {
+		t.Error("6 GHz block should be filtered out")
+	}
+	five := rs["fiveGhzSettings"].(map[string]any)
+	if _, ok := five["minBitrate"]; ok {
+		t.Error("unmapped 5 GHz sub-field should be filtered out")
+	}
+	if five["channel"] != 40 {
+		t.Errorf("applicable 5 GHz channel should survive, got %v", five["channel"])
+	}
+	want := map[string]bool{"radio_settings.sixGhzSettings": true, "radio_settings.fiveGhzSettings.minBitrate": true}
+	if len(skipped) != len(want) {
+		t.Fatalf("skipped = %v, want %v", skipped, want)
+	}
+	for _, s := range skipped {
+		if !want[s] {
+			t.Errorf("unexpected skipped field %q", s)
+		}
+	}
+	// Input must not be mutated.
+	if _, ok := config["radio_settings"].(map[string]any)["sixGhzSettings"]; !ok {
+		t.Error("FilterApplicableRadio must not mutate its input")
 	}
 }
 

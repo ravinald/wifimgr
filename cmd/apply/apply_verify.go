@@ -51,6 +51,7 @@ func recordApplyOutcome(ctx context.Context, client vendors.Client, updater Devi
 	}
 
 	managedKeys := getManagedKeysForDevice(apiLabel, deviceType)
+	vendorName := config.GetVendorFromAPILabel(apiLabel)
 	remaining := append([]string{}, succeeded...)
 	for attempt := 0; attempt < verifyAttempts && len(remaining) > 0; attempt++ {
 		if err := accessor.RefreshDeviceConfigs(ctx, apiLabel, map[string][]string{deviceType: remaining}); err != nil {
@@ -62,7 +63,7 @@ func recordApplyOutcome(ctx context.Context, client vendors.Client, updater Devi
 		}
 		still := make([]string, 0, len(remaining))
 		for _, mac := range remaining {
-			if deviceStillDiverges(updater, batchLoader, siteConfig, mac, managedKeys) {
+			if deviceStillDiverges(updater, batchLoader, siteConfig, mac, vendorName, deviceType, managedKeys) {
 				still = append(still, mac)
 			}
 		}
@@ -93,14 +94,13 @@ func recordApplyOutcome(ctx context.Context, client vendors.Client, updater Devi
 }
 
 // deviceStillDiverges reports whether the re-fetched running config for mac still
-// differs from intent across the managed keys — i.e. the push did not realize intent.
-func deviceStillDiverges(updater DeviceUpdater, batchLoader *DeviceBatchLoader, siteConfig SiteConfig, mac string, managedKeys []string) bool {
-	desired, ok := updater.GetDeviceConfigFromSite(siteConfig, mac)
+// differs from the applicable intent across the managed keys — i.e. the push did not
+// realize what it could apply. Fields the API/device cannot honor are filtered out, so
+// a knowingly-skipped field (e.g. 6 GHz on Meraki) does not read as divergence.
+func deviceStillDiverges(updater DeviceUpdater, batchLoader *DeviceBatchLoader, siteConfig SiteConfig, mac, vendorName, deviceType string, managedKeys []string) bool {
+	desired, _, ok := applicableDesiredConfig(updater, siteConfig, mac, vendorName, deviceType)
 	if !ok {
 		return false
-	}
-	if expanded, err := expandDeviceConfigWithTemplates(desired, siteConfig); err == nil {
-		desired = expanded
 	}
 	device, err := batchLoader.GetDeviceByMAC(mac)
 	if err != nil {
