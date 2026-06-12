@@ -24,6 +24,10 @@ type APUpdater struct {
 	batchLoader *DeviceBatchLoader // Reusable batch loader for device lookups
 }
 
+func init() {
+	RegisterDeviceType("ap", func() DeviceUpdater { return NewAPUpdater() })
+}
+
 // NewAPUpdater creates a new AP updater
 func NewAPUpdater() *APUpdater {
 	return &APUpdater{

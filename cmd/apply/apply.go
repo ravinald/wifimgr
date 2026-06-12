@@ -79,17 +79,15 @@ func HandleCommand(ctx context.Context, client api.Client, cfg *config.Config, a
 	deviceType := command
 	logging.Infof("Executing apply command for site: %s, device type: %s, API: %s", siteName, deviceType, apiLabel)
 
-	// Handle the "all" case - currently only AP is supported
+	// The bulk "all" path applies APs only. Switch and gateway configs are
+	// applied through their explicit subcommands (apply site X switch|gateway),
+	// keeping a one-word command from silently rewriting non-AP infrastructure.
 	if deviceType == "all" {
-		// Apply AP configuration (only supported device type)
 		if err := applyDeviceToSite(ctx, client, cfg, siteName, "ap", apiLabel, force, diffMode, refreshAPI); err != nil {
 			logging.Errorf("Error applying AP configuration to site %s: %v", siteName, err)
 			return fmt.Errorf("AP apply error: %w", err)
 		}
-
-		// Note: Switch and gateway support planned for future release
-		logging.Debugf("Skipping switch and gateway - not yet supported")
-
+		logging.Debugf("Bulk 'all' applies APs only; use 'apply site %s switch|gateway' for other types", siteName)
 		return nil
 	}
 
