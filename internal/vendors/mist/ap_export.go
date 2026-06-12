@@ -217,6 +217,9 @@ func exportRadioConfig(raw map[string]any) *vendors.RadioConfig {
 	if band6, ok := raw["band_6"].(map[string]any); ok {
 		rc.Band6 = exportRadioBandConfig(band6)
 	}
+	if bandDual, ok := raw["band_dual"].(map[string]any); ok {
+		rc.BandDual = exportDualBandConfig(bandDual)
+	}
 
 	// Extract Mist-specific radio fields
 	for key, value := range raw {
@@ -280,6 +283,39 @@ func exportRadioBandConfig(raw map[string]any) *vendors.RadioBandConfig {
 	}
 
 	return bc
+}
+
+// exportDualBandConfig converts a raw band_dual config to structured DualBandConfig.
+// Mist reports dual/flex radios under band_dual; dropping it on import made a
+// freshly-imported config diverge from the running config on the next apply.
+func exportDualBandConfig(raw map[string]any) *vendors.DualBandConfig {
+	if raw == nil {
+		return nil
+	}
+
+	dc := &vendors.DualBandConfig{}
+
+	if v, ok := raw["disabled"].(bool); ok {
+		dc.Disabled = &v
+	}
+	if v, ok := raw["radio_mode"].(float64); ok {
+		mode := int(v)
+		dc.RadioMode = &mode
+	}
+	if v, ok := raw["channel"].(float64); ok {
+		ch := int(v)
+		dc.Channel = &ch
+	}
+	if v, ok := raw["power"].(float64); ok {
+		p := int(v)
+		dc.Power = &p
+	}
+	if v, ok := raw["bandwidth"].(float64); ok {
+		bw := int(v)
+		dc.Bandwidth = &bw
+	}
+
+	return dc
 }
 
 // exportIPConfig converts raw IP config to structured IPConfig.
