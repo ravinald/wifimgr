@@ -218,7 +218,7 @@ func LoadAllConfigsViper(configFile string) ([]*SiteConfigFile, error) {
 				configName = siteName
 			}
 
-			duplicateTracker.CheckAndAdd("site_config", "", configName, siteConfigFile, line)
+			duplicateTracker.CheckAndAdd("site_config", "", configName, siteObj.API, siteConfigFile, line)
 
 			// Add to site index (case-insensitive lookup)
 			lowerName := strings.ToLower(configName)
@@ -270,7 +270,7 @@ func LoadAllConfigsViper(configFile string) ([]*SiteConfigFile, error) {
 				configName = siteName
 			}
 
-			duplicateTracker.CheckAndAdd("site_config", "", configName, rel, line)
+			duplicateTracker.CheckAndAdd("site_config", "", configName, siteObj.API, rel, line)
 
 			lowerName := strings.ToLower(configName)
 			siteIndex.SiteToFile[lowerName] = rel
