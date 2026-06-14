@@ -53,7 +53,7 @@ const (
 
 // importAPISiteCmd represents the "import api site" command
 var importAPISiteCmd = &cobra.Command{
-	Use:   "site [api <api-label>] <site-name> [config|inventory|all] [full|type <scope>] [secrets] [compare] [save] [file <filename>]",
+	Use:   "site <site-name> [config|inventory|all] [full|type <scope>] [source <api-label>] [secrets] [compare] [save] [file <filename>]",
 	Short: "Import site configuration from API cache",
 	Long: `Import site configuration from the API cache.
 
@@ -78,9 +78,9 @@ Basic Usage:
   wifimgr import api site US-SFO-LAB type ap
   wifimgr import api site US-SFO-LAB compare
 
-With Explicit API (when site exists in multiple APIs):
-  wifimgr import api site api mist-prod US-SFO-LAB
-  wifimgr import api site api meraki US-SFO-LAB save
+With Explicit API (when a site name exists in multiple APIs):
+  wifimgr import api site US-SFO-LAB source mist-prod
+  wifimgr import api site US-SFO-LAB source meraki save
 
 With Custom Output File:
   wifimgr import api site US-SFO-LAB save file custom.json
@@ -88,13 +88,14 @@ With Custom Output File:
   wifimgr import api site US-SFO-LAB save file /tmp/site.json
 
 Combined Options:
-  wifimgr import api site api mist-prod US-SFO-LAB save file import/sfo.json
+  wifimgr import api site US-SFO-LAB source mist-prod save file import/sfo.json
   wifimgr import api site US-SFO-LAB type wlans secrets save
   wifimgr import api site US-SFO-LAB | jq '.config'
 
 Arguments:
-  api            Optional. Keyword followed by API label to target specific API
   site-name      Required. The site name to import
+  source <label> Optional. Keyword + API label to import from, when a site name
+                 spans multiple APIs (e.g. the same name on Mist and Aruba)
   config         Optional. Import the configuration envelope (default)
   inventory      Optional. Arm discovered devices into inventory.json
   all            Optional. Import config and arm inventory
@@ -171,23 +172,10 @@ func parseImportSiteArgs(args []string) (*importSiteArgs, error) {
 		scope: ScopeFull,
 	}
 
-	i := 0
-
-	// Check for optional "api <api-label>" prefix
-	if i < len(args) && strings.ToLower(args[i]) == "api" {
-		if i+1 >= len(args) {
-			return nil, fmt.Errorf("'api' requires an API label")
-		}
-		result.apiLabel = args[i+1]
-		i += 2 // Skip "api" and the label
-	}
-
-	// Next argument must be the site name
-	if i >= len(args) {
-		return nil, fmt.Errorf("site name required")
-	}
-	result.siteName = args[i]
-	i++
+	// First argument is the site name; the API (when needed) is given by the
+	// trailing 'source <api-label>' keyword.
+	result.siteName = args[0]
+	i := 1
 
 	// Parse remaining arguments
 	for i < len(args) {
@@ -228,6 +216,15 @@ func parseImportSiteArgs(args []string) (*importSiteArgs, error) {
 			i++ // Skip the scope value
 		case "compare":
 			result.compareMode = true
+		case "source":
+			// Disambiguate which API to import from when a site name spans APIs
+			// (e.g. the same site on Mist and Aruba). Mirrors `target` elsewhere,
+			// but reads as "source" since import pulls from it.
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("'source' requires an API label")
+			}
+			result.apiLabel = args[i+1]
+			i++ // Skip the API label
 		case "help":
 			// Already handled in RunE
 		default:
