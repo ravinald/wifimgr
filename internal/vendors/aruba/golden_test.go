@@ -75,6 +75,24 @@ func TestGolden_SummaryAPMACs(t *testing.T) {
 	}
 }
 
+func TestGolden_SummaryAPNames(t *testing.T) {
+	got := summaryAPNames(stripCLIPrefix(readFixture(t, "show_summary_aptable.txt")))
+	want := map[string]string{
+		"d04dc6c8c8a4": "us-oak-1506-2-1",
+		"d04dc6c8ca06": "us-oak-1506-1-2",
+		"d04dc6c8ca9e": "us-oak-1506-3-1",
+		"d04dc6c8cb3a": "us-oak-1506-1-1",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d MAC->name pairs, want %d: %v", len(got), len(want), got)
+	}
+	for mac, name := range want {
+		if got[mac] != name {
+			t.Errorf("mac %s -> %q, want %q", mac, got[mac], name)
+		}
+	}
+}
+
 // TestCollectAPs_MergesMAC drives the show-aps + show-summary correlation through
 // a stub VC, proving the MAC-less `show aps` rows get their ethernet MAC from the
 // summary table by management IP.
