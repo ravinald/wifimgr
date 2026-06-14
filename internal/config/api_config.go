@@ -190,6 +190,10 @@ func applyVendorDefaults(config *vendors.APIConfig) {
 		if config.RateLimit == 0 {
 			config.RateLimit = 166 // ~10,000 req/min
 		}
+	case "aruba":
+		// No default URL: the Virtual Controller host is site-specific and must
+		// be supplied (https://<vc-ip>:4343). The device-local REST API is
+		// driven sequentially, so rate limiting is handled in the adapter.
 	}
 
 	if config.ResultsLimit == 0 {
@@ -276,6 +280,28 @@ func validateCredentials(config *vendors.APIConfig) []ValidationWarning {
 				Message: fmt.Sprintf("API %q missing required credential 'site_manager_api_key'", config.Label),
 			})
 		}
+	case "aruba":
+		if config.Credentials["user"] == "" {
+			warnings = append(warnings, ValidationWarning{
+				Level:   "api",
+				API:     config.Label,
+				Message: fmt.Sprintf("API %q missing required credential 'user'", config.Label),
+			})
+		}
+		if config.Credentials["passwd"] == "" {
+			warnings = append(warnings, ValidationWarning{
+				Level:   "api",
+				API:     config.Label,
+				Message: fmt.Sprintf("API %q missing required credential 'passwd'", config.Label),
+			})
+		}
+		if config.URL == "" {
+			warnings = append(warnings, ValidationWarning{
+				Level:   "api",
+				API:     config.Label,
+				Message: fmt.Sprintf("API %q missing required 'url' (Virtual Controller host, e.g. https://10.0.0.1:4343)", config.Label),
+			})
+		}
 	}
 
 	return warnings
@@ -283,7 +309,8 @@ func validateCredentials(config *vendors.APIConfig) []ValidationWarning {
 
 // applyEnvOverrides applies environment variable overrides to API configs.
 // Environment variables follow the pattern: WIFIMGR_API_<LABEL>_CREDENTIALS_<FIELD>
-// Supported fields: KEY (maps to api_key), ORG (maps to org_id), URL
+// Supported fields: KEY (maps to api_key), ORG (maps to org_id), URL,
+// USER (maps to user), PASSWD (maps to passwd)
 // Note: Label dashes are converted to underscores (e.g., "mist-prod" -> "MIST_PROD")
 func applyEnvOverrides(configs map[string]*vendors.APIConfig) {
 	for label, config := range configs {
@@ -302,6 +329,14 @@ func applyEnvOverrides(configs map[string]*vendors.APIConfig) {
 		// URL overrides the API base URL
 		if url := os.Getenv(envPrefix + "URL"); url != "" {
 			config.URL = url
+		}
+
+		// USER/PASSWD support username/password vendors (Aruba Instant).
+		if user := os.Getenv(envPrefix + "USER"); user != "" {
+			config.Credentials["user"] = user
+		}
+		if passwd := os.Getenv(envPrefix + "PASSWD"); passwd != "" {
+			config.Credentials["passwd"] = passwd
 		}
 	}
 }

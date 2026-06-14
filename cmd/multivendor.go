@@ -83,6 +83,7 @@ import (
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/vendors"
+	"github.com/ravinald/wifimgr/internal/vendors/aruba"
 	"github.com/ravinald/wifimgr/internal/vendors/meraki"
 	"github.com/ravinald/wifimgr/internal/vendors/mist"
 	"github.com/ravinald/wifimgr/internal/vendors/ubiquiti"
@@ -119,6 +120,7 @@ func InitializeMultiVendor() error {
 	apiRegistry.RegisterFactory("mist", createMistClient)
 	apiRegistry.RegisterFactory("meraki", createMerakiClient)
 	apiRegistry.RegisterFactory("ubiquiti", createUbiquitiClient)
+	apiRegistry.RegisterFactory("aruba", createArubaClient)
 
 	// Build API configs from Viper (uses config package which applies env overrides)
 	apiConfigs, warnings := config.BuildAPIConfigsFromViper()
@@ -256,6 +258,32 @@ func createUbiquitiClient(config *vendors.APIConfig) (vendors.Client, error) {
 	}
 
 	return ubiquiti.NewAdapter(apiKey, config.URL)
+}
+
+// createArubaClient creates an Aruba Instant vendor client from config.
+// Credentials are username/password (not an API token), and the URL carries the
+// Virtual Controller host the device-local REST API lives on.
+func createArubaClient(config *vendors.APIConfig) (vendors.Client, error) {
+	user := config.Credentials["user"]
+	if user == "" {
+		return nil, fmt.Errorf("missing user credential")
+	}
+
+	passwd := config.Credentials["passwd"]
+	if passwd == "" {
+		return nil, fmt.Errorf("missing passwd credential")
+	}
+
+	if config.URL == "" {
+		return nil, fmt.Errorf("missing url (Virtual Controller host, e.g. https://10.0.0.1:4343)")
+	}
+
+	insecure := viper.GetBool(fmt.Sprintf("api.%s.insecure_skip_verify", config.Label))
+
+	return aruba.NewAdapter(user, passwd, config.URL,
+		aruba.WithInsecureSkipVerify(insecure),
+		aruba.WithAPILabel(config.Label),
+	)
 }
 
 // SetGlobalVendorClient sets the global vendor client.
