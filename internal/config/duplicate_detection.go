@@ -31,8 +31,11 @@ func NewDuplicateTracker() *DuplicateTracker {
 	}
 }
 
-// CheckAndAdd checks if an entry is a duplicate and adds it to tracking
-func (dt *DuplicateTracker) CheckAndAdd(category, deviceType, name, file string, line int) bool {
+// CheckAndAdd checks if an entry is a duplicate and adds it to tracking.
+// api scopes the name: the same site name under two different API labels is a
+// legitimate cross-vendor config, not a duplicate, so the dedup key includes it.
+// Pass "" for entries that aren't API-scoped (e.g. device profiles).
+func (dt *DuplicateTracker) CheckAndAdd(category, deviceType, name, api, file string, line int) bool {
 	// Initialize nested maps if needed
 	if dt.seen[category] == nil {
 		dt.seen[category] = make(map[string]map[string]DuplicateEntry)
@@ -41,8 +44,15 @@ func (dt *DuplicateTracker) CheckAndAdd(category, deviceType, name, file string,
 		dt.seen[category][deviceType] = make(map[string]DuplicateEntry)
 	}
 
+	// A name collides only within the same API scope. NUL-join is safe: neither
+	// a site name nor an API label can contain it.
+	key := name
+	if api != "" {
+		key = name + "\x00" + api
+	}
+
 	// Check if we've seen this before
-	if existing, exists := dt.seen[category][deviceType][name]; exists {
+	if existing, exists := dt.seen[category][deviceType][key]; exists {
 		// Found a duplicate
 		duplicate := DuplicateEntry{
 			Name:     name,
@@ -69,7 +79,7 @@ func (dt *DuplicateTracker) CheckAndAdd(category, deviceType, name, file string,
 	}
 
 	// Not a duplicate, add to tracking
-	dt.seen[category][deviceType][name] = DuplicateEntry{
+	dt.seen[category][deviceType][key] = DuplicateEntry{
 		Name:     name,
 		File:     file,
 		Line:     line,
@@ -159,7 +169,7 @@ func (dt *DuplicateTracker) TrackDuplicatesInJSON(category string, jsonData map[
 							keyPath := []string{"config", "device_profiles", deviceType, profileKey}
 							line := EstimateLineNumber(rawJSON, keyPath)
 
-							dt.CheckAndAdd(category, deviceType, name, file, line)
+							dt.CheckAndAdd(category, deviceType, name, "", file, line)
 						}
 					}
 				}

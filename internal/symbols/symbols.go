@@ -44,6 +44,14 @@ var (
 	yellowStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFD700")).
 			Bold(true)
+
+	// emphasisStyle is a theme-safe high-contrast emphasis: bold with an
+	// adaptive foreground (near-black on light terminals, near-white on dark).
+	// It carries no operational meaning — color is reserved for device state —
+	// so it marks metadata like managed rows and legend keys without implying up.
+	emphasisStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.AdaptiveColor{Light: "#000000", Dark: "#FFFFFF"}).
+			Bold(true)
 )
 
 // isTerminal checks if we're running in a terminal that supports colors and symbols
@@ -140,6 +148,16 @@ func BlueText(text string) string {
 func YellowText(text string) string {
 	if isTerminal() {
 		return yellowStyle.Render(text)
+	}
+	return text
+}
+
+// EmphasisText returns theme-safe bold-emphasis text, or plain text for
+// non-terminals. Used for metadata emphasis (managed rows, legend keys) where
+// color would wrongly read as device state.
+func EmphasisText(text string) string {
+	if isTerminal() {
+		return emphasisStyle.Render(text)
 	}
 	return text
 }

@@ -587,7 +587,7 @@ func TestParseImportSiteArgs_Kind(t *testing.T) {
 		{"inventory after site", []string{"US-LAB", "inventory"}, kindInventory, "US-LAB"},
 		{"all after site", []string{"US-LAB", "all"}, kindAll, "US-LAB"},
 		{"config explicit", []string{"US-LAB", "config"}, kindConfig, "US-LAB"},
-		{"with api prefix", []string{"api", "meraki", "US-LAB", "all"}, kindAll, "US-LAB"},
+		{"with source keyword", []string{"US-LAB", "all", "source", "meraki"}, kindAll, "US-LAB"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -602,6 +602,39 @@ func TestParseImportSiteArgs_Kind(t *testing.T) {
 				t.Errorf("siteName = %q, want %q", got.siteName, tc.site)
 			}
 		})
+	}
+}
+
+func TestParseImportSiteArgs_Source(t *testing.T) {
+	cases := []struct {
+		name     string
+		args     []string
+		wantAPI  string
+		wantSite string
+	}{
+		{"source keyword after site", []string{"US-OAK-PINA", "source", "aruba-pina"}, "aruba-pina", "US-OAK-PINA"},
+		{"source mixed with options", []string{"US-OAK-PINA", "type", "wlans", "source", "mist", "save"}, "mist", "US-OAK-PINA"},
+		{"no api specified", []string{"US-LAB"}, "", "US-LAB"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseImportSiteArgs(tc.args)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if got.apiLabel != tc.wantAPI {
+				t.Errorf("apiLabel = %q, want %q", got.apiLabel, tc.wantAPI)
+			}
+			if got.siteName != tc.wantSite {
+				t.Errorf("siteName = %q, want %q", got.siteName, tc.wantSite)
+			}
+		})
+	}
+}
+
+func TestParseImportSiteArgs_SourceMissingLabel(t *testing.T) {
+	if _, err := parseImportSiteArgs([]string{"US-LAB", "source"}); err == nil {
+		t.Error("expected an error when 'source' has no API label")
 	}
 }
 
