@@ -494,3 +494,59 @@ func TestFormatNestedValue(t *testing.T) {
 		})
 	}
 }
+
+func TestFlagLegend(t *testing.T) {
+	data := []GenericTableData{
+		{"name": "BOLD_TEXT:ap-1", "flags": "M*", "status": "online"},
+		{"name": "ap-2", "flags": "", "status": "offline"},
+	}
+	config := TableConfig{
+		Format: "table",
+		Columns: []TableColumn{
+			{Field: "name", Title: "Name"},
+			{Field: "flags", Title: "Flags"},
+			{Field: "status", Title: "Status", IsStatusField: true},
+		},
+		FlagLegend: []FlagDef{
+			{Key: "M", Description: "managed (armed in inventory)"},
+			{Key: "*", Description: "config drift from intent"},
+		},
+	}
+	out := NewGenericTablePrinter(config, data).Print()
+
+	for _, want := range []string{"ap-1", "ap-2", "managed (armed in inventory)", "config drift from intent"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\n%s", want, out)
+		}
+	}
+	// The BOLD_TEXT: marker must render as plain content, never literally.
+	if strings.Contains(out, "BOLD_TEXT:") {
+		t.Errorf("BOLD_TEXT: marker leaked into output:\n%s", out)
+	}
+}
+
+func TestFlagLegend_OmittedWhenEmpty(t *testing.T) {
+	data := []GenericTableData{{"name": "ap-1", "status": "online"}}
+	config := TableConfig{
+		Format:  "table",
+		Columns: []TableColumn{{Field: "name", Title: "Name"}, {Field: "status", Title: "Status", IsStatusField: true}},
+	}
+	out := NewGenericTablePrinter(config, data).Print()
+	if strings.Contains(out, "\nFlags\n") {
+		t.Errorf("legend should be absent when FlagLegend is empty:\n%s", out)
+	}
+}
+
+func TestStructuredOutputStripsMarkers(t *testing.T) {
+	data := []GenericTableData{{"name": "BOLD_TEXT:ap-1", "flags": "M"}}
+	cols := []TableColumn{{Field: "name", Title: "Name"}, {Field: "flags", Title: "Flags"}}
+	for _, format := range []string{"json", "csv"} {
+		out := NewGenericTablePrinter(TableConfig{Format: format, Columns: cols}, data).Print()
+		if strings.Contains(out, "BOLD_TEXT:") {
+			t.Errorf("%s output leaked marker:\n%s", format, out)
+		}
+		if !strings.Contains(out, "ap-1") {
+			t.Errorf("%s output missing clean value:\n%s", format, out)
+		}
+	}
+}

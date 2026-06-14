@@ -382,6 +382,8 @@ func (m *BubbleTableModel) RenderStatic() string {
 				default:
 					if strings.HasPrefix(strVal, "GREEN_TEXT:") {
 						displayContent = strings.TrimPrefix(strVal, "GREEN_TEXT:")
+					} else if strings.HasPrefix(strVal, "BOLD_TEXT:") {
+						displayContent = strings.TrimPrefix(strVal, "BOLD_TEXT:")
 					} else if strings.HasPrefix(strVal, "STATUS_") {
 						displayContent = strings.TrimPrefix(strVal, "STATUS_")
 					}
@@ -613,10 +615,14 @@ func (m *BubbleTableModel) RenderStatic() string {
 				styleType = "blue"
 				hasColor = true
 			default:
-				// Check for GREEN_TEXT: prefix
+				// Check for GREEN_TEXT: / BOLD_TEXT: prefixes
 				if strings.HasPrefix(strVal, "GREEN_TEXT:") {
 					originalContent = strings.TrimPrefix(strVal, "GREEN_TEXT:")
 					styleType = "green"
+					hasColor = true
+				} else if strings.HasPrefix(strVal, "BOLD_TEXT:") {
+					originalContent = strings.TrimPrefix(strVal, "BOLD_TEXT:")
+					styleType = "emphasis"
 					hasColor = true
 				} else if strings.HasPrefix(strVal, "STATUS_") {
 					// Unknown status - show as-is
@@ -674,6 +680,8 @@ func (m *BubbleTableModel) RenderStatic() string {
 				strVal = symbols.BlueText(originalContent)
 			case "yellow":
 				strVal = symbols.YellowText(originalContent)
+			case "emphasis":
+				strVal = symbols.EmphasisText(originalContent)
 			default:
 				strVal = originalContent
 			}
@@ -714,7 +722,33 @@ func (m *BubbleTableModel) RenderStatic() string {
 		output.WriteString("\n")
 	}
 
+	output.WriteString(m.renderFlagLegend())
+
 	return output.String()
+}
+
+// renderFlagLegend renders the flag legend below the table, one flag per line
+// with the key emphasized and aligned to a common width. Returns "" when no
+// legend is configured. The caller supplies only the flags actually present.
+func (m *BubbleTableModel) renderFlagLegend() string {
+	if len(m.config.FlagLegend) == 0 {
+		return ""
+	}
+
+	keyWidth := 0
+	for _, f := range m.config.FlagLegend {
+		if w := lipgloss.Width(f.Key); w > keyWidth {
+			keyWidth = w
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString("\nFlags\n")
+	for _, f := range m.config.FlagLegend {
+		pad := strings.Repeat(" ", keyWidth-lipgloss.Width(f.Key))
+		fmt.Fprintf(&b, "  %s%s  %s\n", symbols.EmphasisText(f.Key), pad, f.Description)
+	}
+	return b.String()
 }
 
 // RenderCSV renders the data as CSV
