@@ -44,6 +44,42 @@ type TableColumn struct {
 	IsStatusField     bool // format as online/offline/alerting/dormant
 }
 
+// displayMarkers are table-only emphasis prefixes the command layer prepends to
+// a cell's value. They steer color/weight in the table renderer and must be
+// stripped before structured output (CSV/JSON) so those carry the clean value.
+var displayMarkers = []string{"GREEN_TEXT:", "BOLD_TEXT:"}
+
+// stripDisplayMarkers removes a leading display marker from a cell value.
+func stripDisplayMarkers(s string) string {
+	for _, m := range displayMarkers {
+		if strings.HasPrefix(s, m) {
+			return strings.TrimPrefix(s, m)
+		}
+	}
+	return s
+}
+
+// stripRowMarkers returns a copy of a row with display markers stripped from its
+// string values, for serialization to structured formats.
+func stripRowMarkers(d GenericTableData) map[string]interface{} {
+	out := make(map[string]interface{}, len(d))
+	for k, v := range d {
+		if s, ok := v.(string); ok {
+			out[k] = stripDisplayMarkers(s)
+		} else {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// FlagDef describes one entry in a table's flag legend: a short key that
+// appears in a row's flags cell, and the meaning printed below the table.
+type FlagDef struct {
+	Key         string
+	Description string
+}
+
 // TableConfig represents the configuration for table display.
 type TableConfig struct {
 	Format        string // "table", "csv", or "json"
@@ -57,6 +93,11 @@ type TableConfig struct {
 	CacheAccess   CacheAccessor  // NOT YET IMPLEMENTED
 	ShowAllFields bool           // show all cache fields vs configured
 	FieldResolver FieldResolver  // optional ID to name resolver
+
+	// FlagLegend, when set, prints a legend below the table explaining the
+	// single-char flags shown in a "flags" column. The caller passes only the
+	// flags actually present, so the formatter renders them verbatim.
+	FlagLegend []FlagDef
 }
 
 // GenericTableData represents a generic data item for the table
@@ -388,7 +429,7 @@ func (p *GenericTablePrinter) formatAsCSV() string {
 				// Use formatNestedValue for cache.* fields to handle complex nested values
 				row[i] = formatNestedValue(val)
 			} else {
-				row[i] = fmt.Sprintf("%v", val)
+				row[i] = stripDisplayMarkers(fmt.Sprintf("%v", val))
 			}
 		}
 
@@ -414,7 +455,7 @@ func (p *GenericTablePrinter) formatAsJSON() string {
 
 	// For single item, return the raw object
 	if len(p.Data) == 1 {
-		jsonData, err := MarshalJSONIndent(colonizeMACValues(map[string]interface{}(p.Data[0])), "", "  ")
+		jsonData, err := MarshalJSONIndent(colonizeMACValues(stripRowMarkers(p.Data[0])), "", "  ")
 		if err != nil {
 			return fmt.Sprintf("Error marshalling JSON: %v\n", err)
 		}
@@ -424,7 +465,7 @@ func (p *GenericTablePrinter) formatAsJSON() string {
 	// For multiple items, return an array
 	items := make([]interface{}, len(p.Data))
 	for i, d := range p.Data {
-		items[i] = colonizeMACValues(map[string]interface{}(d))
+		items[i] = colonizeMACValues(stripRowMarkers(d))
 	}
 	jsonData, err := MarshalJSONIndent(items, "", "  ")
 	if err != nil {

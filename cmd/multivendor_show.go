@@ -16,9 +16,16 @@ import (
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
 
+// Row flags shown in device tables. Color is reserved for device state, so
+// managed/drift metadata rides a flags column with a legend instead.
+const (
+	flagManaged = "M" // armed in inventory.json
+	flagDrift   = "*" // local intent differs from cached config
+)
+
 // showDevicesMultiVendor shows devices of a specific type from one or more APIs.
-// deviceType should be "ap", "switch", or "gateway".
-// Devices that are in the inventory.json file are highlighted in green.
+// deviceType should be "ap", "switch", or "gateway". Devices armed in
+// inventory.json carry an 'M' flag; those whose intent has drifted carry '*'.
 func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmdutils.ParsedShowArgs) error {
 	// Validate target API if provided
 	if err := ValidateAPIFlag(); err != nil {
@@ -44,6 +51,7 @@ func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmduti
 	}
 	deviceIntents := loadDeviceIntentsFromSiteConfigs()
 	hasDrift := false
+	usedManaged := false
 
 	// Collect devices from all target APIs
 	var allDevices []formatter.GenericTableData
@@ -99,26 +107,33 @@ func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmduti
 				}
 			}
 
-			// Drift marker when local intent differs from the cached config.
+			// Per-row flags carry metadata (managed, drift). Color is reserved
+			// for device state in the status column, so these never tint text.
 			displayName := item.Name
+			var flags string
 			if intent, ok := deviceIntents[normalizedMAC]; ok {
 				if displayName == "" && intent.Name != "" {
 					displayName = intent.Name
 				}
 				if hasConfigDrift(cache, normalizedMAC, deviceType, intent) {
-					displayName = "* " + displayName
+					flags += flagDrift
 					hasDrift = true
 				}
 			}
-			// In the widened (`all`) view, green-highlight the managed ones so
-			// they stand out among the unmanaged. The managed-default view is
-			// already all-managed, so highlighting there would be noise.
-			if parsed.ShowUnmanaged && isManaged && item.Name != "" {
-				displayName = "GREEN_TEXT:" + displayName
+			// In the widened (`all`) view, flag the managed ones and embolden the
+			// name so they stand out among the unmanaged. The default view is
+			// already all-managed, so that would be noise.
+			if parsed.ShowUnmanaged && isManaged {
+				flags = flagManaged + flags
+				usedManaged = true
+				if displayName != "" {
+					displayName = "BOLD_TEXT:" + displayName
+				}
 			}
 
 			data := formatter.GenericTableData{
 				"name":    displayName,
+				"flags":   flags,
 				"mac":     item.MAC,
 				"serial":  item.Serial,
 				"model":   item.Model,
@@ -213,15 +228,28 @@ func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmduti
 		cacheAccessor = nil
 	}
 
-	// Determine default columns - add API column when showing multiple APIs
-	defaultColumns := []formatter.TableColumn{
-		{Field: "name", Title: "Name", MaxWidth: 0},
-		{Field: "mac", Title: "MAC", MaxWidth: 0},
-		{Field: "serial", Title: "Serial", MaxWidth: 0},
-		{Field: "model", Title: "Model", MaxWidth: 0},
-		{Field: "status", Title: "Status", MaxWidth: 0, IsStatusField: true},
-		{Field: "site_name", Title: "Site", MaxWidth: 0},
+	// Legend lists only the flags actually present, in canonical order (M then *).
+	var flagLegend []formatter.FlagDef
+	if usedManaged {
+		flagLegend = append(flagLegend, formatter.FlagDef{Key: flagManaged, Description: "managed (armed in inventory)"})
 	}
+	if hasDrift {
+		flagLegend = append(flagLegend, formatter.FlagDef{Key: flagDrift, Description: "config drift from intent"})
+	}
+
+	// Determine default columns. A Flags column slots in after Name only when a
+	// flag is present; the API column appears when showing multiple APIs.
+	defaultColumns := []formatter.TableColumn{{Field: "name", Title: "Name", MaxWidth: 0}}
+	if len(flagLegend) > 0 {
+		defaultColumns = append(defaultColumns, formatter.TableColumn{Field: "flags", Title: "Flags", MaxWidth: 0})
+	}
+	defaultColumns = append(defaultColumns,
+		formatter.TableColumn{Field: "mac", Title: "MAC", MaxWidth: 0},
+		formatter.TableColumn{Field: "serial", Title: "Serial", MaxWidth: 0},
+		formatter.TableColumn{Field: "model", Title: "Model", MaxWidth: 0},
+		formatter.TableColumn{Field: "status", Title: "Status", MaxWidth: 0, IsStatusField: true},
+		formatter.TableColumn{Field: "site_name", Title: "Site", MaxWidth: 0},
+	)
 
 	// Add API column when showing from multiple APIs
 	if len(targetAPIs) > 1 || apiFlag == "" {
@@ -243,6 +271,7 @@ func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmduti
 		CacheAccess:   cacheAccessor,
 		ShowAllFields: parsed.AllFields(),
 		Columns:       defaultColumns,
+		FlagLegend:    flagLegend,
 	}
 
 	// Set format from config if not overridden by argument
@@ -264,12 +293,6 @@ func showDevicesMultiVendor(_ context.Context, deviceType string, parsed *cmduti
 	}
 
 	fmt.Print(printer.Print())
-
-	// Drift note (table only): mirrors the marker prepended to drifted names.
-	if hasDrift && tableConfig.Format == "table" {
-		fmt.Println()
-		fmt.Println("* Device has configuration drift from intent")
-	}
 
 	// Show cache timestamp
 	printCacheTimestamp(cacheMgr, targetAPIs, tableConfig.Format)
