@@ -83,6 +83,61 @@ func TestShowCommand_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestShowCommand_Memoized(t *testing.T) {
+	var showHits, postHits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rest/login":
+			_, _ = w.Write([]byte(`{"Status":"Success","sid":"s"}`))
+		case "/rest/show-cmd":
+			showHits++
+			_, _ = w.Write([]byte(`{"Status":"Success","Status-code":0,"Command output":"ok"}`))
+		case "/rest/ssid":
+			postHits++
+			_, _ = w.Write([]byte(`{"Status":"Success","Status-code":0}`))
+		default:
+			http.Error(w, "nf", http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	c := NewClient("admin", "admin", srv.URL, WithHTTPClient(srv.Client()))
+	c.minInterval = 0
+	ctx := context.Background()
+
+	// Three identical reads collapse to a single device hit.
+	for range 3 {
+		if _, err := c.ShowCommand(ctx, "show aps"); err != nil {
+			t.Fatalf("ShowCommand: %v", err)
+		}
+	}
+	if showHits != 1 {
+		t.Errorf("show hits = %d, want 1 (memoized)", showHits)
+	}
+
+	// A different command is a distinct entry.
+	if _, err := c.ShowCommand(ctx, "show summary"); err != nil {
+		t.Fatalf("ShowCommand: %v", err)
+	}
+	if showHits != 2 {
+		t.Errorf("show hits = %d, want 2", showHits)
+	}
+
+	// A write clears the memo, so the next read re-fetches.
+	if err := c.PostObject(ctx, "ssid", map[string]any{"ssid-profile": map[string]any{"action": "create"}}); err != nil {
+		t.Fatalf("PostObject: %v", err)
+	}
+	if _, err := c.ShowCommand(ctx, "show aps"); err != nil {
+		t.Fatalf("ShowCommand: %v", err)
+	}
+	if showHits != 3 {
+		t.Errorf("show hits = %d, want 3 (write should bust the memo)", showHits)
+	}
+	if postHits != 1 {
+		t.Errorf("post hits = %d, want 1", postHits)
+	}
+}
+
 func TestPostObject_ConfigError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
