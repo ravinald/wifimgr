@@ -133,7 +133,7 @@ func runShowIntentProfiles(cmd *cobra.Command, args []string) error {
 			keyPath := []string{"config", "device_profiles", "ap", profileName}
 			line := config.EstimateLineNumber(rawData, keyPath)
 
-			duplicateTracker.CheckAndAdd("device_profile", "ap", name, profileFile, line)
+			duplicateTracker.CheckAndAdd("device_profile", "ap", name, "", profileFile, line)
 			allProfiles["ap"][profileName] = profile
 		}
 		for profileName, profile := range profileConfig.Config.DeviceProfiles.Switch {
@@ -147,7 +147,7 @@ func runShowIntentProfiles(cmd *cobra.Command, args []string) error {
 			keyPath := []string{"config", "device_profiles", "switch", profileName}
 			line := config.EstimateLineNumber(rawData, keyPath)
 
-			duplicateTracker.CheckAndAdd("device_profile", "switch", name, profileFile, line)
+			duplicateTracker.CheckAndAdd("device_profile", "switch", name, "", profileFile, line)
 			allProfiles["switch"][profileName] = profile
 		}
 		for profileName, profile := range profileConfig.Config.DeviceProfiles.Gateway {
@@ -161,7 +161,7 @@ func runShowIntentProfiles(cmd *cobra.Command, args []string) error {
 			keyPath := []string{"config", "device_profiles", "gateway", profileName}
 			line := config.EstimateLineNumber(rawData, keyPath)
 
-			duplicateTracker.CheckAndAdd("device_profile", "gateway", name, profileFile, line)
+			duplicateTracker.CheckAndAdd("device_profile", "gateway", name, "", profileFile, line)
 			allProfiles["gateway"][profileName] = profile
 		}
 	}
