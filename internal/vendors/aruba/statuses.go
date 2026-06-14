@@ -29,11 +29,25 @@ func (s *statusesService) GetAll(ctx context.Context) (map[string]*vendors.Devic
 			continue
 		}
 		statuses[key] = &vendors.DeviceStatus{
-			Status: ap.Status,
+			Status: deviceStatusVocab(ap.Status),
 			IP:     ap.IP,
 		}
 	}
 	return statuses, nil
+}
+
+// deviceStatusVocab maps the connected/disconnected vocabulary used on
+// DeviceInfo to the online/offline vocabulary DeviceStatus carries, which is
+// what the table formatter's status symbols (online→C, offline→D) expect.
+func deviceStatusVocab(status string) string {
+	switch status {
+	case "connected":
+		return "online"
+	case "disconnected":
+		return "offline"
+	default:
+		return status
+	}
 }
 
 var _ vendors.StatusesService = (*statusesService)(nil)

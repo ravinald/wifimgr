@@ -117,3 +117,17 @@ func TestDeviceInfoFromAP(t *testing.T) {
 		t.Errorf("vendor = %q", d.SourceVendor)
 	}
 }
+
+func TestDeviceStatusVocab(t *testing.T) {
+	cases := map[string]string{
+		"connected":    "online",
+		"disconnected": "offline",
+		"online":       "online",
+		"":             "",
+	}
+	for in, want := range cases {
+		if got := deviceStatusVocab(in); got != want {
+			t.Errorf("deviceStatusVocab(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
