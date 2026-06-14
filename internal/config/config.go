@@ -264,7 +264,7 @@ func LoadAllConfigs(mainConfigFile string) (*Config, []*SiteConfigFile, error) {
 				configName = siteName
 			}
 
-			duplicateTracker.CheckAndAdd("site_config", "", configName, configFile, line)
+			duplicateTracker.CheckAndAdd("site_config", "", configName, siteObj.API, configFile, line)
 
 			// Create a new config for this site
 			individualSiteConfig := &SiteConfigFile{

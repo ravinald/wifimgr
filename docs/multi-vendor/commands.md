@@ -19,6 +19,13 @@ Use the `target` positional keyword to direct a command at a specific API:
 wifimgr show ap target mist-prod
 ```
 
+`import api site` uses `source <label>` instead (it pulls *from* an API) to disambiguate a
+site name that exists under more than one vendor:
+
+```
+wifimgr import api site US-OAK-PINA source aruba-pina
+```
+
 ## Command Behavior Matrix
 
 ### Read Commands

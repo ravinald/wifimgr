@@ -1,0 +1,22 @@
+cli output: 
+
+COMMAND=show ap bss-table
+
+Aruba AP BSS Table
+------------------
+bss                ess          port  ip           band/ht-mode/bandwidth  ch/EIRP/max-EIRP  type  cur-cl  ap name          in-t(s)  tot-t          flags
+---                ---          ----  --           ----------------------  ----------------  ----  ------  -------          -------  -----          -----
+d0:4d:c6:0c:8a:42  moo two gee  ?/?   172.30.8.21  2.4GHz/HE/20MHz         11/15.0/28.2      ap    0       us-oak-1506-2-1  0        7d:2h:15m:50s  T
+d0:4d:c6:0c:8a:50  moo          ?/?   172.30.8.21  5GHz/HE/40MHz           36+/27.6/27.6     ap    4       us-oak-1506-2-1  0        7d:2h:15m:51s  T
+d0:4d:c6:0c:8a:51  eye oh tea   ?/?   172.30.8.21  5GHz/HE/40MHz           36+/27.6/27.6     ap    0       us-oak-1506-2-1  0        7d:2h:15m:50s  T
+d0:4d:c6:0c:8a:53  moo 5G       ?/?   172.30.8.21  5GHz/HE/40MHz           36+/27.6/27.6     ap    2       us-oak-1506-2-1  0        7d:2h:15m:49s  T
+d0:4d:c6:0c:8a:40  moo          ?/?   172.30.8.21  2.4GHz/HE/20MHz         11/15.0/28.2      ap    6       us-oak-1506-2-1  0        7d:2h:15m:50s  T
+d0:4d:c6:0c:8a:41  eye oh tea   ?/?   172.30.8.21  2.4GHz/HE/20MHz         11/15.0/28.2      ap    3       us-oak-1506-2-1  0        7d:2h:15m:50s  T
+
+Channel followed by "*" indicates channel selected due to unsupported configured channel.
+"Spectrum" followed by "^" indicates Local Spectrum Override in effect.
+
+Num APs:6
+Num Associations:15
+
+Flags:       c = MBO Cellular Data Capable BSS; d = Deferred Delete Pending; D = VLAN Discovered; E = Enhanced-open BSS without transition mode; I = Imminent VAP Down; K = 802.11K Enabled; m = Agile Multiband (MBO) BSS; M = WPA3-SAE mixed mode BSS; o = Enhanced-open transition mode open BSS; O = Enhanced-open BSS with transition mode; r = 802.11r Enabled; t = Broadcast TWT Enabled; T = Individual TWT Enabled; W = 802.11W Enabled; x = MBSSID Tx BSS; z = WPA3-AES-CCM128 BSS; Z = WPA3-AES-CCM128 BSS with transition mode; 3 = WPA3 BSS; 
