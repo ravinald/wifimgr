@@ -1,0 +1,16 @@
+cli output: 
+
+COMMAND=show summary
+
+4 Access Points
+---------------
+MAC                IP Address   Name             Clients  Need Antenna Config
+---                ----------   ----             -------  -------------------
+d0:4d:c6:c8:c8:a4  172.30.8.21  us-oak-1506-2-1  15       No
+d0:4d:c6:c8:ca:06  172.30.8.22  us-oak-1506-1-2  8        No
+d0:4d:c6:c8:ca:9e  172.30.8.24  us-oak-1506-3-1  10       No
+d0:4d:c6:c8:cb:3a  172.30.8.23  us-oak-1506-1-1  10       No
+Restricted Management Access Subnets
+------------------------------------
+Subnet IP Address  Subnet Mask
+-----------------  -----------
