@@ -187,21 +187,49 @@ func collectAPs(ctx context.Context, c *Client) ([]apRow, error) {
 	return aps, nil
 }
 
-// parseSummaryAPMACs maps AP management IP to ethernet MAC from the
-// "N Access Points" table in `show summary`. Scoping to the marker skips the
-// earlier client table; per-row MAC/IP validation tolerates the next section
-// bleeding in when no blank line separates them.
-func parseSummaryAPMACs(text string) map[string]string {
+// summaryAP is one row of the "N Access Points" table in `show summary`, which
+// carries the ethernet MAC, management IP, and per-AP name together.
+type summaryAP struct {
+	MAC  string
+	IP   string
+	Name string
+}
+
+// parseSummaryAPs reads the "N Access Points" table from `show summary`. Scoping
+// to the marker skips the earlier client table; per-row MAC/IP validation
+// tolerates the next section bleeding in when no blank line separates them.
+func parseSummaryAPs(text string) []summaryAP {
 	loc := summaryAPMarker.FindStringIndex(text)
 	if loc == nil {
 		return nil
 	}
-	out := map[string]string{}
+	var out []summaryAP
 	for _, row := range parseFixedWidthTable(text[loc[0]:]) {
 		mac := normalizeMAC(pick(row, "mac"))
 		ip := strings.TrimRight(firstField(pick(row, "ipaddress", "ip")), "*")
-		if isHexMAC(mac) && ipv4Re.MatchString(ip) {
-			out[ip] = mac
+		if !isHexMAC(mac) || !ipv4Re.MatchString(ip) {
+			continue
+		}
+		out = append(out, summaryAP{MAC: mac, IP: ip, Name: pick(row, "name")})
+	}
+	return out
+}
+
+// parseSummaryAPMACs maps AP management IP to ethernet MAC.
+func parseSummaryAPMACs(text string) map[string]string {
+	out := map[string]string{}
+	for _, ap := range parseSummaryAPs(text) {
+		out[ap.IP] = ap.MAC
+	}
+	return out
+}
+
+// summaryAPNames maps ethernet MAC to the per-AP name.
+func summaryAPNames(text string) map[string]string {
+	out := map[string]string{}
+	for _, ap := range parseSummaryAPs(text) {
+		if ap.Name != "" {
+			out[ap.MAC] = ap.Name
 		}
 	}
 	return out

@@ -22,14 +22,6 @@ func (s *configsService) GetAPConfig(ctx context.Context, _, deviceID string) (*
 	}
 	blocks := parseRunningConfig(out)
 
-	cfg := map[string]any{}
-	if name := firstNonEmpty(globalValue(blocks, "hostname"), globalValue(blocks, "name")); name != "" {
-		cfg["name"] = name
-	}
-	if radios := radioProfiles(blocks); len(radios) > 0 {
-		cfg["radio_profiles"] = radios
-	}
-
 	// deviceID is the inventory ID, which is the ethernet MAC once summary
 	// enrichment runs. The device export keys APs by MAC, so carry it through.
 	mac := normalizeMAC(deviceID)
@@ -37,9 +29,26 @@ func (s *configsService) GetAPConfig(ctx context.Context, _, deviceID string) (*
 		mac = ""
 	}
 
+	// The per-AP name lives in `show summary`, not the running-config (which
+	// only carries the swarm-wide `name`). Resolve it by MAC so the export keeps
+	// each AP's operator-chosen name rather than repeating the swarm name.
+	name := deviceID
+	if mac != "" {
+		if summary, sErr := s.client.ShowCommand(ctx, "show summary"); sErr == nil {
+			if n := summaryAPNames(summary)[mac]; n != "" {
+				name = n
+			}
+		}
+	}
+
+	cfg := map[string]any{"name": name}
+	if radios := radioProfiles(blocks); len(radios) > 0 {
+		cfg["radio_profiles"] = radios
+	}
+
 	return &vendors.APConfig{
 		ID:           deviceID,
-		Name:         stringOr(cfg["name"], deviceID),
+		Name:         name,
 		MAC:          mac,
 		SiteID:       s.siteID,
 		Config:       cfg,
@@ -68,13 +77,6 @@ func radioProfiles(blocks []configBlock) map[string]any {
 		}
 	}
 	return out
-}
-
-func stringOr(v any, fallback string) string {
-	if s, ok := v.(string); ok && s != "" {
-		return s
-	}
-	return fallback
 }
 
 var _ vendors.ConfigsService = (*configsService)(nil)
