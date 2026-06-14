@@ -26,7 +26,30 @@ The application uses BubbleTea tables for all table rendering, providing both in
 - Boolean field formatting with modern symbols (⏺/Y/N/?)
 - Column width management and truncation
 - Row markers for special items
+- Row flags with a legend (single-char metadata + an explained key)
 - Consistent styling across all tables
+
+## Row Flags and Color Semantics
+
+Color encodes exactly one axis — **device operational state** — in the status column
+(online → green `C`, offline → `D`, alerting → yellow `A`, dormant → blue `Z`). Metadata
+that isn't state (managed, drift) never tints text; it rides a **flags channel** instead.
+
+Device tables (`show ap|switch|gateway`) carry a `Flags` column when any flag is present:
+
+| Flag | Meaning |
+|------|---------|
+| `M`  | managed — armed in the per-site `inventory.json` |
+| `*`  | config drift — local intent differs from the cached config |
+
+Below the table, a legend lists **only the flags actually present**, one per line with the
+key emphasized (theme-safe bold, not color). A managed device's name is shown in the same
+bold emphasis so it scans quickly in the widened `all` view, without implying "up."
+
+A table opts in by setting `TableConfig.FlagLegend` (a `[]FlagDef` of `{Key, Description}`)
+and emitting a `flags` field per row. The caller passes only the present flags. Inline cell
+emphasis uses a `BOLD_TEXT:` value prefix (rendered via `symbols.EmphasisText`); these
+display prefixes are stripped from CSV/JSON output so structured formats stay clean.
 
 ## Usage Example
 
