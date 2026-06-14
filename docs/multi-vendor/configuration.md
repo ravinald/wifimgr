@@ -2,7 +2,7 @@
 
 The configuration supports multiple API connections with user-defined labels, enabling scenarios like:
 - Multiple organizations within the same vendor (prod vs lab)
-- Multi-vendor environments (Mist, Meraki, and Ubiquiti in different locations)
+- Multi-vendor environments (Mist, Meraki, Ubiquiti, and Aruba Instant in different locations)
 - Migration scenarios (old and new systems active simultaneously)
 - Testing/POC with mixed vendors at a physical site
 
@@ -46,6 +46,15 @@ API connections are defined with user-chosen labels in the main config file:
       "credentials": {
         "site_manager_api_key": "..."
       }
+    },
+    "aruba-lab": {
+      "vendor": "aruba",
+      "url": "https://10.0.0.1:4343",
+      "insecure_skip_verify": true,
+      "credentials": {
+        "user": "admin",
+        "passwd": "..."
+      }
     }
   },
   "files": {
@@ -59,8 +68,9 @@ API connections are defined with user-chosen labels in the main config file:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `vendor` | Yes | Vendor type: `mist`, `meraki`, `ubiquiti` |
-| `url` | No | API base URL (vendor default if omitted) |
+| `vendor` | Yes | Vendor type: `mist`, `meraki`, `ubiquiti`, `aruba` |
+| `url` | No | API base URL (vendor default if omitted; required for `aruba` — the Virtual Controller host) |
+| `insecure_skip_verify` | No | Skip TLS certificate verification (for `aruba`'s self-signed VC cert). Defaults to `false` |
 | `credentials` | Yes | Vendor-specific credentials object |
 | `rate_limit` | No | Requests per minute (vendor default if omitted) |
 | `results_limit` | No | Max results per API call |
@@ -97,6 +107,8 @@ All vendors use the same credential field names:
 **Meraki example:** `org_id` is the organization ID (e.g., `L_123456789`), `api_key` is from the Meraki dashboard.
 
 **Ubiquiti note:** Uses `site_manager_api_key` instead of `org_id`/`api_key`. The API key is scoped to the account (no org_id concept). Also accepts `api_key` as a fallback credential name.
+
+**Aruba note:** Standalone Instant (IAP) only, via the device-local REST API on the Virtual Controller. Credentials are `user`/`passwd` (not a token), and `url` must be the VC host (e.g. `https://10.0.0.1:4343`). Enable the API on the device first with `allow-rest-api` + `commit apply`. The swarm is modeled as one site, named after the VC's `name`. The VC ships a self-signed cert, so set `insecure_skip_verify: true` (or install a trusted cert). Shorthand env vars: `WIFIMGR_API_<LABEL>_CREDENTIALS_USER` / `_PASSWD`.
 
 ### Encrypted Credentials
 

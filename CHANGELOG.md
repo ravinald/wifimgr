@@ -5,6 +5,13 @@ All notable changes to wifimgr are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Aruba Instant (IAP) vendor** — standalone swarms via the device-local REST API on the
+  Virtual Controller. Reads (sites, APs, WLANs, configs) parse `show` output; writes use the
+  SSID/Action APIs. Credentials are `user`/`passwd` + the VC `url`; TLS verifies by default
+  with a per-API `insecure_skip_verify` opt-out. The swarm is modeled as one site. Enable the
+  API on the device first with `allow-rest-api` + `commit apply`.
+- `import api site <site> source <api-label>` — pick which API to import from when a site
+  name exists under more than one vendor.
 - `import api site <site> inventory|all` — arm discovered devices into the per-site
   allowlist (`inventory.json`) straight from a vendor; template/profile-managed
   devices (Meraki bound config templates, Mist device profiles) import with a `WARN`
@@ -31,6 +38,13 @@ All notable changes to wifimgr are documented in this file.
 - `import api site` and `import api templates` share one arg parser for the
   `secrets`/`save`/`file` keywords; `import api templates` is documented next to
   template authoring in the Templates guide.
+- **Device tables separate state from metadata:** color encodes operational state only
+  (status column). Managed/drift move to an `M`/`*` flags column with a legend that lists
+  only the flags present; managed names use bold emphasis instead of green.
+
+### Fixed
+- Same site name under different APIs no longer warns as a duplicate `site_config` — the
+  loader scopes the duplicate check by API.
 
 ### Removed
 - `set ap` / `set ap site` — list with `show ap`, assign with `apply` (which enforces
