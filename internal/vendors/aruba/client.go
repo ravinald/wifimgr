@@ -33,6 +33,10 @@ import (
 // it sequentially rather than concurrently.
 const defaultMinInterval = 150 * time.Millisecond
 
+// defaultMemoTTL backstops the show-command memo. It comfortably covers a single
+// refresh (seconds) while bounding how stale a reused client's reads can get.
+const defaultMemoTTL = 60 * time.Second
+
 // Client is the HTTP client for a single Instant AP Virtual Controller.
 type Client struct {
 	baseURL  string // https://<vc-ip>:4343
@@ -47,6 +51,19 @@ type Client struct {
 	sid         string
 	lastReq     time.Time
 	minInterval time.Duration
+
+	// showMemo deduplicates identical `show` reads within a single operation: a
+	// refresh fans the same handful of commands across every service, and the
+	// device state is constant for that burst. Any write (PostObject) clears it,
+	// so apply's read-after-write still sees fresh state. memoTTL bounds staleness
+	// for a long-lived client; each CLI command otherwise runs in its own process.
+	showMemo map[string]memoEntry
+	memoTTL  time.Duration
+}
+
+type memoEntry struct {
+	out string
+	at  time.Time
 }
 
 // ClientOption configures a Client.
@@ -90,6 +107,8 @@ func NewClient(user, passwd, baseURL string, opts ...ClientOption) *Client {
 		apiLabel:    "aruba",
 		httpClient:  &http.Client{Transport: transport, Timeout: 30 * time.Second},
 		minInterval: defaultMinInterval,
+		showMemo:    make(map[string]memoEntry),
+		memoTTL:     defaultMemoTTL,
 	}
 
 	for _, opt := range opts {
@@ -206,6 +225,10 @@ func (c *Client) withSession(ctx context.Context, fn func(sid string) (*apiEnvel
 // cmd is the plain CLI form, e.g. "show running-config"; spaces are encoded as
 // %20 as the device requires.
 func (c *Client) ShowCommand(ctx context.Context, cmd string) (string, error) {
+	if out, ok := c.memoGet(cmd); ok {
+		return out, nil
+	}
+
 	env, err := c.withSession(ctx, func(sid string) (*apiEnvelope, error) {
 		q := url.Values{}
 		q.Set("iap_ip_addr", c.host)
@@ -220,7 +243,35 @@ func (c *Client) ShowCommand(ctx context.Context, cmd string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return stripCLIPrefix(env.CommandOutput), nil
+
+	out := stripCLIPrefix(env.CommandOutput)
+	c.memoPut(cmd, out)
+	return out, nil
+}
+
+// memoGet returns a cached show output if present and within TTL.
+func (c *Client) memoGet(cmd string) (string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.showMemo[cmd]
+	if !ok || (c.memoTTL > 0 && time.Since(e.at) > c.memoTTL) {
+		return "", false
+	}
+	return e.out, true
+}
+
+func (c *Client) memoPut(cmd, out string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.showMemo[cmd] = memoEntry{out: out, at: time.Now()}
+}
+
+// memoClear drops all cached reads. Called after a write, whose effect a cached
+// read would otherwise miss.
+func (c *Client) memoClear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	clear(c.showMemo)
 }
 
 // PostObject sends a Configuration or Action API payload to /rest/<path> and
@@ -236,6 +287,9 @@ func (c *Client) PostObject(ctx context.Context, path string, payload any) error
 		env, _, err := c.do(ctx, http.MethodPost, "/rest/"+strings.TrimPrefix(path, "/")+"?"+q.Encode(), nil, body)
 		return env, err
 	})
+	// A write changes device state; drop cached reads so a later read-back (e.g.
+	// apply's verify step) re-fetches rather than serving the pre-write snapshot.
+	c.memoClear()
 	return err
 }
 
