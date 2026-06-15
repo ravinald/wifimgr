@@ -218,6 +218,75 @@ func ArmSiteDevices(path, siteName string, aps, switches, gateways []string, not
 	return SaveInventoryFile(path, f)
 }
 
+// DisarmSiteDevices removes the given MACs from a site's allowlist at path,
+// leaving every other site untouched. MACs are normalized before comparison so
+// callers may pass any spelling. A site whose ap/switch/gateway slices are all
+// empty after removal is pruned — unless it carries a Note (see
+// SiteInventory.Note), which an operator put there deliberately and a prune
+// would silently discard. A missing file is a no-op success: nothing is armed,
+// so nothing can be disarmed. Returns the count of MACs actually removed so the
+// caller can report "already unmanaged".
+func DisarmSiteDevices(path, siteName string, aps, switches, gateways []string) (int, error) {
+	f, err := LoadInventoryFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	if f.Config.Inventory.Site == nil {
+		return 0, nil
+	}
+
+	key, ok := f.siteKey(siteName)
+	if !ok {
+		return 0, nil
+	}
+
+	si := f.Config.Inventory.Site[key]
+	removed := 0
+	si.AP, removed = removeMACs(si.AP, aps, removed)
+	si.Switch, removed = removeMACs(si.Switch, switches, removed)
+	si.Gateway, removed = removeMACs(si.Gateway, gateways, removed)
+
+	if len(si.AP) == 0 && len(si.Switch) == 0 && len(si.Gateway) == 0 && si.Note == "" {
+		delete(f.Config.Inventory.Site, key)
+	} else {
+		f.Config.Inventory.Site[key] = si
+	}
+
+	if removed == 0 {
+		return 0, nil
+	}
+	if err := SaveInventoryFile(path, f); err != nil {
+		return 0, err
+	}
+	return removed, nil
+}
+
+// removeMACs returns existing minus the normalized incoming MACs, preserving
+// order, and the running removal count incremented by however many it dropped.
+func removeMACs(existing, remove []string, count int) ([]string, int) {
+	if len(existing) == 0 || len(remove) == 0 {
+		return existing, count
+	}
+	drop := make(map[string]bool, len(remove))
+	for _, mac := range remove {
+		if n := macaddr.NormalizeOrEmpty(mac); n != "" {
+			drop[n] = true
+		}
+	}
+	out := make([]string, 0, len(existing))
+	for _, mac := range existing {
+		if drop[macaddr.NormalizeOrEmpty(mac)] {
+			count++
+			continue
+		}
+		out = append(out, mac)
+	}
+	return out, count
+}
+
 // mergeMACs appends incoming MACs to existing ones as normalized bare hex,
 // dropping invalid entries and duplicates while preserving first-seen order.
 // Existing entries are normalized too, so an arm rewrites a hand-edited file to

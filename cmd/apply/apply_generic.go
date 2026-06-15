@@ -80,7 +80,11 @@ func isManagedKeysConfigured(apiLabel, deviceType string) bool {
 // applySiteGeneric applies device configuration to a site using the generic framework.
 // When refreshAPI is true, the cache is refreshed from the API before applying changes.
 // When refreshAPI is false (default), the existing cache is used for efficiency.
-func applySiteGeneric(ctx context.Context, client vendors.Client, cfg *configPkg.Config, siteName string, deviceType string, apiLabel string, force bool, diffMode bool, refreshAPI bool) error {
+// applySiteGeneric applies one device type at one site through a single vendor
+// client. allowedMACs, when non-nil, restricts the run to that set of
+// (normalized) MACs — the per-device-API grouping in applyDeviceToSite uses it
+// to hand each vendor only its own devices. nil means every configured device.
+func applySiteGeneric(ctx context.Context, client vendors.Client, cfg *configPkg.Config, siteName string, deviceType string, apiLabel string, force bool, diffMode bool, refreshAPI bool, allowedMACs map[string]bool) error {
 	// Get the appropriate device updater
 	updater, err := getDeviceUpdater(deviceType)
 	if err != nil {
@@ -175,6 +179,18 @@ func applySiteGeneric(ctx context.Context, client vendors.Client, cfg *configPkg
 
 	// Step 5: Get configured and assigned devices
 	configuredDevices := updater.GetConfiguredDevices(siteConfig)
+
+	// Restrict to this vendor's devices when grouping by per-device API. MACs
+	// from GetConfiguredDevices are already normalized, matching the filter set.
+	if allowedMACs != nil {
+		filtered := configuredDevices[:0]
+		for _, mac := range configuredDevices {
+			if allowedMACs[mac] {
+				filtered = append(filtered, mac)
+			}
+		}
+		configuredDevices = filtered
+	}
 	assignedDevices, err := updater.GetAssignedDevices(ctx, client, siteID)
 	if err != nil {
 		logging.Errorf("Error getting assigned %ss from cache: %v", deviceType, err)
