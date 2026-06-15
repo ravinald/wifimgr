@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -83,6 +84,23 @@ func WithInsecureSkipVerify(skip bool) ClientOption {
 // WithHTTPClient sets a custom HTTP client (used by tests with httptest).
 func WithHTTPClient(hc *http.Client) ClientOption {
 	return func(c *Client) { c.httpClient = hc }
+}
+
+// WithConnectTimeout bounds connection establishment (TCP dial + TLS handshake)
+// on the client's transport, leaving the overall request timeout intact. An
+// unreachable VC then fails in seconds instead of hanging until the request
+// timeout. It mutates the existing transport so the TLS config (and any
+// WithInsecureSkipVerify) is preserved.
+func WithConnectTimeout(d time.Duration) ClientOption {
+	return func(c *Client) {
+		if d <= 0 {
+			return
+		}
+		if tr, ok := c.httpClient.Transport.(*http.Transport); ok {
+			tr.DialContext = (&net.Dialer{Timeout: d}).DialContext
+			tr.TLSHandshakeTimeout = d
+		}
+	}
 }
 
 // WithAPILabel records the registry label for error attribution.

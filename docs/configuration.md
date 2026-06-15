@@ -424,7 +424,8 @@ The main configuration file (`~/.config/wifimgr/wifimgr-config.json`) supports t
       },
       "rate_limit": 5000,
       "results_limit": 100,
-      "cache_ttl": 86400
+      "cache_ttl": 86400,
+      "connection_timeout": 5
     }
   },
   "display": {
@@ -453,6 +454,22 @@ The main configuration file (`~/.config/wifimgr/wifimgr-config.json`) supports t
   }
 }
 ```
+
+### API Connection Timeout
+
+`connection_timeout` (seconds) bounds **connection establishment** — TCP dial plus TLS handshake —
+per API. It does **not** cap the overall request, so slow-but-working calls (large Mist org
+inventories, Meraki per-device fetches) still complete; it only makes an unreachable host fail fast
+instead of hanging until the request timeout.
+
+- **Default:** 5 seconds.
+- **Per-API override:** set `connection_timeout` inside an API entry (as above). A value below 1 is
+  treated as the default; the floor keeps a typo from disabling the dial timeout.
+- **Meraki:** ignored — its SDK builds its HTTP client internally with no transport hook. Mist,
+  Aruba, and Ubiquiti honor it.
+
+A dead host now surfaces as `unhealthy` / `connection failure` in `show api status` within
+`connection_timeout` seconds rather than ~30s.
 
 ### Accessing Configuration Values
 

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -176,6 +177,25 @@ func WithHTTPClient(httpClient *http.Client) ClientOption {
 
 		// Setup debug transport if needed
 		setupDebugTransport(c)
+	}
+}
+
+// WithConnectTimeout bounds connection establishment (TCP dial + TLS handshake)
+// without capping the overall request timeout, so an unreachable host fails fast.
+// It mutates an existing transport or clones the default one (preserving sane
+// proxy/HTTP2 settings) when the client has none.
+func WithConnectTimeout(d time.Duration) ClientOption {
+	return func(c *mistClient) {
+		if d <= 0 || c.httpClient == nil {
+			return
+		}
+		tr, ok := c.httpClient.Transport.(*http.Transport)
+		if !ok || tr == nil {
+			tr = http.DefaultTransport.(*http.Transport).Clone()
+		}
+		tr.DialContext = (&net.Dialer{Timeout: d}).DialContext
+		tr.TLSHandshakeTimeout = d
+		c.httpClient.Transport = tr
 	}
 }
 
