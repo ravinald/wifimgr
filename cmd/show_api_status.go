@@ -18,6 +18,7 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -62,10 +63,28 @@ func runShowAPIStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	statuses := registry.GetStatus()
+	cacheMgr := GetCacheManager()
 
 	fmt.Printf("API Connections (%d):\n\n", len(statuses))
 
 	for _, status := range statuses {
+		// registry.GetStatus reports static capabilities and assumes healthy; the
+		// real signal is the last refresh outcome, persisted in the cache meta.
+		var lastSuccess, lastFailure time.Time
+		lastErr := status.LastError
+		if cacheMgr != nil {
+			if cache, err := cacheMgr.GetAPICache(status.Label); err == nil {
+				lastSuccess = cache.Meta.LastRefresh
+				lastFailure = cache.Meta.LastFailure
+				if lastFailure.After(lastSuccess) {
+					status.Healthy = false
+					if cache.Meta.LastError != "" {
+						lastErr = cache.Meta.LastError
+					}
+				}
+			}
+		}
+
 		fmt.Printf("  %s:\n", status.Label)
 		fmt.Printf("    Vendor:       %s\n", status.Vendor)
 		fmt.Printf("    Org ID:       %s\n", status.OrgID)
@@ -74,15 +93,22 @@ func runShowAPIStatus(cmd *cobra.Command, args []string) error {
 			fmt.Printf("    Status:       healthy\n")
 		} else {
 			fmt.Printf("    Status:       unhealthy\n")
-			if status.LastError != "" {
-				fmt.Printf("    Last Error:   %s\n", status.LastError)
+			if lastErr != "" {
+				fmt.Printf("    Last Error:   %s\n", lastErr)
 			}
+		}
+		if !lastSuccess.IsZero() {
+			fmt.Printf("    Last Success: %s (%s ago)\n",
+				lastSuccess.Format("2006-01-02 15:04:05"), formatDuration(time.Since(lastSuccess)))
+		}
+		if !lastFailure.IsZero() {
+			fmt.Printf("    Last Failure: %s (%s ago)\n",
+				lastFailure.Format("2006-01-02 15:04:05"), formatDuration(time.Since(lastFailure)))
 		}
 		fmt.Println()
 	}
 
 	// Show cache status if available
-	cacheMgr := GetCacheManager()
 	if cacheMgr != nil {
 		fmt.Println("Cache Status:")
 		for _, status := range statuses {
