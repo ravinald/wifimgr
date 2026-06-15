@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -94,10 +95,107 @@ func HandleCommand(ctx context.Context, client vendors.Client, cfg *config.Confi
 	return applyDeviceToSite(ctx, client, cfg, siteName, deviceType, apiLabel, force, diffMode, refreshAPI)
 }
 
-// applyDeviceToSite applies a specific device type configuration to a site
+// applyDeviceToSite applies a device type to a site, routing each device to the
+// API it resolves to — its own "api" override, else the site default. A site
+// whose devices span two vendors (a migration artifact) runs the per-(site,type)
+// apply once per API with that vendor's client and only that vendor's devices;
+// every downstream step is already client-scoped, so the runs don't interfere.
+// The single-vendor case takes the unchanged single pass.
 func applyDeviceToSite(ctx context.Context, client vendors.Client, cfg *config.Config, siteName string, deviceType string, apiLabel string, force bool, diffMode bool, refreshAPI bool) error {
-	// Use the new generic framework
-	return applySiteGeneric(ctx, client, cfg, siteName, deviceType, apiLabel, force, diffMode, refreshAPI)
+	groups, err := resolveDeviceAPIGroups(cfg, siteName, deviceType, apiLabel)
+	if err != nil {
+		return err
+	}
+
+	// Single vendor (or no devices): one pass, passed-in client, no filter.
+	if _, onlyDefault := groups[apiLabel]; len(groups) == 0 || (len(groups) == 1 && onlyDefault) {
+		return applySiteGeneric(ctx, client, cfg, siteName, deviceType, apiLabel, force, diffMode, refreshAPI, nil)
+	}
+
+	apis := make([]string, 0, len(groups))
+	for api := range groups {
+		apis = append(apis, api)
+	}
+	sort.Strings(apis) // deterministic order across runs
+
+	if len(apis) > 1 {
+		logging.Infof("Site %s %s spans %d APIs: %s", siteName, deviceType, len(apis), strings.Join(apis, ", "))
+		fmt.Printf("Applying %s to %s across %d APIs: %s\n", deviceType, siteName, len(apis), strings.Join(apis, ", "))
+	}
+
+	var errs []error
+	for _, api := range apis {
+		allowed := make(map[string]bool, len(groups[api]))
+		for _, mac := range groups[api] {
+			allowed[mac] = true
+		}
+
+		// Reuse the passed client for the site-default API (preserves the legacy
+		// Mist client path); resolve the others from the registry.
+		c := client
+		if api != apiLabel {
+			registry := vendors.GetGlobalRegistry()
+			if registry == nil {
+				errs = append(errs, fmt.Errorf("vendor registry not initialized for api %q", api))
+				continue
+			}
+			rc, gErr := registry.GetClient(api)
+			if gErr != nil {
+				errs = append(errs, fmt.Errorf("device api %q not configured for site %s: %w", api, siteName, gErr))
+				continue
+			}
+			c = rc
+		}
+
+		if err := applySiteGeneric(ctx, c, cfg, siteName, deviceType, api, force, diffMode, refreshAPI, allowed); err != nil {
+			errs = append(errs, fmt.Errorf("api %s: %w", api, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// resolveDeviceAPIGroups buckets a site's configured devices of one type by the
+// API each resolves to: the device's own "api" field, or siteDefaultAPI when it
+// sets none. Keys are API labels, values normalized MACs. An empty result means
+// the site configures no devices of that type.
+func resolveDeviceAPIGroups(cfg *config.Config, siteName, deviceType, siteDefaultAPI string) (map[string][]string, error) {
+	siteConfig, err := getSiteConfiguration(cfg, siteConfigFiles(cfg), siteName)
+	if err != nil {
+		return nil, err
+	}
+	return groupDevicesByAPI(siteConfig, deviceType, siteDefaultAPI)
+}
+
+// groupDevicesByAPI is the pure bucketing step of resolveDeviceAPIGroups, split
+// out so the routing logic is testable without loading config files.
+func groupDevicesByAPI(siteConfig SiteConfig, deviceType, siteDefaultAPI string) (map[string][]string, error) {
+	var devices map[string]map[string]any
+	switch deviceType {
+	case "ap":
+		devices = siteConfig.Devices.APs
+	case "switch":
+		devices = siteConfig.Devices.Switches
+	case "gateway":
+		devices = siteConfig.Devices.WanEdge
+	default:
+		return nil, fmt.Errorf("unknown device type %q", deviceType)
+	}
+
+	groups := make(map[string][]string)
+	for mac, devCfg := range devices {
+		normalized := macaddr.NormalizeOrEmpty(mac)
+		if normalized == "" {
+			continue
+		}
+		api := siteDefaultAPI
+		if v, ok := devCfg["api"].(string); ok {
+			if t := strings.TrimSpace(v); t != "" {
+				api = t
+			}
+		}
+		groups[api] = append(groups[api], normalized)
+	}
+	return groups, nil
 }
 
 // Helper functions
