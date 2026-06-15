@@ -90,6 +90,11 @@
           "description": "Cache time-to-live in seconds. 0=never expire, -1=use default (86400 = 1 day)",
           "minimum": 0
         },
+        "connection_timeout": {
+          "type": "integer",
+          "description": "Connection establishment timeout (TCP dial + TLS handshake) in seconds; default 5. Bounds connect only, not the overall request. Ignored for Meraki (SDK limitation).",
+          "minimum": 1
+        },
         "managed_keys": {
           "$ref": "#/definitions/managedKeys"
         }

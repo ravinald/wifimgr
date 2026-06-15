@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 
@@ -103,13 +104,14 @@ func BuildAPIConfigsFromViper() (map[string]*vendors.APIConfig, []ValidationWarn
 		}
 
 		config := &vendors.APIConfig{
-			Label:        label,
-			Vendor:       vendor,
-			URL:          getStringFromMap(nested, "url"),
-			Credentials:  credentials,
-			RateLimit:    getIntFromMap(nested, "rate_limit"),
-			ResultsLimit: getIntFromMap(nested, "results_limit"),
-			CacheTTL:     getCacheTTLFromMap(nested),
+			Label:          label,
+			Vendor:         vendor,
+			URL:            getStringFromMap(nested, "url"),
+			Credentials:    credentials,
+			RateLimit:      getIntFromMap(nested, "rate_limit"),
+			ResultsLimit:   getIntFromMap(nested, "results_limit"),
+			CacheTTL:       getCacheTTLFromMap(nested),
+			ConnectTimeout: resolveConnectTimeout(nested),
 		}
 
 		// Apply vendor-specific defaults
@@ -364,6 +366,21 @@ func getIntFromMap(m map[string]interface{}, key string) int {
 		}
 	}
 	return 0
+}
+
+// resolveConnectTimeout returns the connection (dial + TLS handshake) timeout
+// for an API: the per-API connection_timeout (seconds) when set, else the global
+// api.connection_timeout (viper default 5). Bounded to a 1s floor so a typo like
+// 0 can't disable the dial timeout and reintroduce indefinite hangs on dead hosts.
+func resolveConnectTimeout(nested map[string]interface{}) time.Duration {
+	secs := getIntFromMap(nested, "connection_timeout")
+	if secs <= 0 {
+		secs = viper.GetInt("api.connection_timeout")
+	}
+	if secs <= 0 {
+		secs = 5
+	}
+	return time.Duration(secs) * time.Second
 }
 
 // getCacheTTLFromMap extracts cache_ttl with special handling:

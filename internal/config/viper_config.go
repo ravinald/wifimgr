@@ -97,6 +97,7 @@ func setDefaults() {
 	viper.SetDefault("api.url", "https://api.mist.com")
 	viper.SetDefault("api.rate_limit", 10)
 	viper.SetDefault("api.results_limit", 100)
+	viper.SetDefault("api.connection_timeout", 5) // seconds, dial + TLS handshake
 
 	// Files defaults (XDG-compliant paths)
 	viper.SetDefault("files.config_dir", xdg.GetConfigDir())

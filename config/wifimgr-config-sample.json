@@ -25,6 +25,7 @@
       },
       "rate_limit": 5000,
       "results_limit": 100,
+      "connection_timeout": 5,
       "managed_keys": {
         "ap": ["name"],
         "switch": ["name", "notes", "tags", "role", "ip_config", "oob_ip_config", "port_config", "port_config_overwrite", "networks", "other_ip_configs", "router_id", "extra_routes", "aggregate_routes", "ospf_config", "vrrp_config", "vrf_config", "stp_config", "dhcpd_config", "dhcp_snooping", "dns_servers", "dns_suffix", "ntp_servers", "radius_config", "acl_tags", "acl_policies", "managed", "disable_auto_config", "port_mirroring", "iot_config", "deviceprofile_id", "additional_config_cmds", "vars"],
