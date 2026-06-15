@@ -108,16 +108,21 @@ func runShowAPIStatus(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 	}
 
-	// Show cache status if available
+	// Local cache data is the on-disk cached state, independent of whether the API
+	// is reachable (see per-API Status above). A down API still has usable cache.
 	if cacheMgr != nil {
-		fmt.Println("Cache Status:")
+		fmt.Println("Local Cache Data:")
 		for _, status := range statuses {
 			cacheStatus, err := cacheMgr.VerifyAPICache(status.Label)
 			if err != nil {
 				fmt.Printf("  %s: error (%v)\n", status.Label, err)
-			} else {
-				fmt.Printf("  %s: %s\n", status.Label, cacheStatus.String())
+				continue
 			}
+			line := cacheStatus.String()
+			if cache, cerr := cacheMgr.GetAPICache(status.Label); cerr == nil && !cache.Meta.LastRefresh.IsZero() {
+				line += fmt.Sprintf(" (%s old)", formatDuration(time.Since(cache.Meta.LastRefresh)))
+			}
+			fmt.Printf("  %s: %s\n", status.Label, line)
 		}
 	}
 
