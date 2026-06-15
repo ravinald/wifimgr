@@ -14,6 +14,7 @@ Complete reference for configuring and using wifimgr.
   - [search](#search)
   - [refresh](#refresh)
   - [init](#init)
+  - [set](#set)
   - [reset](#reset)
   - [encrypt](#encrypt)
 - [Site Configuration](#site-configuration)
@@ -591,6 +592,47 @@ wifimgr init site US-LAB-01 api mist-prod file sites/us-lab.json
 
 # Creates ./config/sites/us-lab.json
 ```
+
+## set
+
+Write operator intent about a device. Two categories live under `set`:
+
+- **Config fields** — written to the site config, then pushed with `apply`.
+- **Management scope** (`managed`/`unmanaged`) — written to the per-site armed
+  allowlist (`inventory.json`), the set of devices wifimgr is permitted to
+  configure. This is immediate and local; no `apply` is needed.
+
+### Config Fields
+
+```bash
+# Set any schema field by dot-notation key path; value is coerced to its JSON type
+wifimgr set site US-LAB-01 ap AP-01 radio_config.band_5.channel 36
+
+# Friendly radio form: positional keywords instead of dot paths
+wifimgr set radio site US-LAB-01 AP-01 band 5 channel 36 power 15 width 80
+```
+
+The site config is backed up before the write, so `apply rollback` can recover
+the prior state. Each write prints the `apply site <site> <type> diff` to review.
+
+### Managed / Unmanaged
+
+```bash
+# Arm or disarm one device by name (site-scoped)
+wifimgr set site US-LAB-01 ap AP-01 managed
+wifimgr set site US-LAB-01 ap AP-01 unmanaged
+
+# Bulk: all of a type, or every device at the site
+wifimgr set site US-LAB-01 switch all unmanaged
+wifimgr set site US-LAB-01 all managed
+
+# Arm or disarm by MAC — site and type are resolved from cache
+wifimgr set device 5c:5b:35:00:00:01 managed
+```
+
+Bulk and by-name forms read the site's devices from cache, so run
+`refresh site <site>` first if a device is missing. A device not yet assigned to
+a site cannot be armed by MAC — use the `set site` form once it has a site.
 
 ## reset
 

@@ -28,7 +28,7 @@ var radioSettingKeys = map[string]string{
 }
 
 var setRadioCmd = &cobra.Command{
-	Use:   "radio <site> <ap-name> band <2.4|5|6> [channel <n>] [power <dBm>] [width <MHz>]",
+	Use:   "radio site <site> <ap-name> band <2.4|5|6> [channel <n>] [power <dBm>] [width <MHz>]",
 	Short: "Set AP radio channel, power, or width in the site config",
 	Long: `Set radio settings for an AP in the site config, then push them with apply.
 This is the human-friendly form of set: positional keywords instead of dot
@@ -38,17 +38,21 @@ All changes for the band are written and validated together, then the site
 config is backed up and saved.
 
 Examples:
-  wifimgr set radio US-LAB-01 AP-01 band 5 channel 36 power 15 width 80
-  wifimgr set radio US-LAB-01 AP-01 band 2.4 power 8`,
+  wifimgr set radio site US-LAB-01 AP-01 band 5 channel 36 power 15 width 80
+  wifimgr set radio site US-LAB-01 AP-01 band 2.4 power 8`,
 	Args: func(_ *cobra.Command, args []string) error {
 		if cmdutils.ContainsHelp(args) {
 			return nil
 		}
-		// site, ap, then at least one keyword/value pair.
-		if len(args) < 4 {
-			return fmt.Errorf("accepts at least 4 args (site ap band <band>), received %d", len(args))
+		// site <site> <ap>, then at least one keyword/value pair.
+		if len(args) < 5 {
+			return fmt.Errorf("accepts at least 5 args (site <site> <ap> band <band>), received %d", len(args))
 		}
-		if len(args)%2 != 0 {
+		if args[0] != "site" {
+			return fmt.Errorf("set radio requires the site keyword: radio site <site> <ap> band <band> ...")
+		}
+		// args after the AP name (args[3:]) must be keyword/value pairs.
+		if len(args)%2 == 0 {
 			return fmt.Errorf("radio settings must be keyword/value pairs after the AP name")
 		}
 		return nil
@@ -57,9 +61,9 @@ Examples:
 		if cmdutils.ContainsHelp(args) {
 			return cmd.Help()
 		}
-		site, apName := args[0], args[1]
+		site, apName := cmdutils.StripQuotes(args[1]), cmdutils.StripQuotes(args[2])
 
-		pairs := args[2:]
+		pairs := args[3:]
 		settings := make(map[string]string, len(pairs)/2)
 		for i := 0; i < len(pairs); i += 2 {
 			settings[pairs[i]] = pairs[i+1]
