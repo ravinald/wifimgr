@@ -145,3 +145,121 @@ func TestLoadInventoryFile_EmptyIsValid(t *testing.T) {
 		t.Error("expected empty normalized set")
 	}
 }
+
+func TestDisarmSiteDevices_RemovesAndCounts(t *testing.T) {
+	path := writeTempInventory(t, `{
+	  "version": 1,
+	  "config": {"inventory": {"site": {
+	    "ZZ-TMP-SITE": {"ap": ["683a1e54490f", "aabbccddeeff"], "switch": ["3c08cd2c3ed0"], "gateway": []}
+	  }}}
+	}`)
+
+	// Remove one AP by a differently-formatted MAC; the switch stays put.
+	removed, err := DisarmSiteDevices(path, "zz-tmp-site", []string{"68:3A:1E:54:49:0F"}, nil, nil)
+	if err != nil {
+		t.Fatalf("disarm: %v", err)
+	}
+	if removed != 1 {
+		t.Fatalf("removed = %d, want 1", removed)
+	}
+
+	f, _ := LoadInventoryFile(path)
+	if got := f.MACsForSite("ZZ-TMP-SITE", "ap"); len(got) != 1 || got[0] != "aabbccddeeff" {
+		t.Errorf("ap after disarm = %v, want [aabbccddeeff]", got)
+	}
+	if got := f.MACsForSite("ZZ-TMP-SITE", "switch"); len(got) != 1 {
+		t.Errorf("switch should be untouched, got %v", got)
+	}
+}
+
+func TestDisarmSiteDevices_PrunesEmptySite(t *testing.T) {
+	path := writeTempInventory(t, `{
+	  "version": 1,
+	  "config": {"inventory": {"site": {
+	    "ZZ-TMP-SITE": {"ap": ["683a1e54490f"], "switch": [], "gateway": []},
+	    "OTHER": {"ap": ["112233445566"]}
+	  }}}
+	}`)
+
+	if _, err := DisarmSiteDevices(path, "ZZ-TMP-SITE", []string{"683a1e54490f"}, nil, nil); err != nil {
+		t.Fatalf("disarm: %v", err)
+	}
+
+	f, _ := LoadInventoryFile(path)
+	for _, name := range f.SiteNames() {
+		if name == "ZZ-TMP-SITE" {
+			t.Error("emptied site should have been pruned")
+		}
+	}
+	if got := f.MACsForSite("OTHER", "ap"); len(got) != 1 {
+		t.Errorf("other site clobbered: %v", got)
+	}
+}
+
+func TestDisarmSiteDevices_KeepsEmptySiteWithNote(t *testing.T) {
+	path := writeTempInventory(t, `{
+	  "version": 1,
+	  "config": {"inventory": {"site": {
+	    "ZZ-TMP-SITE": {"ap": ["683a1e54490f"], "switch": [], "gateway": [], "_note": "template-managed"}
+	  }}}
+	}`)
+
+	if _, err := DisarmSiteDevices(path, "ZZ-TMP-SITE", []string{"683a1e54490f"}, nil, nil); err != nil {
+		t.Fatalf("disarm: %v", err)
+	}
+
+	f, _ := LoadInventoryFile(path)
+	si, ok := f.site("ZZ-TMP-SITE")
+	if !ok {
+		t.Fatal("site with a note must survive pruning")
+	}
+	if si.Note != "template-managed" {
+		t.Errorf("note lost: %q", si.Note)
+	}
+}
+
+func TestDisarmSiteDevices_MissingFileNoOp(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "inventory.json")
+	removed, err := DisarmSiteDevices(path, "ZZ-TMP-SITE", []string{"683a1e54490f"}, nil, nil)
+	if err != nil {
+		t.Fatalf("missing file should be a no-op, got %v", err)
+	}
+	if removed != 0 {
+		t.Errorf("removed = %d, want 0", removed)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("disarm must not create the file")
+	}
+}
+
+func TestDisarmSiteDevices_IdempotentUnknownMAC(t *testing.T) {
+	path := writeTempInventory(t, `{
+	  "version": 1,
+	  "config": {"inventory": {"site": {
+	    "ZZ-TMP-SITE": {"ap": ["683a1e54490f"], "switch": [], "gateway": []}
+	  }}}
+	}`)
+
+	removed, err := DisarmSiteDevices(path, "ZZ-TMP-SITE", []string{"00:00:00:00:00:01"}, nil, nil)
+	if err != nil {
+		t.Fatalf("disarm: %v", err)
+	}
+	if removed != 0 {
+		t.Errorf("removing an absent MAC should report 0, got %d", removed)
+	}
+	f, _ := LoadInventoryFile(path)
+	if got := f.MACsForSite("ZZ-TMP-SITE", "ap"); len(got) != 1 {
+		t.Errorf("armed MAC should remain, got %v", got)
+	}
+}
+
+func TestDisarmSiteDevices_LegacySchemaFailsLoud(t *testing.T) {
+	path := writeTempInventory(t, `{
+	  "version": 1,
+	  "config": {"inventory": {"ap": ["aa:bb:cc:dd:ee:ff"], "switch": [], "gateway": []}}
+	}`)
+
+	if _, err := DisarmSiteDevices(path, "ZZ-TMP-SITE", []string{"aa:bb:cc:dd:ee:ff"}, nil, nil); !errors.Is(err, ErrLegacyInventorySchema) {
+		t.Fatalf("expected ErrLegacyInventorySchema, got %v", err)
+	}
+}
