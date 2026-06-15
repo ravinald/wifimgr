@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 )
 
 // Global registry for cross-package access (same pattern as globalCacheAccessor)
@@ -35,6 +36,10 @@ type APIConfig struct {
 	RateLimit    int
 	ResultsLimit int
 	CacheTTL     int // Cache TTL in seconds. 0 = never expire (on-demand only), -1 = use default (86400)
+	// ConnectTimeout bounds connection establishment (TCP dial + TLS handshake),
+	// not the overall request — so a dead host fails fast without capping slow
+	// but working responses. Vendor clients apply it to their transport.
+	ConnectTimeout time.Duration
 }
 
 // APIStatus represents the status of an API connection.

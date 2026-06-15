@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/ravinald/wifimgr/internal/common"
 	"github.com/ravinald/wifimgr/internal/logging"
@@ -28,6 +30,22 @@ type ClientOption func(*Client)
 func WithHTTPClient(c *http.Client) ClientOption {
 	return func(client *Client) {
 		client.httpClient = c
+	}
+}
+
+// WithConnectTimeout replaces the default client with one whose transport bounds
+// connection establishment (TCP dial + TLS handshake) and which carries an
+// overall request timeout. NewClient otherwise uses the shared http.DefaultClient
+// (no timeout at all), so without this an unreachable host hangs indefinitely.
+func WithConnectTimeout(d time.Duration) ClientOption {
+	return func(client *Client) {
+		if d <= 0 {
+			return
+		}
+		tr := http.DefaultTransport.(*http.Transport).Clone()
+		tr.DialContext = (&net.Dialer{Timeout: d}).DialContext
+		tr.TLSHandshakeTimeout = d
+		client.httpClient = &http.Client{Transport: tr, Timeout: 30 * time.Second}
 	}
 }
 

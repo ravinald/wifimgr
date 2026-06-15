@@ -180,6 +180,7 @@ func createMistClient(config *vendors.APIConfig) (vendors.Client, error) {
 		apiKey,
 		config.URL,
 		orgID,
+		api.WithConnectTimeout(config.ConnectTimeout),
 	)
 
 	return mist.NewAdapter(legacyClient, orgID), nil
@@ -257,7 +258,7 @@ func createUbiquitiClient(config *vendors.APIConfig) (vendors.Client, error) {
 		return nil, fmt.Errorf("missing site_manager_api_key credential")
 	}
 
-	return ubiquiti.NewAdapter(apiKey, config.URL)
+	return ubiquiti.NewAdapter(apiKey, config.URL, ubiquiti.WithConnectTimeout(config.ConnectTimeout))
 }
 
 // createArubaClient creates an Aruba Instant vendor client from config.
@@ -283,6 +284,7 @@ func createArubaClient(config *vendors.APIConfig) (vendors.Client, error) {
 	return aruba.NewAdapter(user, passwd, config.URL,
 		aruba.WithInsecureSkipVerify(insecure),
 		aruba.WithAPILabel(config.Label),
+		aruba.WithConnectTimeout(config.ConnectTimeout),
 	)
 }
 
