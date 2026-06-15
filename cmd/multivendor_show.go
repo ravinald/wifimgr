@@ -763,42 +763,67 @@ func printCacheTimestamp(cacheMgr *vendors.CacheManager, targetAPIs []string, fo
 		return
 	}
 
-	// Collect refresh times from all displayed APIs
-	type apiTime struct {
-		label string
-		time  time.Time
+	// Collect refresh outcome from all displayed APIs.
+	type apiRefresh struct {
+		label   string
+		success time.Time
+		failure time.Time
+		errMsg  string
 	}
-	var times []apiTime
+	var rows []apiRefresh
 
 	for _, apiLabel := range targetAPIs {
 		cache, err := cacheMgr.GetAPICache(apiLabel)
 		if err != nil {
 			continue
 		}
-		if !cache.Meta.LastRefresh.IsZero() {
-			times = append(times, apiTime{label: apiLabel, time: cache.Meta.LastRefresh})
+		m := cache.Meta
+		if m.LastRefresh.IsZero() && m.LastFailure.IsZero() {
+			continue
 		}
+		rows = append(rows, apiRefresh{label: apiLabel, success: m.LastRefresh, failure: m.LastFailure, errMsg: m.LastError})
 	}
 
-	if len(times) == 0 {
+	if len(rows) == 0 {
 		return
 	}
 
 	// Format the output
 	fmt.Println()
-	if len(times) == 1 {
-		fmt.Printf("Cache refreshed: %s (%s ago)\n",
-			times[0].time.Format("2006-01-02 15:04:05"),
-			formatDuration(time.Since(times[0].time)))
+	if len(rows) == 1 {
+		stamp, parens := refreshStampAndParens(rows[0].success, rows[0].failure, rows[0].errMsg)
+		fmt.Printf("Cache refreshed: %s (%s)\n", stamp, parens)
 	} else {
 		fmt.Println("Cache refreshed:")
-		for _, t := range times {
-			fmt.Printf("  %s: %s (%s ago)\n",
-				t.label,
-				t.time.Format("2006-01-02 15:04:05"),
-				formatDuration(time.Since(t.time)))
+		for _, r := range rows {
+			stamp, parens := refreshStampAndParens(r.success, r.failure, r.errMsg)
+			fmt.Printf("  %s: %s (%s)\n", r.label, stamp, parens)
 		}
 	}
+}
+
+// refreshStampAndParens renders the timestamp and parenthetical for one API's
+// cache-refresh footer line. The stamp is the last success (or the last failure
+// when there has never been a success); the parenthetical says how long ago that
+// was and, when the latest attempt failed, the reason and how long ago it failed.
+func refreshStampAndParens(success, failure time.Time, errMsg string) (string, string) {
+	const layout = "2006-01-02 15:04:05"
+	var stamp, parens string
+	if !success.IsZero() {
+		stamp = success.Format(layout)
+		parens = formatDuration(time.Since(success)) + " ago"
+	} else {
+		stamp = failure.Format(layout)
+		parens = "never succeeded"
+	}
+	if failure.After(success) {
+		note := errMsg
+		if note == "" {
+			note = "refresh failed"
+		}
+		parens += fmt.Sprintf(", %s %s ago", note, formatDuration(time.Since(failure)))
+	}
+	return stamp, parens
 }
 
 // formatDuration formats a duration in a human-readable way.

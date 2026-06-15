@@ -3,6 +3,7 @@ package vendors
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -59,11 +60,25 @@ func (c *CacheManager) RefreshAPISite(ctx context.Context, apiLabel, siteID stri
 // and silently clobber results. Combined with WriteFileAtomic, this makes
 // in-process concurrent refreshes safe; cross-process concurrency relies
 // on the atomic rename for last-writer-wins semantics.
+//
+// A failed refresh is recorded onto the prior cache's meta (LastFailure +
+// LastError) so status and the cache footer can show it; the last successful
+// LastRefresh is left intact. Without this, a hard failure returns before any
+// save and the failure leaves no trace the UI can read.
 func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel string, opts RefreshOptions) error {
 	lock := c.labelLock(apiLabel)
 	lock.Lock()
 	defer lock.Unlock()
 
+	err := c.doRefreshAPI(ctx, apiLabel, opts)
+	if err != nil {
+		c.recordRefreshFailureLocked(apiLabel, err)
+	}
+	return err
+}
+
+// doRefreshAPI performs the refresh. The caller holds the per-label lock.
+func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts RefreshOptions) error {
 	logging.Debugf("[cache] Starting refresh for API %s (fetchConfigs=%v)", apiLabel, opts.FetchDeviceConfigs)
 
 	client, err := c.registry.GetClient(apiLabel)
@@ -120,6 +135,15 @@ func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel strin
 	// Create new cache
 	cache := NewAPICache(apiLabel, config.Vendor, config.Credentials["org_id"])
 	cache.Meta.LastRefresh = startTime
+	// A fresh cache resets the failure fields; this is the success path, so leave
+	// LastError clear and carry the prior LastFailure forward as history (the
+	// prior cache, when not already loaded for device-config merge, is read once).
+	cache.Meta.LastError = ""
+	if existingCache != nil {
+		cache.Meta.LastFailure = existingCache.Meta.LastFailure
+	} else if prior, err := c.GetAPICache(apiLabel); err == nil {
+		cache.Meta.LastFailure = prior.Meta.LastFailure
+	}
 
 	// Fetch sites
 	fmt.Printf("    Fetching sites...")
@@ -484,4 +508,52 @@ func (c *CacheManager) refreshAllAPIs(ctx context.Context, optsFor func(apiLabel
 	}
 
 	return errors
+}
+
+// recordRefreshFailureLocked stamps a failed refresh onto the API's existing
+// cache so status and the cache footer can surface it; LastRefresh (the last
+// success) is left untouched. The caller holds the per-label lock. A first-ever
+// refresh that fails has no prior cache to stamp — that API simply isn't shown
+// yet, the pre-existing behavior.
+func (c *CacheManager) recordRefreshFailureLocked(apiLabel string, refreshErr error) {
+	cache, err := c.GetAPICache(apiLabel)
+	if err != nil {
+		logging.Debugf("[cache] No prior cache for %s to record refresh failure: %v", apiLabel, err)
+		return
+	}
+	cache.Meta.LastFailure = time.Now()
+	cache.Meta.LastError = classifyRefreshError(refreshErr)
+	if err := c.saveAPICacheLocked(cache); err != nil {
+		logging.Warnf("[cache] Failed to record refresh failure for %s: %v", apiLabel, err)
+	}
+}
+
+// classifyRefreshError reduces a refresh error to a short operator-facing label.
+// Matching is on the (wrapped) message string so it survives the fmt.Errorf
+// wrapping the refresh applies around vendor/transport errors.
+func classifyRefreshError(refreshErr error) string {
+	if refreshErr == nil {
+		return ""
+	}
+	msg := strings.ToLower(refreshErr.Error())
+	switch {
+	case strings.Contains(msg, "deadline exceeded"),
+		strings.Contains(msg, "timeout"),
+		strings.Contains(msg, "timed out"),
+		strings.Contains(msg, "connection refused"),
+		strings.Contains(msg, "no such host"),
+		strings.Contains(msg, "no route to host"),
+		strings.Contains(msg, "network is unreachable"),
+		strings.Contains(msg, "tls handshake"):
+		return "connection failure"
+	case strings.Contains(msg, "401"),
+		strings.Contains(msg, "403"),
+		strings.Contains(msg, "unauthorized"),
+		strings.Contains(msg, "forbidden"),
+		strings.Contains(msg, "invalid api key"),
+		strings.Contains(msg, "authentication"):
+		return "auth failure"
+	default:
+		return strings.TrimSpace(refreshErr.Error())
+	}
 }

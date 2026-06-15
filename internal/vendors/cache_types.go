@@ -8,9 +8,15 @@ import (
 type APICacheMeta struct {
 	Vendor            string         `json:"vendor"`
 	OrgID             string         `json:"org_id"`
-	LastRefresh       time.Time      `json:"last_refresh"`
+	LastRefresh       time.Time      `json:"last_refresh"` // last successful refresh
 	RefreshDurationMs int64          `json:"refresh_duration_ms"`
 	ItemCounts        map[string]int `json:"item_counts"`
+	// LastFailure/LastError record the most recent failed refresh. LastError is
+	// cleared on the next success so the current state reads cleanly, while
+	// LastFailure is retained as history. "Currently failing" is derived, not
+	// stored: LastFailure.After(LastRefresh).
+	LastFailure time.Time `json:"last_failure"`
+	LastError   string    `json:"last_error,omitempty"`
 }
 
 // APICacheSiteIndex provides site name to ID lookup for a single API.
