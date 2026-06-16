@@ -11,10 +11,10 @@ type APICacheMeta struct {
 	LastRefresh       time.Time      `json:"last_refresh"` // last successful refresh
 	RefreshDurationMs int64          `json:"refresh_duration_ms"`
 	ItemCounts        map[string]int `json:"item_counts"`
-	// LastFailure/LastError record the most recent failed refresh. LastError is
-	// cleared on the next success so the current state reads cleanly, while
-	// LastFailure is retained as history. "Currently failing" is derived, not
-	// stored: LastFailure.After(LastRefresh).
+	// LastFailure/LastError record the most recent failed refresh. Both are
+	// cleared on the next success, since a refresh newer than the failure makes
+	// it stale. A non-zero LastFailure therefore always reflects the current
+	// state, never history.
 	LastFailure time.Time `json:"last_failure"`
 	LastError   string    `json:"last_error,omitempty"`
 }
