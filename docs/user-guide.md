@@ -75,6 +75,12 @@ wifimgr show ap all                   # Every AP the API knows (managed highligh
 wifimgr show ap Lobby-AP format json  # A single AP as JSON
 ```
 
+The site list splits its device columns into managed/unmanaged: `APs (M/U)`,
+`Switches (M/U)`, `Gateways (M/U)` — so a managed site that still holds unarmed devices
+reads at a glance. In the widened `show sites all` view, sites that hold at least one armed
+device carry an `M` flag. JSON and CSV keep numeric fields (`ap_count`, `ap_managed`, …);
+the `M/U` string is table-only.
+
 ### Data Sources
 
 | Command       | Source            | Description                                  |
