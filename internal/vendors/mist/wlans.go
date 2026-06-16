@@ -317,7 +317,11 @@ func convertMistWLAN(w *api.MistWLAN, orgID string) *vendors.WLAN {
 	if w.Auth.Type != nil {
 		wlan.AuthType = *w.Auth.Type
 	}
-	// Don't copy PSK to cache for security - will be populated from user config when needed
+	// Secrets ride the typed fields, where the refresh layer encrypts them
+	// before they reach the cache. The raw config map below stays scrubbed.
+	if w.Auth.PSK != nil {
+		wlan.PSK = *w.Auth.PSK
+	}
 
 	// RADIUS servers for enterprise auth
 	if w.Auth.Enterprise != nil && w.Auth.Enterprise.Radius != nil {
@@ -328,13 +332,16 @@ func convertMistWLAN(w *api.MistWLAN, orgID string) *vendors.WLAN {
 		if w.Auth.Enterprise.Radius.Port != nil {
 			server.Port = *w.Auth.Enterprise.Radius.Port
 		}
-		// Don't copy RADIUS secret to cache for security
+		if w.Auth.Enterprise.Radius.Secret != nil {
+			server.Secret = *w.Auth.Enterprise.Radius.Secret
+		}
 		wlan.RadiusServers = []vendors.RadiusServer{server}
 	}
 
-	// Store full config map for round-trip accuracy using JSON marshaling
+	// Store full config map for round-trip accuracy using JSON marshaling.
+	// Strip secrets from the map: they live encrypted in the typed fields, and
+	// the map is persisted verbatim.
 	wlan.Config = mistWLANToMap(w)
-	// Remove sensitive data from cached config
 	if auth, ok := wlan.Config["auth"].(map[string]interface{}); ok {
 		delete(auth, "psk")
 		if enterprise, ok := auth["enterprise"].(map[string]interface{}); ok {

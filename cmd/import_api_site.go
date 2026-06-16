@@ -32,6 +32,7 @@ import (
 
 	"github.com/ravinald/wifimgr/internal/cmdutils"
 	"github.com/ravinald/wifimgr/internal/config"
+	"github.com/ravinald/wifimgr/internal/encryption"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/vendors"
 	"github.com/ravinald/wifimgr/internal/vendors/meraki"
@@ -53,7 +54,7 @@ const (
 
 // importAPISiteCmd represents the "import api site" command
 var importAPISiteCmd = &cobra.Command{
-	Use:   "site <site-name> [config|inventory|all] [full|type <scope>] [source <api-label>] [secrets] [compare] [save] [file <filename>]",
+	Use:   "site <site-name> [config|inventory|all] [full|type <scope>] [source <api-label>] [secrets|decrypt] [compare] [save] [file <filename>]",
 	Short: "Import site configuration from API cache",
 	Long: `Import site configuration from the API cache.
 
@@ -106,7 +107,9 @@ Arguments:
                    - ap        Access point configurations only
                    - switch    Switch configurations only
                    - gateway   Gateway/firewall configurations only
-  secrets        Optional. Include sensitive data (PSK, RADIUS secrets) - redacted by default
+  secrets        Optional. Include PSK/RADIUS secrets, masked as "*secret*"
+  decrypt        Optional. Include secrets decrypted to plaintext (implies secrets);
+                 needs the encryption password (WIFIMGR_PASSWORD or prompt)
   compare        Optional. Compare API state with existing import file (using jsondiff)
   save           Optional. Write to import file (default: print to STDOUT)
   file           Optional. Keyword followed by output filename (relative to config_dir or absolute)
@@ -114,7 +117,7 @@ Arguments:
 What it Does:
   1. Retrieves site configuration from the specified API cache
   2. Optionally filters to specific scope (wlans, profiles, ap, switch, gateway)
-  3. Redacts secrets by default (use 'secrets' to include)
+  3. Omits secrets by default; 'secrets' masks them, 'decrypt' reveals plaintext
   4. Prints to STDOUT or saves to a single import file if 'save' specified
   5. With 'compare': shows diff between API and existing local import file
 
@@ -279,7 +282,11 @@ func runImportAPISite(cmd *cobra.Command, args []string) error {
 
 	// Build the combined ImportFile envelope (site config + site-local WLAN
 	// templates live side-by-side so the file self-describes).
-	exportData, err := buildSiteExportData(cacheAccessor, site, parsed.scope, parsed.IncludeSecrets)
+	reveal, err := resolveSecretReveal(parsed.IncludeSecrets, parsed.Decrypt)
+	if err != nil {
+		return err
+	}
+	exportData, err := buildSiteExportData(cacheAccessor, site, parsed.scope, reveal)
 	if err != nil {
 		return fmt.Errorf("failed to build export data: %w", err)
 	}
@@ -582,10 +589,56 @@ type templatesEnvelope struct {
 	Device map[string]map[string]any `json:"device,omitempty"`
 }
 
+// maskedSecret is the placeholder emitted for a secret the caller asked to
+// include but not decrypt.
+const maskedSecret = "*secret*"
+
+// secretReveal controls how WLAN secrets are emitted on import. include turns
+// the secret fields on at all; decrypt swaps the masked placeholder for the
+// plaintext, which needs the encryption password.
+type secretReveal struct {
+	include  bool
+	decrypt  bool
+	password string
+}
+
+// resolveSecretReveal builds the reveal policy from the parsed keywords,
+// prompting for the encryption password when decrypt was requested.
+func resolveSecretReveal(include, decrypt bool) (secretReveal, error) {
+	r := secretReveal{include: include || decrypt, decrypt: decrypt}
+	if decrypt {
+		pw, err := encryption.GetPasswordOrPrompt("Enter encryption password to decrypt secrets: ")
+		if err != nil {
+			return secretReveal{}, fmt.Errorf("decrypt requires the encryption password: %w", err)
+		}
+		r.password = pw
+	}
+	return r, nil
+}
+
+// revealSecret renders a stored (encrypted) secret for output: the masked
+// placeholder unless decrypt was requested, in which case it's decrypted with
+// the supplied password. A decrypt failure falls back to the mask so a wrong
+// password neither leaks ciphertext nor aborts the export.
+func revealSecret(stored string, reveal secretReveal) string {
+	if !reveal.decrypt {
+		return maskedSecret
+	}
+	if !encryption.IsEncrypted(stored) {
+		return stored
+	}
+	plain, err := encryption.Decrypt(stored, reveal.password)
+	if err != nil {
+		logging.Warnf("Failed to decrypt secret, masking instead: %v", err)
+		return maskedSecret
+	}
+	return plain
+}
+
 // buildSiteExportData builds an ImportFile-shaped envelope containing both
 // the site config and the companion WLAN templates used by that site. Returns
 // nil when the scope produces nothing to emit.
-func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.SiteInfo, scope ImportScope, includeSecrets bool) (*importEnvelope, error) {
+func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.SiteInfo, scope ImportScope, reveal secretReveal) (*importEnvelope, error) {
 	siteSlug := slug(site.Name)
 
 	// WLANs always processed first so label references are ready to attach.
@@ -593,7 +646,7 @@ func buildSiteExportData(cacheAccessor *vendors.CacheAccessor, site *vendors.Sit
 	var wlanTemplates map[string]map[string]any
 	var wlanAssign map[string][]string
 	if scope == ScopeFull || scope == ScopeWLANs {
-		wlanLabels, wlanTemplates, wlanAssign = buildWLANsExport(cacheAccessor, site.ID, siteSlug, includeSecrets)
+		wlanLabels, wlanTemplates, wlanAssign = buildWLANsExport(cacheAccessor, site.ID, siteSlug, reveal)
 	}
 
 	env := &importEnvelope{
@@ -969,9 +1022,9 @@ func buildDevicesExport(cacheAccessor *vendors.CacheAccessor, siteID string, sou
 // to specific APs (apply_to=aps); the caller wires those into device-level wlan
 // lists so apply resolves them back to the same ap_ids — a functional no-op.
 // Meraki carries its availability inside the WLAN's vendor block instead.
-func buildWLANsExport(cacheAccessor *vendors.CacheAccessor, siteID, siteSlug string, includeSecrets bool) ([]string, map[string]map[string]any, map[string][]string) {
+func buildWLANsExport(cacheAccessor *vendors.CacheAccessor, siteID, siteSlug string, reveal secretReveal) ([]string, map[string]map[string]any, map[string][]string) {
 	wlans := cacheAccessor.GetWLANsBySite(siteID)
-	labels, profiles, vendorBlocks := synthesizeWLANLabels(wlans, siteSlug, includeSecrets)
+	labels, profiles, vendorBlocks := synthesizeWLANLabels(wlans, siteSlug, reveal)
 	if len(profiles) == 0 {
 		return labels, nil, nil
 	}
@@ -1056,7 +1109,7 @@ func profileToMap(p *config.WLANProfile) (map[string]any, error) {
 // matching WLANProfile map, and any per-label vendor blocks (e.g. the Meraki
 // SSID slot) that pin the WLAN to its native identity. Separated so unit tests
 // can drive it directly.
-func synthesizeWLANLabels(vendorWLANs []*vendors.WLAN, siteSlug string, includeSecrets bool) ([]string, map[string]*config.WLANProfile, map[string]map[string]any) {
+func synthesizeWLANLabels(vendorWLANs []*vendors.WLAN, siteSlug string, reveal secretReveal) ([]string, map[string]*config.WLANProfile, map[string]map[string]any) {
 	if len(vendorWLANs) == 0 {
 		return nil, nil, nil
 	}
@@ -1074,7 +1127,7 @@ func synthesizeWLANLabels(vendorWLANs []*vendors.WLAN, siteSlug string, includeS
 		}
 		used[base]++
 
-		profiles[label] = convertVendorWLANToProfile(w, includeSecrets)
+		profiles[label] = convertVendorWLANToProfile(w, reveal)
 		if block := vendorBlockForWLAN(w); block != nil {
 			vendorBlocks[label] = block
 		}
@@ -1179,8 +1232,9 @@ func merakiSlot(w *vendors.WLAN) (int, bool) {
 // (network IDs, ipAssignmentMode, etc.) is deliberately dropped here — this is
 // the portable half. The one binding worth keeping, the Meraki SSID slot, rides
 // alongside in a vendor block (see vendorBlockForWLAN), not in the profile. PSK
-// and RADIUS secrets honor includeSecrets and are otherwise omitted.
-func convertVendorWLANToProfile(w *vendors.WLAN, includeSecrets bool) *config.WLANProfile {
+// and RADIUS secrets honor the reveal policy: omitted unless requested, masked
+// as a placeholder by default, and decrypted only when decrypt was passed.
+func convertVendorWLANToProfile(w *vendors.WLAN, reveal secretReveal) *config.WLANProfile {
 	profile := &config.WLANProfile{
 		SSID:    w.SSID,
 		Enabled: w.Enabled,
@@ -1192,8 +1246,8 @@ func convertVendorWLANToProfile(w *vendors.WLAN, includeSecrets bool) *config.WL
 		},
 	}
 
-	if includeSecrets && w.PSK != "" {
-		profile.Auth.PSK = w.PSK
+	if reveal.include && w.PSK != "" {
+		profile.Auth.PSK = revealSecret(w.PSK, reveal)
 	}
 
 	if pairwise := derivePairwiseFromConfig(w.Config, w.EncryptionMode); len(pairwise) > 0 {
@@ -1204,8 +1258,8 @@ func convertVendorWLANToProfile(w *vendors.WLAN, includeSecrets bool) *config.WL
 		servers := make([]config.RADIUSServer, 0, len(w.RadiusServers))
 		for _, rs := range w.RadiusServers {
 			cs := config.RADIUSServer{Host: rs.Host, Port: rs.Port}
-			if includeSecrets {
-				cs.Secret = rs.Secret
+			if reveal.include && rs.Secret != "" {
+				cs.Secret = revealSecret(rs.Secret, reveal)
 			}
 			servers = append(servers, cs)
 		}

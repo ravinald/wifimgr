@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ravinald/wifimgr/internal/config"
+	"github.com/ravinald/wifimgr/internal/encryption"
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
 
@@ -194,7 +195,7 @@ func TestConvertVendorWLANToProfile_Meraki(t *testing.T) {
 			"splashPage":                  "Click-through",
 		},
 	}
-	got := convertVendorWLANToProfile(w, true)
+	got := convertVendorWLANToProfile(w, secretReveal{include: true, decrypt: true})
 
 	if got.SSID != "Scale Guest" || !got.Enabled || got.VLANID != 10 || got.Band != "dual" {
 		t.Errorf("basic fields wrong: %+v", got)
@@ -213,9 +214,42 @@ func TestConvertVendorWLANToProfile_Meraki(t *testing.T) {
 	}
 
 	// With includeSecrets=false, PSK must be stripped.
-	gotNoSec := convertVendorWLANToProfile(w, false)
+	gotNoSec := convertVendorWLANToProfile(w, secretReveal{})
 	if gotNoSec.Auth.PSK != "" {
 		t.Errorf("PSK leaked when includeSecrets=false: %q", gotNoSec.Auth.PSK)
+	}
+}
+
+// TestConvertVendorWLANToProfile_SecretReveal checks the three output states for
+// a secret stored encrypted in the cache: omitted, masked, and decrypted.
+func TestConvertVendorWLANToProfile_SecretReveal(t *testing.T) {
+	const password = "correct horse battery staple"
+	encPSK, err := encryption.Encrypt("s3cr3t-pass", password)
+	if err != nil {
+		t.Fatalf("seed encrypt: %v", err)
+	}
+	w := &vendors.WLAN{SSID: "Scale", Enabled: true, AuthType: "psk", PSK: encPSK}
+
+	// Omitted: no secrets keyword.
+	if got := convertVendorWLANToProfile(w, secretReveal{}); got.Auth.PSK != "" {
+		t.Errorf("PSK should be omitted, got %q", got.Auth.PSK)
+	}
+
+	// Masked: secrets without decrypt never exposes ciphertext or plaintext.
+	if got := convertVendorWLANToProfile(w, secretReveal{include: true}); got.Auth.PSK != maskedSecret {
+		t.Errorf("PSK = %q, want %q", got.Auth.PSK, maskedSecret)
+	}
+
+	// Decrypted: correct password yields the plaintext.
+	got := convertVendorWLANToProfile(w, secretReveal{include: true, decrypt: true, password: password})
+	if got.Auth.PSK != "s3cr3t-pass" {
+		t.Errorf("decrypted PSK = %q, want %q", got.Auth.PSK, "s3cr3t-pass")
+	}
+
+	// Wrong password falls back to the mask rather than leaking ciphertext.
+	bad := convertVendorWLANToProfile(w, secretReveal{include: true, decrypt: true, password: "wrong"})
+	if bad.Auth.PSK != maskedSecret {
+		t.Errorf("bad-password PSK = %q, want %q", bad.Auth.PSK, maskedSecret)
 	}
 }
 
@@ -235,7 +269,7 @@ func TestConvertVendorWLANToProfile_MerakiRealWorld(t *testing.T) {
 			"bandSelection":     "Dual band operation with Band Steering",
 		},
 	}
-	got := convertVendorWLANToProfile(w, false)
+	got := convertVendorWLANToProfile(w, secretReveal{})
 
 	if got.Band != "dual" {
 		t.Errorf("Band = %q, want %q", got.Band, "dual")
@@ -268,7 +302,7 @@ func TestConvertVendorWLANToProfile_MistEnterprise(t *testing.T) {
 			"portal": map[string]any{"enabled": true, "auth": "sponsor"},
 		},
 	}
-	got := convertVendorWLANToProfile(w, true)
+	got := convertVendorWLANToProfile(w, secretReveal{include: true, decrypt: true})
 
 	if got.Auth.Type != "eap" {
 		t.Errorf("expected Auth.Type=eap, got %q", got.Auth.Type)
@@ -287,7 +321,7 @@ func TestConvertVendorWLANToProfile_MistEnterprise(t *testing.T) {
 	}
 
 	// includeSecrets=false strips RADIUS secret but keeps host/port.
-	gotNoSec := convertVendorWLANToProfile(w, false)
+	gotNoSec := convertVendorWLANToProfile(w, secretReveal{})
 	if gotNoSec.Auth.RADIUSServers[0].Secret != "" {
 		t.Errorf("RADIUS secret leaked: %q", gotNoSec.Auth.RADIUSServers[0].Secret)
 	}
@@ -301,7 +335,7 @@ func TestSynthesizeWLANLabels(t *testing.T) {
 		{SSID: "Scale Guest", Enabled: true, AuthType: "open"},
 		{SSID: "Scale Robotics", Enabled: true, AuthType: "psk"},
 	}
-	labels, profiles, _ := synthesizeWLANLabels(wlans, "mx-mex-904", false)
+	labels, profiles, _ := synthesizeWLANLabels(wlans, "mx-mex-904", secretReveal{})
 
 	if len(labels) != 2 || len(profiles) != 2 {
 		t.Fatalf("expected 2 labels/profiles, got %d/%d", len(labels), len(profiles))
@@ -324,7 +358,7 @@ func TestSynthesizeWLANLabels_CollisionSuffix(t *testing.T) {
 		{SSID: "corp-net", Enabled: true, AuthType: "psk"},
 		{SSID: "CORP__NET", Enabled: true, AuthType: "psk"},
 	}
-	labels, profiles, _ := synthesizeWLANLabels(wlans, "site", false)
+	labels, profiles, _ := synthesizeWLANLabels(wlans, "site", secretReveal{})
 
 	want := []string{"site--corp-net", "site--corp-net-2", "site--corp-net-3"}
 	if !equalStrings(labels, want) {
@@ -336,7 +370,7 @@ func TestSynthesizeWLANLabels_CollisionSuffix(t *testing.T) {
 }
 
 func TestSynthesizeWLANLabels_Empty(t *testing.T) {
-	labels, profiles, vendorBlocks := synthesizeWLANLabels(nil, "site", false)
+	labels, profiles, vendorBlocks := synthesizeWLANLabels(nil, "site", secretReveal{})
 	if labels != nil || profiles != nil || vendorBlocks != nil {
 		t.Errorf("empty input should return nil/nil/nil, got %v/%v/%v", labels, profiles, vendorBlocks)
 	}
@@ -350,7 +384,7 @@ func TestSynthesizeWLANLabels_PinsMerakiSlot(t *testing.T) {
 		{SSID: "Scale Guest", Enabled: true, AuthType: "open", SourceVendor: "meraki", ID: "L_123:3", Config: map[string]any{"number": float64(3)}},
 		{SSID: "Corp", Enabled: true, AuthType: "psk", SourceVendor: "mist", ID: "uuid-abc"},
 	}
-	_, templates := buildWLANsExportFromWLANs(wlans, "site", false)
+	_, templates := buildWLANsExportFromWLANs(wlans, "site", secretReveal{})
 
 	block, ok := templates["site--scale-guest"]["meraki:"].(map[string]any)
 	if !ok {
@@ -472,7 +506,7 @@ func TestExportRoundTripsThroughLoaderTypes(t *testing.T) {
 	wlans := []*vendors.WLAN{
 		{SSID: "Scale Guest", Enabled: true, AuthType: "open"},
 	}
-	labels, templates := buildWLANsExportFromWLANs(wlans, "mx-mex-904", false)
+	labels, templates := buildWLANsExportFromWLANs(wlans, "mx-mex-904", secretReveal{})
 
 	env := &importEnvelope{
 		Version: 1,
@@ -530,8 +564,8 @@ func TestExportRoundTripsThroughLoaderTypes(t *testing.T) {
 // buildWLANsExportFromWLANs is a test helper mirroring buildWLANsExport but
 // bypasses the cache accessor so the test can drive synthesizeWLANLabels
 // directly and then mimic the profile-to-map conversion.
-func buildWLANsExportFromWLANs(ws []*vendors.WLAN, siteSlug string, includeSecrets bool) ([]string, map[string]map[string]any) {
-	labels, profiles, vendorBlocks := synthesizeWLANLabels(ws, siteSlug, includeSecrets)
+func buildWLANsExportFromWLANs(ws []*vendors.WLAN, siteSlug string, reveal secretReveal) ([]string, map[string]map[string]any) {
+	labels, profiles, vendorBlocks := synthesizeWLANLabels(ws, siteSlug, reveal)
 	if len(profiles) == 0 {
 		return labels, nil
 	}
