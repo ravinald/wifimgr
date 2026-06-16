@@ -113,11 +113,13 @@ func TestImportOutputArgsConsume(t *testing.T) {
 		wantMatch   bool
 		wantLast    int
 		wantSecrets bool
+		wantDecrypt bool
 		wantSave    bool
 		wantFile    string
 		wantErr     string
 	}{
 		{name: "secrets", args: []string{"secrets"}, wantMatch: true, wantLast: 0, wantSecrets: true},
+		{name: "decrypt implies secrets", args: []string{"decrypt"}, wantMatch: true, wantLast: 0, wantSecrets: true, wantDecrypt: true},
 		{name: "save", args: []string{"save"}, wantMatch: true, wantLast: 0, wantSave: true},
 		{name: "file consumes operand", args: []string{"file", "x.json"}, wantMatch: true, wantLast: 1, wantFile: "x.json"},
 		{name: "file strips quotes", args: []string{"file", `"q.json"`}, wantMatch: true, wantLast: 1, wantFile: "q.json"},
@@ -140,8 +142,8 @@ func TestImportOutputArgsConsume(t *testing.T) {
 			if matched != tc.wantMatch || last != tc.wantLast {
 				t.Errorf("matched=%v last=%d, want matched=%v last=%d", matched, last, tc.wantMatch, tc.wantLast)
 			}
-			if o.IncludeSecrets != tc.wantSecrets || o.SaveMode != tc.wantSave || o.OutputFile != tc.wantFile {
-				t.Errorf("state = %+v, want secrets=%v save=%v file=%q", o, tc.wantSecrets, tc.wantSave, tc.wantFile)
+			if o.IncludeSecrets != tc.wantSecrets || o.Decrypt != tc.wantDecrypt || o.SaveMode != tc.wantSave || o.OutputFile != tc.wantFile {
+				t.Errorf("state = %+v, want secrets=%v decrypt=%v save=%v file=%q", o, tc.wantSecrets, tc.wantDecrypt, tc.wantSave, tc.wantFile)
 			}
 		})
 	}

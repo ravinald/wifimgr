@@ -61,8 +61,14 @@ func (s *wlansService) Get(ctx context.Context, id string) (*vendors.WLAN, error
 		return nil, err
 	}
 
+	return s.fetchSSID(ctx, networkID, number)
+}
+
+// fetchSSID does a single SSID GET with retry/rate-limiting and returns the
+// vendor WLAN, including the PSK parsed from the raw response body (the SDK's
+// typed response omits it). Shared by Get and the per-network refresh.
+func (s *wlansService) fetchSSID(ctx context.Context, networkID, number string) (*vendors.WLAN, error) {
 	retryState := NewRetryState(s.retryConfig)
-	var ssid *meraki.ResponseWirelessGetNetworkWirelessSSID
 
 	for {
 		if s.rateLimiter != nil {
@@ -71,33 +77,52 @@ func (s *wlansService) Get(ctx context.Context, id string) (*vendors.WLAN, error
 			}
 		}
 
+		var ssid *meraki.ResponseWirelessGetNetworkWirelessSSID
+		var rawPSK string
 		var fetchErr error
 		if s.suppressOutput {
 			restore := suppressStdout()
-			ssid, _, fetchErr = s.dashboard.Wireless.GetNetworkWirelessSSID(networkID, number)
+			r, resp, e := s.dashboard.Wireless.GetNetworkWirelessSSID(networkID, number)
 			restore()
+			ssid, fetchErr = r, e
+			if e == nil && resp != nil {
+				rawPSK = pskFromBody(resp.Body())
+			}
 		} else {
-			ssid, _, fetchErr = s.dashboard.Wireless.GetNetworkWirelessSSID(networkID, number)
+			r, resp, e := s.dashboard.Wireless.GetNetworkWirelessSSID(networkID, number)
+			ssid, fetchErr = r, e
+			if e == nil && resp != nil {
+				rawPSK = pskFromBody(resp.Body())
+			}
 		}
 
 		if fetchErr == nil {
-			break
+			if ssid == nil {
+				return nil, fmt.Errorf("SSID not found: %s:%s", networkID, number)
+			}
+			return convertMerakiSSID(ssid, networkID, s.orgID, rawPSK), nil
 		}
 
 		if !retryState.ShouldRetry(fetchErr) {
-			return nil, fmt.Errorf("failed to get SSID %s: %w", id, fetchErr)
+			return nil, fmt.Errorf("failed to get SSID %s:%s: %w", networkID, number, fetchErr)
 		}
 
 		if waitErr := retryState.WaitBeforeRetry(ctx, nil); waitErr != nil {
 			return nil, fmt.Errorf("retry wait failed: %w", waitErr)
 		}
 	}
+}
 
-	if ssid == nil {
-		return nil, fmt.Errorf("SSID not found: %s", id)
+// pskFromBody extracts the psk from a raw SSID GET body. The dashboard returns
+// it only for psk auth mode; anything else yields "".
+func pskFromBody(body []byte) string {
+	var parsed struct {
+		Psk string `json:"psk"`
 	}
-
-	return convertMerakiSSID(ssid, networkID, s.orgID), nil
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return ""
+	}
+	return parsed.Psk
 }
 
 // BySSID finds SSIDs by their SSID name across all networks.
@@ -561,10 +586,20 @@ func (s *wlansService) getSSIDsForNetwork(ctx context.Context, networkID, networ
 	for _, ssid := range *ssids {
 		// Only include enabled SSIDs with a configured name
 		// (Meraki has 15 SSID slots, most are unconfigured)
-		if ssid.Enabled != nil && *ssid.Enabled && ssid.Name != "" {
-			wlan := convertMerakiSSIDItem(&ssid, networkID, networkName, s.orgID)
-			result = append(result, wlan)
+		if ssid.Enabled == nil || !*ssid.Enabled || ssid.Name == "" || ssid.Number == nil {
+			continue
 		}
+		// The list omits the PSK, so fetch each SSID individually to capture it.
+		// On GET failure, fall back to the list item so the SSID still caches
+		// (without its passphrase).
+		wlan, err := s.fetchSSID(ctx, networkID, strconv.Itoa(*ssid.Number))
+		if err != nil {
+			logging.Warnf("[meraki] Failed to get SSID %s:%d, caching without PSK: %v", networkID, *ssid.Number, err)
+			wlan = convertMerakiSSIDItem(&ssid, networkID, networkName, s.orgID)
+		} else if wlan.Config != nil && networkName != "" {
+			wlan.Config["networkName"] = networkName
+		}
+		result = append(result, wlan)
 	}
 
 	return result, nil
@@ -619,7 +654,9 @@ func convertMerakiSSIDItem(ssid *meraki.ResponseItemWirelessGetNetworkWirelessSS
 }
 
 // convertMerakiSSID converts a single Meraki SSID to vendor-agnostic WLAN type.
-func convertMerakiSSID(ssid *meraki.ResponseWirelessGetNetworkWirelessSSID, networkID, orgID string) *vendors.WLAN {
+// rawPSK is the passphrase parsed from the raw GET body: the SDK's typed
+// response drops the psk field, so callers extract it with pskFromBody.
+func convertMerakiSSID(ssid *meraki.ResponseWirelessGetNetworkWirelessSSID, networkID, orgID, rawPSK string) *vendors.WLAN {
 	wlan := &vendors.WLAN{
 		OrgID:        orgID,
 		SiteID:       networkID,
@@ -644,6 +681,11 @@ func convertMerakiSSID(ssid *meraki.ResponseWirelessGetNetworkWirelessSSID, netw
 	wlan.EncryptionMode = ssid.EncryptionMode
 	wlan.Band = ssid.BandSelection
 
+	// PSK is only present on the per-SSID GET (the list endpoint omits it) and
+	// only for psk auth mode. It rides the typed field, where the refresh layer
+	// encrypts it before caching; the config map below stays scrubbed.
+	wlan.PSK = rawPSK
+
 	// Convert RADIUS servers
 	if ssid.RadiusServers != nil {
 		for _, rs := range *ssid.RadiusServers {
@@ -657,8 +699,10 @@ func convertMerakiSSID(ssid *meraki.ResponseWirelessGetNetworkWirelessSSID, netw
 		}
 	}
 
-	// Store full config
+	// Store full config, then strip the secret so it never persists in the
+	// clear; the encrypted copy lives in wlan.PSK.
 	wlan.Config = ssidToMap(ssid)
+	delete(wlan.Config, "psk")
 
 	return wlan
 }

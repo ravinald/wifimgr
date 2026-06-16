@@ -48,7 +48,7 @@ const (
 // into a standalone ImportFile. Scoped to a specific API because template
 // namespaces live at the API/org boundary.
 var importAPITemplatesCmd = &cobra.Command{
-	Use:   "templates [target <api-label>] [type wlan|rf|device|gateway|all] [save] [file <filename>] [secrets]",
+	Use:   "templates [target <api-label>] [type wlan|rf|device|gateway|all] [save] [file <filename>] [secrets|decrypt]",
 	Short: "Import vendor-level templates from API cache",
 	Long: `Import vendor-level (org-scoped) templates from a specific API.
 
@@ -70,8 +70,9 @@ Arguments:
   type <kind>    Optional. Template kind to export (default: wlan). Currently
                  only "wlan" is supported; "rf", "device", "gateway", "all"
                  are reserved for later coverage.
-  secrets        Optional. Include sensitive data (PSK, RADIUS secrets) —
-                 redacted by default.
+  secrets        Optional. Include PSK/RADIUS secrets, masked as "*secret*".
+  decrypt        Optional. Include secrets decrypted to plaintext (implies
+                 secrets); needs WIFIMGR_PASSWORD or an interactive prompt.
   save           Optional. Write to import file (default: print to STDOUT).
   file           Optional. Keyword followed by output filename (relative to
                  config_dir or absolute).
@@ -188,7 +189,11 @@ func runImportAPITemplates(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build the envelope. For now only WLANs are supported.
-	env, err := buildTemplatesExportData(cacheAccessor, parsed.apiLabel, parsed.templateType, parsed.IncludeSecrets)
+	reveal, err := resolveSecretReveal(parsed.IncludeSecrets, parsed.Decrypt)
+	if err != nil {
+		return err
+	}
+	env, err := buildTemplatesExportData(cacheAccessor, parsed.apiLabel, parsed.templateType, reveal)
 	if err != nil {
 		return fmt.Errorf("failed to build templates export: %w", err)
 	}
@@ -243,7 +248,7 @@ func resolveTemplateImportPath(outputFile, configDir, apiLabel string, kind Temp
 
 // buildTemplatesExportData materializes an ImportFile envelope containing
 // vendor-level templates for the given API.
-func buildTemplatesExportData(cacheAccessor *vendors.CacheAccessor, apiLabel string, kind TemplateImportType, includeSecrets bool) (*importEnvelope, error) {
+func buildTemplatesExportData(cacheAccessor *vendors.CacheAccessor, apiLabel string, kind TemplateImportType, reveal secretReveal) (*importEnvelope, error) {
 	env := &importEnvelope{
 		Version: 1,
 		Source: &importSourceExport{
@@ -256,7 +261,7 @@ func buildTemplatesExportData(cacheAccessor *vendors.CacheAccessor, apiLabel str
 	switch kind {
 	case TemplateTypeWLAN:
 		wlans := collectOrgWLANs(cacheAccessor, apiLabel)
-		templates := synthesizeOrgWLANTemplates(wlans, includeSecrets)
+		templates := synthesizeOrgWLANTemplates(wlans, reveal)
 		if len(templates) == 0 {
 			return env, nil
 		}
@@ -290,7 +295,7 @@ func collectOrgWLANs(cacheAccessor *vendors.CacheAccessor, apiLabel string) []*v
 // synthesizeOrgWLANTemplates builds the Templates.WLAN map for org-level
 // WLANs. Labels are bare slugs of the SSID — no site prefix, because the
 // scope IS the whole org. Collisions append a counter suffix.
-func synthesizeOrgWLANTemplates(ws []*vendors.WLAN, includeSecrets bool) map[string]map[string]any {
+func synthesizeOrgWLANTemplates(ws []*vendors.WLAN, reveal secretReveal) map[string]map[string]any {
 	if len(ws) == 0 {
 		return nil
 	}
@@ -308,7 +313,7 @@ func synthesizeOrgWLANTemplates(ws []*vendors.WLAN, includeSecrets bool) map[str
 		}
 		used[base]++
 
-		profile := convertVendorWLANToProfile(w, includeSecrets)
+		profile := convertVendorWLANToProfile(w, reveal)
 		m, err := profileToMap(profile)
 		if err != nil {
 			logging.Warnf("[import templates] failed to serialize WLAN %q: %v", w.SSID, err)

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/ravinald/wifimgr/internal/encryption"
 	"github.com/ravinald/wifimgr/internal/helpers"
 	"github.com/ravinald/wifimgr/internal/logging"
 )
@@ -23,6 +24,23 @@ type CacheManager struct {
 	// API is strictly ordered. Combined with WriteFileAtomic this makes
 	// in-process concurrent refreshes safe.
 	labelMus sync.Map // map[string]*sync.Mutex
+
+	// secretPw caches the encryption password used to protect WLAN secrets at
+	// rest. Resolved once per process so a parallel refresh-all prompts at most
+	// once; see secretPassword.
+	secretPwOnce sync.Once
+	secretPw     string
+	secretPwErr  error
+}
+
+// secretPassword resolves the password used to encrypt WLAN secrets in the
+// cache — from WIFIMGR_PASSWORD or an interactive prompt — once per process.
+func (c *CacheManager) secretPassword() (string, error) {
+	c.secretPwOnce.Do(func() {
+		c.secretPw, c.secretPwErr = encryption.GetPasswordOrPrompt(
+			"Enter encryption password to protect WLAN secrets in cache: ")
+	})
+	return c.secretPw, c.secretPwErr
 }
 
 // RefreshOptions controls the behavior of cache refresh operations.
