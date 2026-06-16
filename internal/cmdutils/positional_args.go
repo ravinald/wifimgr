@@ -225,6 +225,7 @@ func ParseApplyArgs(args []string) (*ParsedApplyArgs, error) {
 // identically across commands; the command-specific keywords stay local.
 type ImportOutputArgs struct {
 	IncludeSecrets bool
+	Decrypt        bool // reveal plaintext secrets; implies IncludeSecrets
 	SaveMode       bool
 	OutputFile     string
 }
@@ -236,6 +237,9 @@ type ImportOutputArgs struct {
 func (o *ImportOutputArgs) Consume(args []string, i int) (matched bool, last int, err error) {
 	switch strings.ToLower(args[i]) {
 	case "secrets":
+		o.IncludeSecrets = true
+	case "decrypt":
+		o.Decrypt = true
 		o.IncludeSecrets = true
 	case "save":
 		o.SaveMode = true
