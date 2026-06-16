@@ -389,19 +389,20 @@ Because the password protects the cache, use the **same** password across refres
 secret encrypted with one password can't be decrypted with another. If you refresh with a
 different password, re-run `refresh` to re-encrypt under the intended one.
 
-The `import api site` and `import api templates` commands read these encrypted secrets:
+The `import api site` and `import api templates` commands emit these secrets so the
+imported file is ready to apply:
 
-| Keyword     | Output for a stored secret                                    |
-|-------------|---------------------------------------------------------------|
-| *(none)*    | Secret field omitted                                          |
-| `secrets`   | Field present, masked as `*secret*`                           |
-| `decrypt`   | Field present, decrypted to plaintext (implies `secrets`)     |
+| Keyword   | Output for a stored secret                                                  |
+|-----------|-----------------------------------------------------------------------------|
+| *(none)*  | The stored `enc:` value, verbatim — applies as-is (apply decrypts it)        |
+| `decrypt` | Decrypted plaintext, using the encryption password                          |
 
-`decrypt` needs the encryption password (`WIFIMGR_PASSWORD` or prompt). A wrong password
-falls back to the `*secret*` mask rather than emitting ciphertext.
+If the cache somehow holds a secret in the clear, the default output masks it as
+`*secret*` rather than echoing plaintext. `decrypt` needs the encryption password
+(`WIFIMGR_PASSWORD` or prompt); a wrong password also falls back to the mask.
 
 ```bash
-wifimgr import api site US-SFO-LAB type wlans secrets   # PSK shown as *secret*
+wifimgr import api site US-SFO-LAB type wlans            # PSK kept as its enc: value
 WIFIMGR_PASSWORD=… wifimgr import api site US-SFO-LAB type wlans decrypt   # plaintext PSK
 ```
 
