@@ -101,7 +101,9 @@ func runShowAPIStatus(cmd *cobra.Command, args []string) error {
 			fmt.Printf("    Last Success: %s (%s ago)\n",
 				lastSuccess.Format("2006-01-02 15:04:05"), formatDuration(time.Since(lastSuccess)))
 		}
-		if !lastFailure.IsZero() {
+		// Only surface a failure that the latest success hasn't already superseded.
+		// An older failure is stale history; a success newer than it means recovery.
+		if lastFailure.After(lastSuccess) {
 			fmt.Printf("    Last Failure: %s (%s ago)\n",
 				lastFailure.Format("2006-01-02 15:04:05"), formatDuration(time.Since(lastFailure)))
 		}
