@@ -35,16 +35,20 @@ Color encodes exactly one axis — **device operational state** — in the statu
 (online → green `C`, offline → `D`, alerting → yellow `A`, dormant → blue `Z`). Metadata
 that isn't state (managed, drift) never tints text; it rides a **flags channel** instead.
 
-Device tables (`show ap|switch|gateway`) carry a `Flags` column when any flag is present:
+Device tables (`show ap|switch|gateway`) and the site list (`show site`) carry a `Flags`
+column when any flag is present:
 
 | Flag | Meaning |
 |------|---------|
 | `M`  | managed — armed in the per-site `inventory.json` |
 | `*`  | config drift — local intent differs from the cached config |
 
+On the site list, `M` marks a site that holds at least one armed device, shown only in the
+widened `all` view (the default view is already managed-only, so the flag would be noise).
+
 Below the table, a legend lists **only the flags actually present**, one per line with the
-key emphasized (theme-safe bold, not color). A managed device's name is shown in the same
-bold emphasis so it scans quickly in the widened `all` view, without implying "up."
+key emphasized (theme-safe bold, not color). A managed device's (or site's) name is shown in
+the same bold emphasis so it scans quickly in the widened `all` view, without implying "up."
 
 A table opts in by setting `TableConfig.FlagLegend` (a `[]FlagDef` of `{Key, Description}`)
 and emitting a `flags` field per row. The caller passes only the present flags. Inline cell
