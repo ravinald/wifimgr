@@ -195,7 +195,8 @@ func TestConvertVendorWLANToProfile_Meraki(t *testing.T) {
 			"splashPage":                  "Click-through",
 		},
 	}
-	got := convertVendorWLANToProfile(w, secretReveal{include: true, decrypt: true})
+	// Seed PSK is plaintext, so decrypt echoes it back unchanged.
+	got := convertVendorWLANToProfile(w, secretReveal{decrypt: true})
 
 	if got.SSID != "Scale Guest" || !got.Enabled || got.VLANID != 10 || got.Band != "dual" {
 		t.Errorf("basic fields wrong: %+v", got)
@@ -213,15 +214,16 @@ func TestConvertVendorWLANToProfile_Meraki(t *testing.T) {
 		t.Errorf("portal wrong: %+v", got.Portal)
 	}
 
-	// With includeSecrets=false, PSK must be stripped.
+	// Default (no decrypt) on a plaintext-stored secret masks it, never leaks it.
 	gotNoSec := convertVendorWLANToProfile(w, secretReveal{})
-	if gotNoSec.Auth.PSK != "" {
-		t.Errorf("PSK leaked when includeSecrets=false: %q", gotNoSec.Auth.PSK)
+	if gotNoSec.Auth.PSK != maskedSecret {
+		t.Errorf("plaintext PSK should mask, got %q", gotNoSec.Auth.PSK)
 	}
 }
 
-// TestConvertVendorWLANToProfile_SecretReveal checks the three output states for
-// a secret stored encrypted in the cache: omitted, masked, and decrypted.
+// TestConvertVendorWLANToProfile_SecretReveal checks the output states for a
+// secret stored encrypted in the cache: the enc: value by default, plaintext on
+// decrypt, and the mask on a bad password.
 func TestConvertVendorWLANToProfile_SecretReveal(t *testing.T) {
 	const password = "correct horse battery staple"
 	encPSK, err := encryption.Encrypt("s3cr3t-pass", password)
@@ -230,24 +232,19 @@ func TestConvertVendorWLANToProfile_SecretReveal(t *testing.T) {
 	}
 	w := &vendors.WLAN{SSID: "Scale", Enabled: true, AuthType: "psk", PSK: encPSK}
 
-	// Omitted: no secrets keyword.
-	if got := convertVendorWLANToProfile(w, secretReveal{}); got.Auth.PSK != "" {
-		t.Errorf("PSK should be omitted, got %q", got.Auth.PSK)
-	}
-
-	// Masked: secrets without decrypt never exposes ciphertext or plaintext.
-	if got := convertVendorWLANToProfile(w, secretReveal{include: true}); got.Auth.PSK != maskedSecret {
-		t.Errorf("PSK = %q, want %q", got.Auth.PSK, maskedSecret)
+	// Default: emit the encrypted value verbatim so the config applies as-is.
+	if got := convertVendorWLANToProfile(w, secretReveal{}); got.Auth.PSK != encPSK {
+		t.Errorf("PSK = %q, want the stored enc: value", got.Auth.PSK)
 	}
 
 	// Decrypted: correct password yields the plaintext.
-	got := convertVendorWLANToProfile(w, secretReveal{include: true, decrypt: true, password: password})
+	got := convertVendorWLANToProfile(w, secretReveal{decrypt: true, password: password})
 	if got.Auth.PSK != "s3cr3t-pass" {
 		t.Errorf("decrypted PSK = %q, want %q", got.Auth.PSK, "s3cr3t-pass")
 	}
 
 	// Wrong password falls back to the mask rather than leaking ciphertext.
-	bad := convertVendorWLANToProfile(w, secretReveal{include: true, decrypt: true, password: "wrong"})
+	bad := convertVendorWLANToProfile(w, secretReveal{decrypt: true, password: "wrong"})
 	if bad.Auth.PSK != maskedSecret {
 		t.Errorf("bad-password PSK = %q, want %q", bad.Auth.PSK, maskedSecret)
 	}
@@ -302,7 +299,8 @@ func TestConvertVendorWLANToProfile_MistEnterprise(t *testing.T) {
 			"portal": map[string]any{"enabled": true, "auth": "sponsor"},
 		},
 	}
-	got := convertVendorWLANToProfile(w, secretReveal{include: true, decrypt: true})
+	// Seed RADIUS secret is plaintext, so decrypt echoes it back unchanged.
+	got := convertVendorWLANToProfile(w, secretReveal{decrypt: true})
 
 	if got.Auth.Type != "eap" {
 		t.Errorf("expected Auth.Type=eap, got %q", got.Auth.Type)
@@ -320,10 +318,10 @@ func TestConvertVendorWLANToProfile_MistEnterprise(t *testing.T) {
 		t.Errorf("portal wrong: %+v", got.Portal)
 	}
 
-	// includeSecrets=false strips RADIUS secret but keeps host/port.
+	// Default (no decrypt) on a plaintext-stored RADIUS secret masks it.
 	gotNoSec := convertVendorWLANToProfile(w, secretReveal{})
-	if gotNoSec.Auth.RADIUSServers[0].Secret != "" {
-		t.Errorf("RADIUS secret leaked: %q", gotNoSec.Auth.RADIUSServers[0].Secret)
+	if gotNoSec.Auth.RADIUSServers[0].Secret != maskedSecret {
+		t.Errorf("plaintext RADIUS secret should mask, got %q", gotNoSec.Auth.RADIUSServers[0].Secret)
 	}
 	if gotNoSec.Auth.RADIUSServers[0].Host != "radius1.example.com" {
 		t.Errorf("host should survive secret strip: %q", gotNoSec.Auth.RADIUSServers[0].Host)

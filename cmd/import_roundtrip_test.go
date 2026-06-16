@@ -94,7 +94,7 @@ func runRoundTripCase(t *testing.T, vendor, siteName string, seedWLANs []*vendor
 	siteSlug := slug(siteName)
 
 	// Step 1+2: export pipeline (no cache accessor needed for this slice).
-	labels, profiles, _ := synthesizeWLANLabels(seedWLANs, siteSlug, secretReveal{include: true, decrypt: true})
+	labels, profiles, _ := synthesizeWLANLabels(seedWLANs, siteSlug, secretReveal{decrypt: true})
 	if len(labels) != len(seedWLANs) {
 		t.Fatalf("label count = %d, want %d", len(labels), len(seedWLANs))
 	}
