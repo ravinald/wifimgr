@@ -332,9 +332,18 @@ func showSitesMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) er
 		return err
 	}
 
+	// Armed device MACs, to split each site's device counts into managed vs
+	// unmanaged. A device is exactly one type and inventory maps key on the
+	// normalized MAC, so one combined set suffices.
+	managedMACs, err := loadManagedMACSet([]string{"ap", "switch", "gateway"})
+	if err != nil {
+		return err
+	}
+
 	// Collect sites from all target APIs (list view)
 	var allSites []formatter.GenericTableData
 	apiCounts := make(map[string]int)
+	usedManaged := false // any M flag emitted -> render the legend
 
 	for _, apiLabel := range targetAPIs {
 		cache, err := cacheMgr.GetAPICache(apiLabel)
@@ -356,39 +365,73 @@ func showSitesMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) er
 				}
 			}
 
-			// Count devices for this site
-			apCount := 0
-			switchCount := 0
-			gwCount := 0
+			// Count devices for this site, splitting managed (armed) from the
+			// rest. A managed site can still hold unmanaged devices, so the
+			// split is informative in both views.
+			apTotal, apManaged := 0, 0
+			for mac, item := range cache.Inventory.AP {
+				if item.SiteID != site.ID {
+					continue
+				}
+				apTotal++
+				if managedMACs[vendors.NormalizeMAC(mac)] {
+					apManaged++
+				}
+			}
+			switchTotal, switchManaged := 0, 0
+			for mac, item := range cache.Inventory.Switch {
+				if item.SiteID != site.ID {
+					continue
+				}
+				switchTotal++
+				if managedMACs[vendors.NormalizeMAC(mac)] {
+					switchManaged++
+				}
+			}
+			gwTotal, gwManaged := 0, 0
+			for mac, item := range cache.Inventory.Gateway {
+				if item.SiteID != site.ID {
+					continue
+				}
+				gwTotal++
+				if managedMACs[vendors.NormalizeMAC(mac)] {
+					gwManaged++
+				}
+			}
 
-			for _, item := range cache.Inventory.AP {
-				if item.SiteID == site.ID {
-					apCount++
-				}
-			}
-			for _, item := range cache.Inventory.Switch {
-				if item.SiteID == site.ID {
-					switchCount++
-				}
-			}
-			for _, item := range cache.Inventory.Gateway {
-				if item.SiteID == site.ID {
-					gwCount++
-				}
+			// In the widened (`all`) view, flag managed sites and embolden the
+			// name so they stand out among the unmanaged. The default view is
+			// already all-managed, so a flag there is noise.
+			siteManaged := managedSites[strings.ToLower(site.Name)]
+			displayName := site.Name
+			var flags string
+			if parsed.ShowUnmanaged && siteManaged {
+				flags = flagManaged
+				usedManaged = true
+				displayName = "BOLD_TEXT:" + site.Name
 			}
 
-			// Convert to table data
+			// Numeric fields stay primary for JSON/CSV; the `M/U` strings are a
+			// table-only convenience.
 			data := formatter.GenericTableData{
-				"name":         site.Name,
-				"id":           site.ID,
-				"timezone":     site.Timezone,
-				"country_code": site.CountryCode,
-				"ap_count":     apCount,
-				"switch_count": switchCount,
-				"gw_count":     gwCount,
-				"total":        apCount + switchCount + gwCount,
-				"vendor":       cache.Meta.Vendor,
-				"api":          apiLabel,
+				"name":           displayName,
+				"flags":          flags,
+				"id":             site.ID,
+				"timezone":       site.Timezone,
+				"country_code":   site.CountryCode,
+				"managed":        siteManaged,
+				"ap_count":       apTotal,
+				"ap_managed":     apManaged,
+				"ap_mu":          fmt.Sprintf("%d/%d", apManaged, apTotal-apManaged),
+				"switch_count":   switchTotal,
+				"switch_managed": switchManaged,
+				"switch_mu":      fmt.Sprintf("%d/%d", switchManaged, switchTotal-switchManaged),
+				"gw_count":       gwTotal,
+				"gw_managed":     gwManaged,
+				"gw_mu":          fmt.Sprintf("%d/%d", gwManaged, gwTotal-gwManaged),
+				"total":          apTotal + switchTotal + gwTotal,
+				"vendor":         cache.Meta.Vendor,
+				"api":            apiLabel,
 			}
 
 			allSites = append(allSites, data)
@@ -428,23 +471,6 @@ func showSitesMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) er
 		return nil
 	}
 
-	// Determine columns - add API column when showing multiple APIs
-	columns := []formatter.TableColumn{
-		{Field: "name", Title: "Name", MaxWidth: 0},
-		{Field: "timezone", Title: "Timezone", MaxWidth: 0},
-		{Field: "ap_count", Title: "APs", MaxWidth: 0},
-		{Field: "switch_count", Title: "Switches", MaxWidth: 0},
-		{Field: "gw_count", Title: "Gateways", MaxWidth: 0},
-	}
-
-	// Add vendor and API columns when showing from multiple APIs
-	if len(targetAPIs) > 1 || apiFlag == "" {
-		columns = append(columns,
-			formatter.TableColumn{Field: "vendor", Title: "Vendor", MaxWidth: 0},
-			formatter.TableColumn{Field: "api", Title: "API", MaxWidth: 0},
-		)
-	}
-
 	// Create command path for config lookup
 	commandPath := "show.sites"
 
@@ -465,6 +491,54 @@ func showSitesMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) er
 				commandFormat.Title = titleVal
 			}
 		}
+	}
+
+	// Resolve the effective format before building columns: CSV gets numeric
+	// columns, the table gets the combined `M/U` cells and the flags column.
+	effFormat := parsed.Format
+	if effFormat == "" && hasCommandConfig {
+		effFormat = commandFormat.Format
+	}
+
+	var flagLegend []formatter.FlagDef
+	if usedManaged {
+		flagLegend = append(flagLegend, formatter.FlagDef{Key: flagManaged, Description: "managed (armed in inventory)"})
+	}
+
+	var columns []formatter.TableColumn
+	if effFormat == "csv" {
+		// Machine output: split totals from managed counts, both numeric.
+		columns = []formatter.TableColumn{
+			{Field: "name", Title: "Name", MaxWidth: 0},
+			{Field: "timezone", Title: "Timezone", MaxWidth: 0},
+			{Field: "managed", Title: "Managed", MaxWidth: 0, IsBoolField: true},
+			{Field: "ap_count", Title: "APs", MaxWidth: 0},
+			{Field: "ap_managed", Title: "APs Managed", MaxWidth: 0},
+			{Field: "switch_count", Title: "Switches", MaxWidth: 0},
+			{Field: "switch_managed", Title: "Switches Managed", MaxWidth: 0},
+			{Field: "gw_count", Title: "Gateways", MaxWidth: 0},
+			{Field: "gw_managed", Title: "Gateways Managed", MaxWidth: 0},
+		}
+	} else {
+		columns = []formatter.TableColumn{{Field: "name", Title: "Name", MaxWidth: 0}}
+		// Flags column slots in after Name only when a flag is present.
+		if len(flagLegend) > 0 {
+			columns = append(columns, formatter.TableColumn{Field: "flags", Title: "Flags", MaxWidth: 0})
+		}
+		columns = append(columns,
+			formatter.TableColumn{Field: "timezone", Title: "Timezone", MaxWidth: 0},
+			formatter.TableColumn{Field: "ap_mu", Title: "APs (M/U)", MaxWidth: 0},
+			formatter.TableColumn{Field: "switch_mu", Title: "Switches (M/U)", MaxWidth: 0},
+			formatter.TableColumn{Field: "gw_mu", Title: "Gateways (M/U)", MaxWidth: 0},
+		)
+	}
+
+	// Add vendor and API columns when showing from multiple APIs
+	if len(targetAPIs) > 1 || apiFlag == "" {
+		columns = append(columns,
+			formatter.TableColumn{Field: "vendor", Title: "Vendor", MaxWidth: 0},
+			formatter.TableColumn{Field: "api", Title: "API", MaxWidth: 0},
+		)
 	}
 
 	// Create cache accessor for cache.* field lookups
@@ -489,6 +563,7 @@ func showSitesMultiVendor(_ context.Context, parsed *cmdutils.ParsedShowArgs) er
 		CacheAccess:   cacheAccessor,
 		ShowAllFields: parsed.AllFields(),
 		Columns:       columns,
+		FlagLegend:    flagLegend,
 	}
 
 	// Set format from config if not overridden by argument
