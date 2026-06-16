@@ -68,7 +68,7 @@ func TestSynthesizeOrgWLANTemplates_BareSlugs(t *testing.T) {
 		{SSID: "Corp Net", Enabled: true, AuthType: "wpa2-enterprise"},
 		{SSID: "Guest Wi-Fi", Enabled: true, AuthType: "open"},
 	}
-	out := synthesizeOrgWLANTemplates(ws, false)
+	out := synthesizeOrgWLANTemplates(ws, secretReveal{})
 	if len(out) != 2 {
 		t.Fatalf("expected 2 templates, got %d", len(out))
 	}
@@ -84,7 +84,7 @@ func TestSynthesizeOrgWLANTemplates_CollisionSuffix(t *testing.T) {
 		{SSID: "Corp Net", Enabled: true, AuthType: "open"},
 		{SSID: "corp-net", Enabled: true, AuthType: "psk"},
 	}
-	out := synthesizeOrgWLANTemplates(ws, false)
+	out := synthesizeOrgWLANTemplates(ws, secretReveal{})
 	if len(out) != 2 {
 		t.Fatalf("expected 2 templates, got %d", len(out))
 	}
@@ -96,7 +96,7 @@ func TestSynthesizeOrgWLANTemplates_CollisionSuffix(t *testing.T) {
 }
 
 func TestSynthesizeOrgWLANTemplates_Empty(t *testing.T) {
-	if got := synthesizeOrgWLANTemplates(nil, false); got != nil {
+	if got := synthesizeOrgWLANTemplates(nil, secretReveal{}); got != nil {
 		t.Errorf("empty input should return nil, got %v", got)
 	}
 }
@@ -113,7 +113,7 @@ func TestOrgTemplatesRoundTripThroughLoader(t *testing.T) {
 			API:  "mist-prod",
 			Kind: "wlan-templates",
 		},
-		Templates: &templatesEnvelope{WLAN: synthesizeOrgWLANTemplates(ws, false)},
+		Templates: &templatesEnvelope{WLAN: synthesizeOrgWLANTemplates(ws, secretReveal{})},
 	}
 
 	data, err := json.Marshal(env)

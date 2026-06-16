@@ -7,8 +7,45 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ravinald/wifimgr/internal/encryption"
 	"github.com/ravinald/wifimgr/internal/logging"
 )
+
+// wlanHasPlaintextSecret reports whether a freshly fetched WLAN carries a PSK or
+// RADIUS secret that still needs encrypting before it can be cached.
+func wlanHasPlaintextSecret(w *WLAN) bool {
+	if w.PSK != "" && !encryption.IsEncrypted(w.PSK) {
+		return true
+	}
+	for _, rs := range w.RadiusServers {
+		if rs.Secret != "" && !encryption.IsEncrypted(rs.Secret) {
+			return true
+		}
+	}
+	return false
+}
+
+// encryptWLANSecrets replaces a WLAN's plaintext PSK and RADIUS secrets with
+// enc: ciphertext so secrets never reach the cache file in the clear. Empty or
+// already-encrypted values pass through untouched.
+func encryptWLANSecrets(w *WLAN, password string) error {
+	enc := func(v string) (string, error) {
+		if v == "" || encryption.IsEncrypted(v) {
+			return v, nil
+		}
+		return encryption.Encrypt(v, password)
+	}
+	var err error
+	if w.PSK, err = enc(w.PSK); err != nil {
+		return err
+	}
+	for i := range w.RadiusServers {
+		if w.RadiusServers[i].Secret, err = enc(w.RadiusServers[i].Secret); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // skipDeviceConfig reports whether a device's per-device config fetch should be
 // skipped (and its prior config carried forward) for this refresh. A device is
@@ -315,7 +352,25 @@ func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts R
 			if cache.WLANs == nil {
 				cache.WLANs = make(map[string]*WLAN)
 			}
+			// Secrets must never hit the cache file in the clear. Resolve the
+			// password once, and only when a WLAN actually carries a secret, so
+			// secret-free refreshes never prompt.
+			var pw string
 			for _, w := range wlans {
+				if wlanHasPlaintextSecret(w) {
+					pw, err = c.secretPassword()
+					if err != nil {
+						return fmt.Errorf("cache: resolve secret password: %w", err)
+					}
+					break
+				}
+			}
+			for _, w := range wlans {
+				if pw != "" {
+					if encErr := encryptWLANSecrets(w, pw); encErr != nil {
+						return fmt.Errorf("cache: encrypt WLAN %s secrets: %w", w.ID, encErr)
+					}
+				}
 				cache.WLANs[w.ID] = w
 			}
 			fmt.Printf(" %d WLANs\n", len(wlans))

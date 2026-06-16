@@ -378,6 +378,36 @@ When `WIFIMGR_PASSWORD` is set (either as an environment variable or in `.env.wi
 
 **Security note:** The password remains available in memory for the duration of the session when loaded via `.env.wifimgr` with the `-e` flag, enabling decryption of multiple values without re-prompting.
 
+### Secrets in the Cache
+
+WLAN secrets (PSK, RADIUS shared secret) are encrypted at rest. When `refresh` pulls
+WLANs from a vendor API, it encrypts any captured secret with the same `enc:` scheme
+before writing the cache file — secrets never land on disk in the clear. Refresh resolves
+the encryption password from `WIFIMGR_PASSWORD` or prompts for it once.
+
+Because the password protects the cache, use the **same** password across refreshes; a
+secret encrypted with one password can't be decrypted with another. If you refresh with a
+different password, re-run `refresh` to re-encrypt under the intended one.
+
+The `import api site` and `import api templates` commands read these encrypted secrets:
+
+| Keyword     | Output for a stored secret                                    |
+|-------------|---------------------------------------------------------------|
+| *(none)*    | Secret field omitted                                          |
+| `secrets`   | Field present, masked as `*secret*`                           |
+| `decrypt`   | Field present, decrypted to plaintext (implies `secrets`)     |
+
+`decrypt` needs the encryption password (`WIFIMGR_PASSWORD` or prompt). A wrong password
+falls back to the `*secret*` mask rather than emitting ciphertext.
+
+```bash
+wifimgr import api site US-SFO-LAB type wlans secrets   # PSK shown as *secret*
+WIFIMGR_PASSWORD=… wifimgr import api site US-SFO-LAB type wlans decrypt   # plaintext PSK
+```
+
+> Meraki returns the PSK only on its per-SSID endpoint, so `refresh` fetches each SSID
+> individually to capture it. Meraki does not return RADIUS shared secrets at all.
+
 ### PSK Validation
 
 When encrypting WiFi passwords, use `encrypt psk` to validate against IEEE 802.11i requirements:
