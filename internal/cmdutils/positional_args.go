@@ -219,15 +219,15 @@ func ParseApplyArgs(args []string) (*ParsedApplyArgs, error) {
 }
 
 // ImportOutputArgs carries the emit-control keywords every `import api …`
-// subcommand shares: secrets (include redacted-by-default fields), save (write
-// to disk vs print), and file <name> (output path). Each importer embeds this
-// and runs Consume before its own grammar switch so the shared keywords behave
-// identically across commands; the command-specific keywords stay local.
+// subcommand shares: decrypt (reveal plaintext secrets vs the encrypted value),
+// save (write to disk vs print), and file <name> (output path). Each importer
+// embeds this and runs Consume before its own grammar switch so the shared
+// keywords behave identically across commands; the command-specific keywords
+// stay local.
 type ImportOutputArgs struct {
-	IncludeSecrets bool
-	Decrypt        bool // reveal plaintext secrets; implies IncludeSecrets
-	SaveMode       bool
-	OutputFile     string
+	Decrypt    bool // emit decrypted plaintext secrets instead of the stored enc: value
+	SaveMode   bool
+	OutputFile string
 }
 
 // Consume handles the shared import keyword at args[i]. It reports whether the
@@ -236,11 +236,8 @@ type ImportOutputArgs struct {
 // through to its own keywords.
 func (o *ImportOutputArgs) Consume(args []string, i int) (matched bool, last int, err error) {
 	switch strings.ToLower(args[i]) {
-	case "secrets":
-		o.IncludeSecrets = true
 	case "decrypt":
 		o.Decrypt = true
-		o.IncludeSecrets = true
 	case "save":
 		o.SaveMode = true
 	case "file":

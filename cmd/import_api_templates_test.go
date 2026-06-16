@@ -19,18 +19,18 @@ func TestParseImportTemplatesArgs_Defaults(t *testing.T) {
 	if got.templateType != TemplateTypeWLAN {
 		t.Errorf("templateType = %q, want default wlan", got.templateType)
 	}
-	if got.SaveMode || got.IncludeSecrets || got.OutputFile != "" {
+	if got.SaveMode || got.Decrypt || got.OutputFile != "" {
 		t.Errorf("unexpected non-default flags: %+v", got)
 	}
 }
 
 func TestParseImportTemplatesArgs_Full(t *testing.T) {
-	got, err := parseImportTemplatesArgs([]string{"target", "mist-prod", "type", "wlan", "secrets", "save", "file", "import/org.json"})
+	got, err := parseImportTemplatesArgs([]string{"target", "mist-prod", "type", "wlan", "decrypt", "save", "file", "import/org.json"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if got.apiLabel != "mist-prod" || got.templateType != TemplateTypeWLAN ||
-		!got.SaveMode || !got.IncludeSecrets || got.OutputFile != "import/org.json" {
+		!got.SaveMode || !got.Decrypt || got.OutputFile != "import/org.json" {
 		t.Errorf("parsed args incorrect: %+v", got)
 	}
 }

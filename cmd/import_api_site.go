@@ -54,7 +54,7 @@ const (
 
 // importAPISiteCmd represents the "import api site" command
 var importAPISiteCmd = &cobra.Command{
-	Use:   "site <site-name> [config|inventory|all] [full|type <scope>] [source <api-label>] [secrets|decrypt] [compare] [save] [file <filename>]",
+	Use:   "site <site-name> [config|inventory|all] [full|type <scope>] [source <api-label>] [decrypt] [compare] [save] [file <filename>]",
 	Short: "Import site configuration from API cache",
 	Long: `Import site configuration from the API cache.
 
@@ -90,7 +90,7 @@ With Custom Output File:
 
 Combined Options:
   wifimgr import api site US-SFO-LAB source mist-prod save file import/sfo.json
-  wifimgr import api site US-SFO-LAB type wlans secrets save
+  wifimgr import api site US-SFO-LAB type wlans decrypt save
   wifimgr import api site US-SFO-LAB | jq '.config'
 
 Arguments:
@@ -107,9 +107,10 @@ Arguments:
                    - ap        Access point configurations only
                    - switch    Switch configurations only
                    - gateway   Gateway/firewall configurations only
-  secrets        Optional. Include PSK/RADIUS secrets, masked as "*secret*"
-  decrypt        Optional. Include secrets decrypted to plaintext (implies secrets);
-                 needs the encryption password (WIFIMGR_PASSWORD or prompt)
+  decrypt        Optional. Emit secrets (PSK, RADIUS) decrypted to plaintext;
+                 needs the encryption password (WIFIMGR_PASSWORD or prompt).
+                 Without it, the stored enc: value is emitted as-is (applyable),
+                 or "*secret*" if the cache somehow holds it in the clear.
   compare        Optional. Compare API state with existing import file (using jsondiff)
   save           Optional. Write to import file (default: print to STDOUT)
   file           Optional. Keyword followed by output filename (relative to config_dir or absolute)
@@ -117,7 +118,7 @@ Arguments:
 What it Does:
   1. Retrieves site configuration from the specified API cache
   2. Optionally filters to specific scope (wlans, profiles, ap, switch, gateway)
-  3. Omits secrets by default; 'secrets' masks them, 'decrypt' reveals plaintext
+  3. Emits secrets as their stored enc: value by default; 'decrypt' reveals plaintext
   4. Prints to STDOUT or saves to a single import file if 'save' specified
   5. With 'compare': shows diff between API and existing local import file
 
@@ -282,7 +283,7 @@ func runImportAPISite(cmd *cobra.Command, args []string) error {
 
 	// Build the combined ImportFile envelope (site config + site-local WLAN
 	// templates live side-by-side so the file self-describes).
-	reveal, err := resolveSecretReveal(parsed.IncludeSecrets, parsed.Decrypt)
+	reveal, err := resolveSecretReveal(parsed.Decrypt)
 	if err != nil {
 		return err
 	}
@@ -589,23 +590,23 @@ type templatesEnvelope struct {
 	Device map[string]map[string]any `json:"device,omitempty"`
 }
 
-// maskedSecret is the placeholder emitted for a secret the caller asked to
-// include but not decrypt.
+// maskedSecret stands in for a secret that can't be emitted safely — one the
+// cache holds in the clear (so echoing it would leak plaintext) or one a decrypt
+// failed on.
 const maskedSecret = "*secret*"
 
-// secretReveal controls how WLAN secrets are emitted on import. include turns
-// the secret fields on at all; decrypt swaps the masked placeholder for the
-// plaintext, which needs the encryption password.
+// secretReveal controls how WLAN secrets are emitted on import. By default the
+// stored (encrypted) value is printed verbatim so the config applies as-is;
+// decrypt swaps it for the plaintext, which needs the encryption password.
 type secretReveal struct {
-	include  bool
 	decrypt  bool
 	password string
 }
 
 // resolveSecretReveal builds the reveal policy from the parsed keywords,
 // prompting for the encryption password when decrypt was requested.
-func resolveSecretReveal(include, decrypt bool) (secretReveal, error) {
-	r := secretReveal{include: include || decrypt, decrypt: decrypt}
+func resolveSecretReveal(decrypt bool) (secretReveal, error) {
+	r := secretReveal{decrypt: decrypt}
 	if decrypt {
 		pw, err := encryption.GetPasswordOrPrompt("Enter encryption password to decrypt secrets: ")
 		if err != nil {
@@ -616,12 +617,16 @@ func resolveSecretReveal(include, decrypt bool) (secretReveal, error) {
 	return r, nil
 }
 
-// revealSecret renders a stored (encrypted) secret for output: the masked
-// placeholder unless decrypt was requested, in which case it's decrypted with
-// the supplied password. A decrypt failure falls back to the mask so a wrong
+// revealSecret renders a stored secret for output. Default: emit the encrypted
+// value as-is (so the imported config stays applyable) — but mask anything not
+// actually encrypted so a clear-text secret never leaks. With decrypt: return
+// the plaintext, falling back to the mask if decryption fails so a wrong
 // password neither leaks ciphertext nor aborts the export.
 func revealSecret(stored string, reveal secretReveal) string {
 	if !reveal.decrypt {
+		if encryption.IsEncrypted(stored) {
+			return stored
+		}
 		return maskedSecret
 	}
 	if !encryption.IsEncrypted(stored) {
@@ -1232,8 +1237,8 @@ func merakiSlot(w *vendors.WLAN) (int, bool) {
 // (network IDs, ipAssignmentMode, etc.) is deliberately dropped here — this is
 // the portable half. The one binding worth keeping, the Meraki SSID slot, rides
 // alongside in a vendor block (see vendorBlockForWLAN), not in the profile. PSK
-// and RADIUS secrets honor the reveal policy: omitted unless requested, masked
-// as a placeholder by default, and decrypted only when decrypt was passed.
+// and RADIUS secrets emit per revealSecret: the encrypted value by default
+// (applyable as-is), or plaintext when decrypt was passed.
 func convertVendorWLANToProfile(w *vendors.WLAN, reveal secretReveal) *config.WLANProfile {
 	profile := &config.WLANProfile{
 		SSID:    w.SSID,
@@ -1246,7 +1251,7 @@ func convertVendorWLANToProfile(w *vendors.WLAN, reveal secretReveal) *config.WL
 		},
 	}
 
-	if reveal.include && w.PSK != "" {
+	if w.PSK != "" {
 		profile.Auth.PSK = revealSecret(w.PSK, reveal)
 	}
 
@@ -1258,7 +1263,7 @@ func convertVendorWLANToProfile(w *vendors.WLAN, reveal secretReveal) *config.WL
 		servers := make([]config.RADIUSServer, 0, len(w.RadiusServers))
 		for _, rs := range w.RadiusServers {
 			cs := config.RADIUSServer{Host: rs.Host, Port: rs.Port}
-			if reveal.include && rs.Secret != "" {
+			if rs.Secret != "" {
 				cs.Secret = revealSecret(rs.Secret, reveal)
 			}
 			servers = append(servers, cs)
