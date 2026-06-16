@@ -456,7 +456,8 @@ The main configuration file (`~/.config/wifimgr/wifimgr-config.json`) supports t
       "rate_limit": 5000,
       "results_limit": 100,
       "cache_ttl": 86400,
-      "connection_timeout": 5
+      "connection_timeout": 5,
+      "sync_type": ["ap", "switch", "gateway"]
     }
   },
   "display": {
@@ -501,6 +502,24 @@ instead of hanging until the request timeout.
 
 A dead host now surfaces as `unhealthy` / `connection failure` in `show api status` within
 `connection_timeout` seconds rather than ~30s.
+
+### Sync Type
+
+`sync_type` is a per-API list declaring which device types a refresh collects:
+any of `ap`, `switch`, `gateway`. Site attributes (name, address, timezone)
+always sync.
+
+- **Omitted or `[]`:** site attributes only — no device inventory, configs,
+  statuses, or BSSIDs.
+- **`["ap"]`:** APs only, with their statuses and BSSIDs.
+- **`["ap", "switch", "gateway"]`:** all device types.
+
+Statuses are fetched only when at least one device type is listed; BSSIDs only
+when `ap` is listed. Org-level templates, profiles, and WLANs always sync.
+
+> **Upgrade note:** earlier versions collected all three device types
+> unconditionally. An API without `sync_type` now syncs site attributes only —
+> add `sync_type` to keep collecting devices.
 
 ### Accessing Configuration Values
 

@@ -552,7 +552,7 @@ func TestCacheManager_RefreshAllAPIs(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	errs := cm.RefreshAllAPIs(ctx)
+	errs := cm.RefreshAllAPIs(ctx, nil)
 
 	if len(errs) > 0 {
 		t.Errorf("unexpected errors: %v", errs)

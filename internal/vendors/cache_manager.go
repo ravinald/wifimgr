@@ -1,15 +1,18 @@
 package vendors
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/ravinald/wifimgr/internal/encryption"
 	"github.com/ravinald/wifimgr/internal/helpers"
 	"github.com/ravinald/wifimgr/internal/logging"
+	"github.com/ravinald/wifimgr/internal/refreshui"
 )
 
 // CacheManager manages per-API cache files and the cross-API index.
@@ -31,6 +34,50 @@ type CacheManager struct {
 	secretPwOnce sync.Once
 	secretPw     string
 	secretPwErr  error
+
+	// refresh-all tuning, applied by SetRefreshTuning. Zero values mean
+	// defaults: a bounded fan-out and no per-API deadline.
+	refreshConcurrency int
+	refreshTimeout     time.Duration
+}
+
+// defaultRefreshConcurrency caps how many APIs refresh at once when no explicit
+// limit is configured. Refresh-all fans out one goroutine per API; without a cap
+// a large config would open that many concurrent vendor sessions at once.
+const defaultRefreshConcurrency = 8
+
+// SetRefreshTuning sets the refresh-all fan-out cap and the per-API timeout.
+// concurrency <= 0 keeps the default cap; timeout <= 0 leaves per-API refreshes
+// unbounded (so a legitimately large org isn't cut off mid-fetch). The command
+// layer wires these from config.
+func (c *CacheManager) SetRefreshTuning(concurrency int, timeout time.Duration) {
+	c.refreshConcurrency = concurrency
+	c.refreshTimeout = timeout
+}
+
+// refreshLimit resolves the fan-out cap for n APIs: the configured value, else
+// the default, clamped to [1, n].
+func (c *CacheManager) refreshLimit(n int) int {
+	limit := c.refreshConcurrency
+	if limit <= 0 {
+		limit = defaultRefreshConcurrency
+	}
+	if limit > n {
+		limit = n
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	return limit
+}
+
+// refreshCtx derives the per-API context: a timeout-bounded child when a refresh
+// timeout is configured, else the parent with a no-op cancel.
+func (c *CacheManager) refreshCtx(parent context.Context) (context.Context, context.CancelFunc) {
+	if c.refreshTimeout <= 0 {
+		return parent, func() {}
+	}
+	return context.WithTimeout(parent, c.refreshTimeout)
 }
 
 // secretPassword resolves the password used to encrypt WLAN secrets in the
@@ -64,6 +111,16 @@ type RefreshOptions struct {
 	// managed refresh stays cheap on Meraki without discarding data a full
 	// pass collected. nil means no managed filter: fetch every device in scope.
 	ManagedMACs map[string]bool
+
+	// Reporter receives progress events. nil falls back to linear stdout output
+	// (refreshui.Resolve), preserving the original single-API behavior.
+	Reporter refreshui.Reporter
+
+	// SkipIndexRebuild suppresses the per-API cross-API index rebuild at the end
+	// of doRefreshAPI. The refresh-all orchestrator sets it so the index is built
+	// once after the batch instead of once per API — which otherwise re-scans
+	// every cache file N times and re-emits each MAC collision N times.
+	SkipIndexRebuild bool
 }
 
 // NewCacheManager creates a new cache manager.

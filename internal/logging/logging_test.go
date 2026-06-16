@@ -268,3 +268,24 @@ func TestNameFormatting(t *testing.T) {
 		t.Errorf("FormatOrgID(%s) = %s, want %s", unknownOrgID, formattedOrg, unknownOrgID)
 	}
 }
+
+func TestPauseOutputBuffersThenFlushes(t *testing.T) {
+	originalLogger := defaultLogger
+	defer func() { defaultLogger = originalLogger }()
+
+	defaultLogger = logrus.New()
+	var sink bytes.Buffer
+	defaultLogger.SetOutput(&sink)
+	defaultLogger.SetLevel(logrus.InfoLevel)
+
+	release := PauseOutput()
+	Warnf("collision while paused")
+	if sink.Len() != 0 {
+		t.Fatalf("paused log leaked to sink: %q", sink.String())
+	}
+
+	release()
+	if !strings.Contains(sink.String(), "collision while paused") {
+		t.Fatalf("release did not flush buffered log; sink=%q", sink.String())
+	}
+}

@@ -651,3 +651,29 @@ func TestMockSearchService(t *testing.T) {
 		t.Error("expected NeedsConfirmation=false for mock")
 	}
 }
+
+func TestAPIConfigShouldSync(t *testing.T) {
+	cfg := &APIConfig{SyncTypes: []string{"ap", "switch"}}
+	if !cfg.ShouldSync("ap") {
+		t.Error("expected ShouldSync(ap)=true")
+	}
+	if !cfg.ShouldSync("switch") {
+		t.Error("expected ShouldSync(switch)=true")
+	}
+	if cfg.ShouldSync("gateway") {
+		t.Error("expected ShouldSync(gateway)=false")
+	}
+	if !cfg.SyncsAnyDevice() {
+		t.Error("expected SyncsAnyDevice=true")
+	}
+}
+
+func TestAPIConfigSyncsAnyDeviceEmpty(t *testing.T) {
+	cfg := &APIConfig{}
+	if cfg.SyncsAnyDevice() {
+		t.Error("expected SyncsAnyDevice=false for empty SyncTypes")
+	}
+	if cfg.ShouldSync("ap") {
+		t.Error("expected ShouldSync(ap)=false for empty SyncTypes")
+	}
+}
