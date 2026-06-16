@@ -17,6 +17,7 @@ import (
 	"github.com/ravinald/wifimgr/internal/cmdutils"
 	"github.com/ravinald/wifimgr/internal/config"
 	"github.com/ravinald/wifimgr/internal/logging"
+	"github.com/ravinald/wifimgr/internal/refreshui"
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
 
@@ -148,12 +149,27 @@ func runRefreshAllSites(scope string) error {
 		fmt.Printf("Successfully refreshed %s\n", apiFlag)
 	} else {
 		fmt.Printf("Refreshing cache for %d APIs...\n", len(targetAPIs))
+
+		// On a terminal, drive the live status board and hold log output (incl.
+		// the index-rebuild MAC-collision warnings) until the board tears down so
+		// it doesn't paint over the render. Piped/redirected output keeps the
+		// linear text and logs unbuffered.
+		interactive := refreshui.Interactive()
+		reporter, stopBoard := refreshui.New(targetAPIs, interactive)
+		release := func() {}
+		if interactive {
+			release = logging.PauseOutput()
+		}
+
 		var errs map[string]error
 		if managed == nil {
-			errs = cacheMgr.RefreshAllAPIs(ctx)
+			errs = cacheMgr.RefreshAllAPIs(ctx, reporter)
 		} else {
-			errs = cacheMgr.RefreshAllAPIsManaged(ctx, managed)
+			errs = cacheMgr.RefreshAllAPIsManaged(ctx, managed, reporter)
 		}
+		stopBoard()
+		release()
+
 		successCount := len(targetAPIs) - len(errs)
 		fmt.Printf("\nRefreshed %d/%d APIs successfully\n", successCount, len(targetAPIs))
 		if len(errs) > 0 {

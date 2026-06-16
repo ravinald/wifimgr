@@ -30,6 +30,11 @@ func (c *CacheManager) RebuildIndex() error {
 		return fmt.Errorf("failed to read apis directory: %w", err)
 	}
 
+	// collisions records, per normalized MAC, the API that keeps it and the one
+	// that lost — deduped so a MAC owned by two APIs is reported once per rebuild,
+	// not once per device that re-hits it.
+	collisions := make(map[string]macCollision)
+
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
@@ -44,13 +49,13 @@ func (c *CacheManager) RebuildIndex() error {
 
 		// Index MACs
 		for mac := range cache.Inventory.AP {
-			c.indexMAC(index, mac, apiLabel)
+			c.indexMAC(index, collisions, mac, apiLabel)
 		}
 		for mac := range cache.Inventory.Switch {
-			c.indexMAC(index, mac, apiLabel)
+			c.indexMAC(index, collisions, mac, apiLabel)
 		}
 		for mac := range cache.Inventory.Gateway {
-			c.indexMAC(index, mac, apiLabel)
+			c.indexMAC(index, collisions, mac, apiLabel)
 		}
 
 		// Index site names
@@ -59,19 +64,31 @@ func (c *CacheManager) RebuildIndex() error {
 		}
 	}
 
+	for mac, col := range collisions {
+		logging.Warnf("MAC collision: %s exists in both %q and %q - keeping %q", mac, col.kept, col.dropped, col.kept)
+	}
+
 	c.index = index
 	return c.saveIndex()
 }
 
-// indexMAC adds a MAC to the index with collision detection.
-func (c *CacheManager) indexMAC(index *CrossAPIIndex, mac, apiLabel string) {
+// macCollision is one MAC claimed by two APIs: the first indexed wins (kept).
+type macCollision struct {
+	kept    string
+	dropped string
+}
+
+// indexMAC adds a MAC to the index, keeping the first API to claim it. A
+// conflicting claim is recorded in collisions (deduped) for the caller to log
+// once, rather than printed per occurrence.
+func (c *CacheManager) indexMAC(index *CrossAPIIndex, collisions map[string]macCollision, mac, apiLabel string) {
 	normalizedMAC := NormalizeMAC(mac)
 
 	if existingAPI, found := index.MACToAPI[normalizedMAC]; found {
 		if existingAPI != apiLabel {
-			// MAC collision - log error but keep existing mapping
-			_, _ = fmt.Fprintf(os.Stderr, "ERROR MAC collision: %s exists in both %q and %q - keeping %q\n",
-				normalizedMAC, existingAPI, apiLabel, existingAPI)
+			if _, seen := collisions[normalizedMAC]; !seen {
+				collisions[normalizedMAC] = macCollision{kept: existingAPI, dropped: apiLabel}
+			}
 			return
 		}
 	}

@@ -2,6 +2,7 @@ package vendors
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -40,7 +41,21 @@ type APIConfig struct {
 	// not the overall request — so a dead host fails fast without capping slow
 	// but working responses. Vendor clients apply it to their transport.
 	ConnectTimeout time.Duration
+	// SyncTypes lists the device types this API collects: any of "ap", "switch",
+	// "gateway". Empty means site attributes only — no device inventory, configs,
+	// statuses, or BSSIDs are fetched. Normalized lowercase and deduped at load.
+	SyncTypes []string
 }
+
+// ShouldSync reports whether deviceType ("ap"/"switch"/"gateway") is collected
+// for this API.
+func (c *APIConfig) ShouldSync(deviceType string) bool {
+	return slices.Contains(c.SyncTypes, deviceType)
+}
+
+// SyncsAnyDevice reports whether any device type is collected. False means a
+// site-attributes-only sync.
+func (c *APIConfig) SyncsAnyDevice() bool { return len(c.SyncTypes) > 0 }
 
 // APIStatus represents the status of an API connection.
 type APIStatus struct {

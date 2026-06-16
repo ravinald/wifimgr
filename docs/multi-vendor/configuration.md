@@ -22,7 +22,8 @@ API connections are defined with user-chosen labels in the main config file:
       },
       "rate_limit": 5000,
       "results_limit": 100,
-      "cache_ttl": 86400
+      "cache_ttl": 86400,
+      "sync_type": ["ap", "switch", "gateway"]
     },
     "mist-lab": {
       "vendor": "mist",
@@ -31,7 +32,8 @@ API connections are defined with user-chosen labels in the main config file:
         "org_id": "xyz-789-uvw",
         "api_key": "..."
       },
-      "cache_ttl": 0
+      "cache_ttl": 0,
+      "sync_type": ["ap"]
     },
     "meraki-corp": {
       "vendor": "meraki",
@@ -75,6 +77,27 @@ API connections are defined with user-chosen labels in the main config file:
 | `rate_limit` | No | Requests per minute (vendor default if omitted) |
 | `results_limit` | No | Max results per API call |
 | `cache_ttl` | No | Cache TTL in seconds (see below) |
+| `sync_type` | No | Device types to collect: any of `ap`, `switch`, `gateway` (see below) |
+
+### Sync Type Configuration
+
+`sync_type` declares which device types a refresh collects for this API. It's a
+list drawn from `ap`, `switch`, and `gateway`. Site attributes (name, address,
+timezone) always sync regardless.
+
+| Value | Behavior |
+|-------|----------|
+| Omitted | **Site attributes only — no devices.** |
+| `[]` | Same as omitted (sites only) |
+| `["ap"]` | Collects APs only (plus AP statuses and BSSIDs) |
+| `["ap", "switch", "gateway"]` | Collects all device types |
+
+Device statuses are fetched only when at least one device type is listed; BSSIDs
+only when `ap` is listed. Org-level templates, profiles, and WLANs always sync.
+
+> **Upgrade note:** earlier versions collected all three device types
+> unconditionally. An API without `sync_type` now syncs **site attributes only**.
+> Add `sync_type` to keep collecting devices.
 
 ### Cache TTL Configuration
 

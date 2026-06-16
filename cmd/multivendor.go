@@ -76,6 +76,7 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/viper"
 
@@ -148,6 +149,10 @@ func InitializeMultiVendor() error {
 
 		logging.Debugf("Multi-vendor cache directory: %s", cacheDir)
 		cacheManager = vendors.NewCacheManager(cacheDir, apiRegistry)
+		cacheManager.SetRefreshTuning(
+			viper.GetInt("api.refresh_concurrency"),
+			time.Duration(viper.GetInt("api.refresh_timeout"))*time.Second,
+		)
 
 		if err := cacheManager.Initialize(); err != nil {
 			return fmt.Errorf("failed to initialize cache manager: %w", err)
