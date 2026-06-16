@@ -135,15 +135,12 @@ func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts R
 	// Create new cache
 	cache := NewAPICache(apiLabel, config.Vendor, config.Credentials["org_id"])
 	cache.Meta.LastRefresh = startTime
-	// A fresh cache resets the failure fields; this is the success path, so leave
-	// LastError clear and carry the prior LastFailure forward as history (the
-	// prior cache, when not already loaded for device-config merge, is read once).
+	// This is the success path, and startTime is newer than any prior failure, so
+	// the failure is stale: clear both LastError and LastFailure. Leaving them
+	// (zero by construction in NewAPICache) means status reads as healthy with no
+	// lingering failure once a success supersedes it.
 	cache.Meta.LastError = ""
-	if existingCache != nil {
-		cache.Meta.LastFailure = existingCache.Meta.LastFailure
-	} else if prior, err := c.GetAPICache(apiLabel); err == nil {
-		cache.Meta.LastFailure = prior.Meta.LastFailure
-	}
+	cache.Meta.LastFailure = time.Time{}
 
 	// Fetch sites
 	fmt.Printf("    Fetching sites...")

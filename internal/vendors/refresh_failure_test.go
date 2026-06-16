@@ -1,6 +1,7 @@
 package vendors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -63,6 +64,47 @@ func TestRecordRefreshFailureLocked(t *testing.T) {
 	}
 	if got.Meta.LastError != "connection failure" {
 		t.Errorf("LastError = %q, want %q", got.Meta.LastError, "connection failure")
+	}
+}
+
+func TestRefreshAPIClearsPriorFailure(t *testing.T) {
+	registry := NewAPIClientRegistry()
+	registry.RegisterFactory("mock", func(config *APIConfig) (Client, error) {
+		return NewMockClientWithAllServices(config.Vendor, config.Credentials["org_id"]), nil
+	})
+	registry.InitializeClients(map[string]*APIConfig{
+		"test-api": {Label: "test-api", Vendor: "mock", Credentials: map[string]string{"org_id": "org-123"}},
+	})
+
+	cm := NewCacheManager(t.TempDir(), registry)
+	if err := cm.Initialize(); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+	ctx := context.Background()
+
+	// Seed a cache, then record a failure on top of it.
+	if err := cm.RefreshAPI(ctx, "test-api"); err != nil {
+		t.Fatalf("initial RefreshAPI: %v", err)
+	}
+	cm.recordRefreshFailureLocked("test-api", errors.New("POST /rest/login: context deadline exceeded"))
+
+	if got, _ := cm.GetAPICache("test-api"); got.Meta.LastFailure.IsZero() {
+		t.Fatal("precondition: LastFailure should be set after recorded failure")
+	}
+
+	// A subsequent successful refresh supersedes the failure, so it must clear.
+	if err := cm.RefreshAPI(ctx, "test-api"); err != nil {
+		t.Fatalf("second RefreshAPI: %v", err)
+	}
+	got, err := cm.GetAPICache("test-api")
+	if err != nil {
+		t.Fatalf("GetAPICache: %v", err)
+	}
+	if !got.Meta.LastFailure.IsZero() {
+		t.Errorf("LastFailure not cleared by success: got %v", got.Meta.LastFailure)
+	}
+	if got.Meta.LastError != "" {
+		t.Errorf("LastError not cleared by success: got %q", got.Meta.LastError)
 	}
 }
 
