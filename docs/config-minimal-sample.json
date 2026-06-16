@@ -13,7 +13,8 @@
       "url": "https://api.mist.com/api/v1",
       "credentials": {
         "org_id": "your-org-uuid-here"
-      }
+      },
+      "sync_type": ["ap"]
     }
   }
 }

@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -269,6 +270,27 @@ func Error(args ...interface{}) {
 // Errorf logs a formatted message at the error level
 func Errorf(format string, args ...interface{}) {
 	defaultLogger.Errorf(format, args...)
+}
+
+// PauseOutput redirects the logger to an in-memory buffer and returns a release
+// func. While paused, log lines accumulate instead of printing; release restores
+// the prior destination and flushes everything buffered to it. A full-screen
+// renderer (the refresh board) calls this so concurrent warnings — like MAC
+// collisions during the index rebuild — don't corrupt the live display, then
+// surface as a clean trailing block once the board tears down.
+//
+// Not reentrant: a second PauseOutput before release loses the first buffer's
+// destination. The refresh path is the only caller and pauses once.
+func PauseOutput() (release func()) {
+	prev := defaultLogger.Out
+	buf := &bytes.Buffer{}
+	defaultLogger.SetOutput(buf)
+	return func() {
+		defaultLogger.SetOutput(prev)
+		if buf.Len() > 0 {
+			_, _ = prev.Write(buf.Bytes())
+		}
+	}
 }
 
 // ConfigureLogger configures the logger with a simplified interface
