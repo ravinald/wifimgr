@@ -45,6 +45,7 @@ func TestRefreshAPISite(t *testing.T) {
 			Label:       "test-api",
 			Vendor:      "mock",
 			Credentials: map[string]string{"org_id": "org-123"},
+			SyncTypes:   []string{"ap"},
 		},
 	}
 	registry.InitializeClients(configs)

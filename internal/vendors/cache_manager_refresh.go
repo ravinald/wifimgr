@@ -9,6 +9,7 @@ import (
 
 	"github.com/ravinald/wifimgr/internal/encryption"
 	"github.com/ravinald/wifimgr/internal/logging"
+	"github.com/ravinald/wifimgr/internal/refreshui"
 )
 
 // wlanHasPlaintextSecret reports whether a freshly fetched WLAN carries a PSK or
@@ -116,6 +117,7 @@ func (c *CacheManager) RefreshAPIWithOptions(ctx context.Context, apiLabel strin
 
 // doRefreshAPI performs the refresh. The caller holds the per-label lock.
 func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts RefreshOptions) error {
+	report := refreshui.Resolve(opts.Reporter)
 	logging.Debugf("[cache] Starting refresh for API %s (fetchConfigs=%v)", apiLabel, opts.FetchDeviceConfigs)
 
 	client, err := c.registry.GetClient(apiLabel)
@@ -146,12 +148,7 @@ func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts R
 
 	logging.Debugf("[cache] Refreshing %s (vendor=%s, org=%s, fetchConfigs=%v, siteID=%q)", apiLabel, config.Vendor, config.Credentials["org_id"], shouldFetchConfigs, opts.SiteID)
 
-	// Progress message: Starting API refresh
-	if opts.SiteID != "" {
-		fmt.Printf("  [%s] Refreshing %s API (site %s)...\n", apiLabel, config.Vendor, opts.SiteID)
-	} else {
-		fmt.Printf("  [%s] Refreshing %s API...\n", apiLabel, config.Vendor)
-	}
+	report.APIStart(apiLabel, config.Vendor, opts.SiteID)
 
 	startTime := time.Now()
 
@@ -180,96 +177,107 @@ func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts R
 	cache.Meta.LastFailure = time.Time{}
 
 	// Fetch sites
-	fmt.Printf("    Fetching sites...")
+	report.Stage(apiLabel, "Fetching sites")
 	logging.Debugf("[cache] Fetching sites for %s", apiLabel)
 	if sitesSvc := client.Sites(); sitesSvc != nil {
 		sites, err := sitesSvc.List(ctx)
 		if err != nil {
-			fmt.Printf(" error\n")
+			report.StageResult(apiLabel, "error")
 			logging.Debugf("[cache] Failed to fetch sites for %s: %v", apiLabel, err)
 			return fmt.Errorf("failed to fetch sites: %w", err)
 		}
-		fmt.Printf(" %d sites\n", len(sites))
+		report.StageResult(apiLabel, fmt.Sprintf("%d sites", len(sites)))
 		logging.Debugf("[cache] Fetched %d sites for %s", len(sites), apiLabel)
 		for _, site := range sites {
 			cache.Sites.Info = append(cache.Sites.Info, *site)
 		}
 	} else {
-		fmt.Printf(" not supported\n")
+		report.StageResult(apiLabel, "not supported")
 	}
 
-	// Fetch inventory
+	// Fetch inventory. Each device type is gated on the API's sync_type — an API
+	// that doesn't list a type leaves its inventory map empty (and the per-device
+	// config, status, and BSSID fetches below short-circuit off that).
 	logging.Debugf("[cache] Fetching inventory for %s", apiLabel)
 	if invSvc := client.Inventory(); invSvc != nil {
 		// APs
-		fmt.Printf("    Fetching APs...")
-		aps, err := invSvc.List(ctx, "ap")
-		if err == nil {
-			for _, item := range aps {
-				if item.MAC != "" {
-					cache.Inventory.AP[NormalizeMAC(item.MAC)] = item
+		if config.ShouldSync("ap") {
+			report.Stage(apiLabel, "Fetching APs")
+			aps, err := invSvc.List(ctx, "ap")
+			if err == nil {
+				for _, item := range aps {
+					if item.MAC != "" {
+						cache.Inventory.AP[NormalizeMAC(item.MAC)] = item
+					}
 				}
+				report.StageResult(apiLabel, fmt.Sprintf("%d devices", len(aps)))
+				logging.Debugf("[cache] Fetched %d APs for %s", len(aps), apiLabel)
+			} else {
+				report.StageResult(apiLabel, "error")
+				logging.Debugf("[cache] Failed to fetch APs for %s: %v", apiLabel, err)
 			}
-			fmt.Printf(" %d devices\n", len(aps))
-			logging.Debugf("[cache] Fetched %d APs for %s", len(aps), apiLabel)
-		} else {
-			fmt.Printf(" error\n")
-			logging.Debugf("[cache] Failed to fetch APs for %s: %v", apiLabel, err)
 		}
 
 		// Switches
-		fmt.Printf("    Fetching switches...")
-		switches, err := invSvc.List(ctx, "switch")
-		if err == nil {
-			for _, item := range switches {
-				if item.MAC != "" {
-					cache.Inventory.Switch[NormalizeMAC(item.MAC)] = item
+		if config.ShouldSync("switch") {
+			report.Stage(apiLabel, "Fetching switches")
+			switches, err := invSvc.List(ctx, "switch")
+			if err == nil {
+				for _, item := range switches {
+					if item.MAC != "" {
+						cache.Inventory.Switch[NormalizeMAC(item.MAC)] = item
+					}
 				}
+				report.StageResult(apiLabel, fmt.Sprintf("%d devices", len(switches)))
+				logging.Debugf("[cache] Fetched %d switches for %s", len(switches), apiLabel)
+			} else {
+				report.StageResult(apiLabel, "error")
+				logging.Debugf("[cache] Failed to fetch switches for %s: %v", apiLabel, err)
 			}
-			fmt.Printf(" %d devices\n", len(switches))
-			logging.Debugf("[cache] Fetched %d switches for %s", len(switches), apiLabel)
-		} else {
-			fmt.Printf(" error\n")
-			logging.Debugf("[cache] Failed to fetch switches for %s: %v", apiLabel, err)
 		}
 
 		// Gateways
-		fmt.Printf("    Fetching gateways...")
-		gateways, err := invSvc.List(ctx, "gateway")
-		if err == nil {
-			for _, item := range gateways {
-				if item.MAC != "" {
-					cache.Inventory.Gateway[NormalizeMAC(item.MAC)] = item
+		if config.ShouldSync("gateway") {
+			report.Stage(apiLabel, "Fetching gateways")
+			gateways, err := invSvc.List(ctx, "gateway")
+			if err == nil {
+				for _, item := range gateways {
+					if item.MAC != "" {
+						cache.Inventory.Gateway[NormalizeMAC(item.MAC)] = item
+					}
 				}
+				report.StageResult(apiLabel, fmt.Sprintf("%d devices", len(gateways)))
+				logging.Debugf("[cache] Fetched %d gateways for %s", len(gateways), apiLabel)
+			} else {
+				report.StageResult(apiLabel, "error")
+				logging.Debugf("[cache] Failed to fetch gateways for %s: %v", apiLabel, err)
 			}
-			fmt.Printf(" %d devices\n", len(gateways))
-			logging.Debugf("[cache] Fetched %d gateways for %s", len(gateways), apiLabel)
-		} else {
-			fmt.Printf(" error\n")
-			logging.Debugf("[cache] Failed to fetch gateways for %s: %v", apiLabel, err)
 		}
 	}
 
-	// Fetch device statuses
-	fmt.Printf("    Fetching device statuses...")
-	logging.Debugf("[cache] Fetching device statuses for %s", apiLabel)
-	if statusSvc := client.Statuses(); statusSvc != nil {
-		statuses, err := statusSvc.GetAll(ctx)
-		if err == nil {
-			cache.DeviceStatus = statuses
-			fmt.Printf(" %d statuses\n", len(statuses))
-			logging.Debugf("[cache] Fetched status for %d devices for %s", len(statuses), apiLabel)
+	// Fetch device statuses. Skipped entirely for a site-only sync — statuses
+	// describe devices we aren't collecting.
+	if config.SyncsAnyDevice() {
+		report.Stage(apiLabel, "Fetching device statuses")
+		logging.Debugf("[cache] Fetching device statuses for %s", apiLabel)
+		if statusSvc := client.Statuses(); statusSvc != nil {
+			statuses, err := statusSvc.GetAll(ctx)
+			if err == nil {
+				cache.DeviceStatus = statuses
+				report.StageResult(apiLabel, fmt.Sprintf("%d statuses", len(statuses)))
+				logging.Debugf("[cache] Fetched status for %d devices for %s", len(statuses), apiLabel)
+			} else {
+				report.StageResult(apiLabel, "error")
+				logging.Debugf("[cache] Failed to fetch device statuses for %s: %v", apiLabel, err)
+			}
 		} else {
-			fmt.Printf(" error\n")
-			logging.Debugf("[cache] Failed to fetch device statuses for %s: %v", apiLabel, err)
+			report.StageResult(apiLabel, "not supported")
 		}
-	} else {
-		fmt.Printf(" not supported\n")
 	}
 
-	// Fetch BSSIDs (if supported)
-	if bssidSvc := client.BSSIDs(); bssidSvc != nil {
-		fmt.Printf("    Fetching BSSIDs...")
+	// Fetch BSSIDs (if supported). BSSIDs are AP-scoped, so skip when APs aren't synced.
+	if bssidSvc := client.BSSIDs(); bssidSvc != nil && config.ShouldSync("ap") {
+		report.Stage(apiLabel, "Fetching BSSIDs")
 		logging.Debugf("[cache] Fetching BSSIDs for %s", apiLabel)
 		entries, err := bssidSvc.List(ctx)
 		if err == nil {
@@ -292,17 +300,17 @@ func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts R
 				}
 				cache.BSSIDs[NormalizeMAC(entry.BSSID)] = entry
 			}
-			fmt.Printf(" %d BSSIDs\n", len(entries))
+			report.StageResult(apiLabel, fmt.Sprintf("%d BSSIDs", len(entries)))
 			logging.Debugf("[cache] Fetched %d BSSIDs for %s", len(entries), apiLabel)
 		} else {
-			fmt.Printf(" error\n")
+			report.StageResult(apiLabel, "error")
 			logging.Warnf("[cache] Failed to fetch BSSIDs for %s: %v", apiLabel, err)
 		}
 	}
 
 	// Fetch templates (if supported)
 	if tmplSvc := client.Templates(); tmplSvc != nil {
-		fmt.Printf("    Fetching templates...")
+		report.Stage(apiLabel, "Fetching templates")
 		rfCount, gwCount, wlanCount := 0, 0, 0
 		if rf, err := tmplSvc.ListRF(ctx); err == nil {
 			for _, t := range rf {
@@ -328,25 +336,25 @@ func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts R
 		} else {
 			logging.Warnf("[cache] Failed to fetch WLAN templates: %v", err)
 		}
-		fmt.Printf(" %d RF, %d GW, %d WLAN\n", rfCount, gwCount, wlanCount)
+		report.StageResult(apiLabel, fmt.Sprintf("%d RF, %d GW, %d WLAN", rfCount, gwCount, wlanCount))
 	}
 
 	// Fetch profiles (if supported)
 	if profSvc := client.Profiles(); profSvc != nil {
-		fmt.Printf("    Fetching device profiles...")
+		report.Stage(apiLabel, "Fetching device profiles")
 		if profiles, err := profSvc.List(ctx, ""); err == nil {
 			for _, p := range profiles {
 				cache.Profiles.Devices = append(cache.Profiles.Devices, *p)
 			}
-			fmt.Printf(" %d profiles\n", len(profiles))
+			report.StageResult(apiLabel, fmt.Sprintf("%d profiles", len(profiles)))
 		} else {
-			fmt.Printf(" error\n")
+			report.StageResult(apiLabel, "error")
 		}
 	}
 
 	// Fetch WLANs (if supported)
 	if wlanSvc := client.WLANs(); wlanSvc != nil {
-		fmt.Printf("    Fetching WLANs...")
+		report.Stage(apiLabel, "Fetching WLANs")
 		if wlans, err := wlanSvc.List(ctx); err == nil {
 			// Initialize map if needed
 			if cache.WLANs == nil {
@@ -373,9 +381,9 @@ func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts R
 				}
 				cache.WLANs[w.ID] = w
 			}
-			fmt.Printf(" %d WLANs\n", len(wlans))
+			report.StageResult(apiLabel, fmt.Sprintf("%d WLANs", len(wlans)))
 		} else {
-			fmt.Printf(" error: %v\n", err)
+			report.StageResult(apiLabel, fmt.Sprintf("error: %v", err))
 			logging.Warnf("[cache] Failed to fetch WLANs: %v", err)
 		}
 	}
@@ -386,14 +394,17 @@ func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts R
 			logging.Debugf("[cache] Fetching device configs for %s", apiLabel)
 
 			// Fetch AP configs
-			if len(cache.Inventory.AP) > 0 {
+			if config.ShouldSync("ap") && len(cache.Inventory.AP) > 0 {
 				if opts.SiteID != "" {
-					fmt.Printf("    Fetching AP configs (site %s)...", opts.SiteID)
+					report.Stage(apiLabel, fmt.Sprintf("AP configs (site %s)", opts.SiteID))
 				} else {
-					fmt.Printf("    Fetching AP configs...")
+					report.Stage(apiLabel, "AP configs")
 				}
 				apConfigCount, apCarriedCount := 0, 0
+				apTotal, apDone := len(cache.Inventory.AP), 0
 				for mac, item := range cache.Inventory.AP {
+					apDone++
+					report.Progress(apiLabel, apDone, apTotal)
 					if item.ID == "" || item.SiteID == "" {
 						continue
 					}
@@ -413,22 +424,25 @@ func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts R
 					}
 				}
 				if apCarriedCount > 0 {
-					fmt.Printf(" %d fetched, %d preserved\n", apConfigCount, apCarriedCount)
+					report.StageResult(apiLabel, fmt.Sprintf("%d fetched, %d preserved", apConfigCount, apCarriedCount))
 				} else {
-					fmt.Printf(" %d configs\n", apConfigCount)
+					report.StageResult(apiLabel, fmt.Sprintf("%d configs", apConfigCount))
 				}
 				logging.Debugf("[cache] Fetched %d AP configs (preserved %d) for %s", apConfigCount, apCarriedCount, apiLabel)
 			}
 
 			// Fetch Switch configs
-			if len(cache.Inventory.Switch) > 0 {
+			if config.ShouldSync("switch") && len(cache.Inventory.Switch) > 0 {
 				if opts.SiteID != "" {
-					fmt.Printf("    Fetching switch configs (site %s)...", opts.SiteID)
+					report.Stage(apiLabel, fmt.Sprintf("switch configs (site %s)", opts.SiteID))
 				} else {
-					fmt.Printf("    Fetching switch configs...")
+					report.Stage(apiLabel, "switch configs")
 				}
 				switchConfigCount, switchCarriedCount := 0, 0
+				swTotal, swDone := len(cache.Inventory.Switch), 0
 				for mac, item := range cache.Inventory.Switch {
+					swDone++
+					report.Progress(apiLabel, swDone, swTotal)
 					if item.ID == "" || item.SiteID == "" {
 						continue
 					}
@@ -448,22 +462,25 @@ func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts R
 					}
 				}
 				if switchCarriedCount > 0 {
-					fmt.Printf(" %d fetched, %d preserved\n", switchConfigCount, switchCarriedCount)
+					report.StageResult(apiLabel, fmt.Sprintf("%d fetched, %d preserved", switchConfigCount, switchCarriedCount))
 				} else {
-					fmt.Printf(" %d configs\n", switchConfigCount)
+					report.StageResult(apiLabel, fmt.Sprintf("%d configs", switchConfigCount))
 				}
 				logging.Debugf("[cache] Fetched %d switch configs (preserved %d) for %s", switchConfigCount, switchCarriedCount, apiLabel)
 			}
 
 			// Fetch Gateway configs
-			if len(cache.Inventory.Gateway) > 0 {
+			if config.ShouldSync("gateway") && len(cache.Inventory.Gateway) > 0 {
 				if opts.SiteID != "" {
-					fmt.Printf("    Fetching gateway configs (site %s)...", opts.SiteID)
+					report.Stage(apiLabel, fmt.Sprintf("gateway configs (site %s)", opts.SiteID))
 				} else {
-					fmt.Printf("    Fetching gateway configs...")
+					report.Stage(apiLabel, "gateway configs")
 				}
 				gatewayConfigCount, gatewayCarriedCount := 0, 0
+				gwTotal, gwDone := len(cache.Inventory.Gateway), 0
 				for mac, item := range cache.Inventory.Gateway {
+					gwDone++
+					report.Progress(apiLabel, gwDone, gwTotal)
 					if item.ID == "" || item.SiteID == "" {
 						continue
 					}
@@ -483,15 +500,16 @@ func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts R
 					}
 				}
 				if gatewayCarriedCount > 0 {
-					fmt.Printf(" %d fetched, %d preserved\n", gatewayConfigCount, gatewayCarriedCount)
+					report.StageResult(apiLabel, fmt.Sprintf("%d fetched, %d preserved", gatewayConfigCount, gatewayCarriedCount))
 				} else {
-					fmt.Printf(" %d configs\n", gatewayConfigCount)
+					report.StageResult(apiLabel, fmt.Sprintf("%d configs", gatewayConfigCount))
 				}
 				logging.Debugf("[cache] Fetched %d gateway configs (preserved %d) for %s", gatewayConfigCount, gatewayCarriedCount, apiLabel)
 			}
 		}
 	} else {
-		fmt.Printf("    Skipping device configs (use 'refresh cache' to fetch)\n")
+		report.Stage(apiLabel, "Skipping device configs (use 'refresh cache' to fetch)")
+		report.StageResult(apiLabel, "")
 		logging.Debugf("[cache] Skipping device config fetch for %s (Meraki optimization)", apiLabel)
 	}
 
@@ -501,7 +519,7 @@ func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts R
 	// carried forward from the prior cache keep their original (older) timestamp.
 	cache.StampFreshObjects(startTime)
 
-	fmt.Printf("  [%s] Complete in %dms\n", apiLabel, cache.Meta.RefreshDurationMs)
+	report.APIDone(apiLabel, time.Since(startTime))
 	logging.Debugf("[cache] Refresh complete for %s in %dms", apiLabel, cache.Meta.RefreshDurationMs)
 
 	// Save cache. Use the locked variant because this function already holds
@@ -513,13 +531,19 @@ func (c *CacheManager) doRefreshAPI(ctx context.Context, apiLabel string, opts R
 
 	logging.Debugf("[cache] Saved cache for %s", apiLabel)
 
-	// Rebuild cross-API index
+	// Rebuild the cross-API index — unless the caller batches it. Refresh-all
+	// sets SkipIndexRebuild and rebuilds once after every API saves, instead of
+	// rebuilding (and re-reporting every MAC collision) once per API.
+	if opts.SkipIndexRebuild {
+		return nil
+	}
 	return c.RebuildIndex()
 }
 
-// RefreshAllAPIs refreshes all API caches in parallel.
-func (c *CacheManager) RefreshAllAPIs(ctx context.Context) map[string]error {
-	return c.refreshAllAPIs(ctx, func(string) RefreshOptions {
+// RefreshAllAPIs refreshes all API caches in parallel, reporting progress to
+// report (nil falls back to linear stdout output).
+func (c *CacheManager) RefreshAllAPIs(ctx context.Context, report refreshui.Reporter) map[string]error {
+	return c.refreshAllAPIs(ctx, report, func(string) RefreshOptions {
 		return RefreshOptions{FetchDeviceConfigs: true}
 	})
 }
@@ -527,24 +551,40 @@ func (c *CacheManager) RefreshAllAPIs(ctx context.Context) map[string]error {
 // RefreshAllAPIsManaged refreshes every API in parallel, limiting per-device
 // config fetches to the armed (managed) MACs. The same set is applied to each
 // API; MACs not present in a given API's inventory simply never match.
-func (c *CacheManager) RefreshAllAPIsManaged(ctx context.Context, managed map[string]bool) map[string]error {
-	return c.refreshAllAPIs(ctx, func(string) RefreshOptions {
+func (c *CacheManager) RefreshAllAPIsManaged(ctx context.Context, managed map[string]bool, report refreshui.Reporter) map[string]error {
+	return c.refreshAllAPIs(ctx, report, func(string) RefreshOptions {
 		return RefreshOptions{FetchDeviceConfigs: true, ManagedMACs: managed}
 	})
 }
 
-func (c *CacheManager) refreshAllAPIs(ctx context.Context, optsFor func(apiLabel string) RefreshOptions) map[string]error {
+func (c *CacheManager) refreshAllAPIs(ctx context.Context, report refreshui.Reporter, optsFor func(apiLabel string) RefreshOptions) map[string]error {
 	labels := c.registry.GetAllLabels()
+	report = refreshui.Resolve(report)
 
-	var wg sync.WaitGroup
 	errors := make(map[string]error)
 	var mu sync.Mutex
 
+	// Bound the fan-out: refresh-all otherwise launches one goroutine per API at
+	// once. A buffered channel caps how many run concurrently; the per-label
+	// mutex inside RefreshAPIWithOptions still serializes same-API refreshes.
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, c.refreshLimit(len(labels)))
+
 	for _, label := range labels {
 		wg.Add(1)
+		sem <- struct{}{}
 		go func(apiLabel string) {
 			defer wg.Done()
-			if err := c.RefreshAPIWithOptions(ctx, apiLabel, optsFor(apiLabel)); err != nil {
+			defer func() { <-sem }()
+
+			apiCtx, cancel := c.refreshCtx(ctx)
+			defer cancel()
+
+			opts := optsFor(apiLabel)
+			opts.Reporter = report
+			opts.SkipIndexRebuild = true // batch the rebuild once, below
+			if err := c.RefreshAPIWithOptions(apiCtx, apiLabel, opts); err != nil {
+				report.APIError(apiLabel, err)
 				mu.Lock()
 				errors[apiLabel] = err
 				mu.Unlock()
@@ -554,7 +594,7 @@ func (c *CacheManager) refreshAllAPIs(ctx context.Context, optsFor func(apiLabel
 
 	wg.Wait()
 
-	// Rebuild index even if some APIs failed
+	// Rebuild index once, even if some APIs failed.
 	if err := c.RebuildIndex(); err != nil {
 		errors["_index"] = err
 	}

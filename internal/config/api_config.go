@@ -103,6 +103,9 @@ func BuildAPIConfigsFromViper() (map[string]*vendors.APIConfig, []ValidationWarn
 			}
 		}
 
+		syncTypes, syncWarnings := parseSyncTypes(label, nested)
+		warnings = append(warnings, syncWarnings...)
+
 		config := &vendors.APIConfig{
 			Label:          label,
 			Vendor:         vendor,
@@ -112,6 +115,7 @@ func BuildAPIConfigsFromViper() (map[string]*vendors.APIConfig, []ValidationWarn
 			ResultsLimit:   getIntFromMap(nested, "results_limit"),
 			CacheTTL:       getCacheTTLFromMap(nested),
 			ConnectTimeout: resolveConnectTimeout(nested),
+			SyncTypes:      syncTypes,
 		}
 
 		// Apply vendor-specific defaults
@@ -351,6 +355,62 @@ func getStringFromMap(m map[string]interface{}, key string) string {
 		}
 	}
 	return ""
+}
+
+// validSyncTypes is the set of device types an API may declare under sync_type.
+var validSyncTypes = map[string]bool{"ap": true, "switch": true, "gateway": true}
+
+// parseSyncTypes reads the optional sync_type list for an API, normalizing each
+// entry to lowercase, dropping blanks and duplicates. Unknown entries are
+// skipped with a warning rather than failing the load. A missing key returns a
+// nil slice, which the refresh path treats as "sites only".
+func parseSyncTypes(label string, nested map[string]interface{}) ([]string, []ValidationWarning) {
+	raw, ok := nested["sync_type"]
+	if !ok {
+		return nil, nil
+	}
+
+	// JSON/YAML decode lists as []interface{}; tolerate []string too.
+	var items []interface{}
+	switch v := raw.(type) {
+	case []interface{}:
+		items = v
+	case []string:
+		for _, s := range v {
+			items = append(items, s)
+		}
+	default:
+		return nil, []ValidationWarning{{
+			Level:   "api",
+			API:     label,
+			Message: fmt.Sprintf("API %q has invalid 'sync_type' (expected a list of 'ap', 'switch', 'gateway')", label),
+		}}
+	}
+
+	var result []string
+	var warnings []ValidationWarning
+	seen := make(map[string]bool)
+	for _, item := range items {
+		s, ok := item.(string)
+		if !ok {
+			continue
+		}
+		t := strings.ToLower(strings.TrimSpace(s))
+		if t == "" || seen[t] {
+			continue
+		}
+		if !validSyncTypes[t] {
+			warnings = append(warnings, ValidationWarning{
+				Level:   "api",
+				API:     label,
+				Message: fmt.Sprintf("API %q sync_type has unknown device type %q (allowed: ap, switch, gateway)", label, s),
+			})
+			continue
+		}
+		seen[t] = true
+		result = append(result, t)
+	}
+	return result, warnings
 }
 
 // getIntFromMap safely extracts an int value from a map[string]interface{}
