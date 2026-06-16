@@ -98,7 +98,9 @@ func SortTableDataBy(data []GenericTableData, fields ...string) {
 // getStringField safely extracts a string field from GenericTableData
 func getStringField(data GenericTableData, field string) string {
 	if val, ok := data[field]; ok {
-		return fmt.Sprintf("%v", val)
+		// Strip table-only emphasis prefixes (BOLD_TEXT:, GREEN_TEXT:) so a
+		// styled cell sorts by its real value, not the marker.
+		return stripDisplayMarkers(fmt.Sprintf("%v", val))
 	}
 	return ""
 }
