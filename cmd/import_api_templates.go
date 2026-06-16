@@ -48,7 +48,7 @@ const (
 // into a standalone ImportFile. Scoped to a specific API because template
 // namespaces live at the API/org boundary.
 var importAPITemplatesCmd = &cobra.Command{
-	Use:   "templates [target <api-label>] [type wlan|rf|device|gateway|all] [save] [file <filename>] [secrets|decrypt]",
+	Use:   "templates [target <api-label>] [type wlan|rf|device|gateway|all] [save] [file <filename>] [decrypt]",
 	Short: "Import vendor-level templates from API cache",
 	Long: `Import vendor-level (org-scoped) templates from a specific API.
 
@@ -70,9 +70,9 @@ Arguments:
   type <kind>    Optional. Template kind to export (default: wlan). Currently
                  only "wlan" is supported; "rf", "device", "gateway", "all"
                  are reserved for later coverage.
-  secrets        Optional. Include PSK/RADIUS secrets, masked as "*secret*".
-  decrypt        Optional. Include secrets decrypted to plaintext (implies
-                 secrets); needs WIFIMGR_PASSWORD or an interactive prompt.
+  decrypt        Optional. Emit secrets decrypted to plaintext; needs
+                 WIFIMGR_PASSWORD or an interactive prompt. Without it, the
+                 stored enc: value is emitted as-is.
   save           Optional. Write to import file (default: print to STDOUT).
   file           Optional. Keyword followed by output filename (relative to
                  config_dir or absolute).
@@ -189,7 +189,7 @@ func runImportAPITemplates(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build the envelope. For now only WLANs are supported.
-	reveal, err := resolveSecretReveal(parsed.IncludeSecrets, parsed.Decrypt)
+	reveal, err := resolveSecretReveal(parsed.Decrypt)
 	if err != nil {
 		return err
 	}
