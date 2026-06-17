@@ -3,6 +3,7 @@ package refreshui
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -123,17 +124,19 @@ func (m *boardModel) View() string {
 		b = append(b, '[')
 		b = append(b, name...)
 		b = append(b, ']', ' ')
+		// One space after the status glyph in every branch so the bar column
+		// lines up — the spinner and the ✔/✖ glyphs are each one cell wide.
 		switch r.state {
 		case rowDone:
 			b = append(b, doneStyle.Render("✔")...)
-			b = append(b, ' ', ' ')
+			b = append(b, ' ')
 			b = append(b, m.bar.ViewAs(1)...)
 			b = append(b, fmt.Sprintf("  Started %dms", r.dur.Milliseconds())...)
 		case rowFailed:
 			b = append(b, failStyle.Render("✖")...)
-			b = append(b, ' ', ' ')
+			b = append(b, ' ')
 			b = append(b, dimStyle.Render(dots(barWidth))...)
-			b = append(b, fmt.Sprintf("  Failed: %v", r.failErr)...)
+			b = append(b, fmt.Sprintf("  Failed: %s", friendlyError(r.failErr))...)
 		default: // rowActive
 			b = append(b, m.spin.View()...)
 			b = append(b, ' ')
@@ -149,6 +152,77 @@ func (m *boardModel) View() string {
 		b = append(b, '\n')
 	}
 	return string(b)
+}
+
+// friendlyError reduces a wrapped refresh error to a short, operator-readable
+// reason — the raw chain (e.g. `failed to fetch sites: ...: dial tcp HOST: i/o
+// timeout`) is too long for a board row and gets truncated. The full error still
+// prints in the command's trailing error block. When a dial target is present it
+// is appended so the operator still knows which host failed.
+func friendlyError(err error) string {
+	if err == nil {
+		return "unknown error"
+	}
+	msg := err.Error()
+	low := strings.ToLower(msg)
+
+	var reason string
+	switch {
+	case strings.Contains(low, "deadline exceeded"),
+		strings.Contains(low, "timeout"),
+		strings.Contains(low, "timed out"):
+		reason = "connection timed out"
+	case strings.Contains(low, "connection refused"):
+		reason = "connection refused"
+	case strings.Contains(low, "no such host"):
+		reason = "host not found"
+	case strings.Contains(low, "no route to host"),
+		strings.Contains(low, "network is unreachable"):
+		reason = "network unreachable"
+	case strings.Contains(low, "tls"), strings.Contains(low, "certificate"):
+		reason = "TLS handshake failed"
+	case strings.Contains(low, "401"),
+		strings.Contains(low, "403"),
+		strings.Contains(low, "unauthorized"),
+		strings.Contains(low, "forbidden"),
+		strings.Contains(low, "invalid api key"),
+		strings.Contains(low, "authentication"):
+		reason = "authentication failed"
+	default:
+		reason = innermost(msg)
+	}
+
+	if host := dialTarget(msg); host != "" {
+		return reason + " (" + host + ")"
+	}
+	return reason
+}
+
+// dialTarget extracts the host:port from a Go dial error
+// (`... dial tcp 10.0.0.1:443: i/o timeout`), or "" when absent.
+func dialTarget(msg string) string {
+	const marker = "dial tcp "
+	i := strings.Index(strings.ToLower(msg), marker)
+	if i < 0 {
+		return ""
+	}
+	rest := msg[i+len(marker):]
+	if j := strings.Index(rest, ": "); j >= 0 {
+		rest = rest[:j]
+	}
+	return strings.TrimSpace(rest)
+}
+
+// innermost returns the last `: `-delimited segment of a wrapped error — the
+// root cause — for errors that don't match a known class.
+func innermost(msg string) string {
+	parts := strings.Split(msg, ": ")
+	for i := len(parts) - 1; i >= 0; i-- {
+		if s := strings.TrimSpace(parts[i]); s != "" {
+			return s
+		}
+	}
+	return strings.TrimSpace(msg)
 }
 
 // dots returns n dot runes — the indeterminate stand-in for the bar before a
