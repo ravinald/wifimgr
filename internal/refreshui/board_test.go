@@ -51,7 +51,7 @@ func TestBoardModelDoneAndError(t *testing.T) {
 	m := newBoardModel([]string{"mist", "meraki"})
 
 	m.Update(doneMsg{label: "mist", dur: 952 * time.Millisecond})
-	m.Update(errMsg{label: "meraki", err: errors.New("login timeout")})
+	m.Update(errMsg{label: "meraki", err: errors.New("connection refused")})
 
 	if r := m.rows["mist"]; r.state != rowDone || r.dur != 952*time.Millisecond {
 		t.Fatalf("mist row = %+v, want done 952ms", r)
@@ -64,8 +64,53 @@ func TestBoardModelDoneAndError(t *testing.T) {
 	if !strings.Contains(v, "Started 952ms") {
 		t.Fatalf("view missing done summary:\n%s", v)
 	}
-	if !strings.Contains(v, "Failed: login timeout") {
+	if !strings.Contains(v, "Failed: connection refused") {
 		t.Fatalf("view missing error summary:\n%s", v)
+	}
+}
+
+func TestFriendlyError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "dial timeout keeps host",
+			err:  errors.New(`failed to fetch sites: aruba-pina: POST /rest/login: Post "https://172.30.8.20:4343/rest/login": dial tcp 172.30.8.20:4343: i/o timeout`),
+			want: "connection timed out (172.30.8.20:4343)",
+		},
+		{name: "refused", err: errors.New("dial tcp 10.0.0.1:443: connect: connection refused"), want: "connection refused (10.0.0.1:443)"},
+		{name: "dns", err: errors.New(`Get "https://api.x.com": dial tcp: lookup api.x.com: no such host`), want: "host not found"},
+		{name: "auth", err: errors.New("meraki: 401 Unauthorized"), want: "authentication failed"},
+		{name: "unknown falls to innermost", err: errors.New("fetch sites: weird vendor explosion"), want: "weird vendor explosion"},
+		{name: "nil", err: nil, want: "unknown error"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := friendlyError(tc.err); got != tc.want {
+				t.Fatalf("friendlyError = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBoardRowsAlignAtBar guards the off-by-one fix: the bar (or dots) must
+// start at the same column on active, done, and failed rows. The status glyphs
+// (spinner, ✔, ✖) are all 3-byte runes, so equal byte offsets mean equal
+// columns under the Ascii color profile (no escapes).
+func TestBoardRowsAlignAtBar(t *testing.T) {
+	m := newBoardModel([]string{"api"})
+
+	m.Update(progressMsg{label: "api", done: 1, total: 2})
+	active := strings.IndexRune(m.View(), '█')
+	m.Update(doneMsg{label: "api", dur: time.Second})
+	done := strings.IndexRune(m.View(), '█')
+	m.Update(errMsg{label: "api", err: errors.New("x")})
+	failed := strings.IndexRune(m.View(), '.')
+
+	if active != done || active != failed {
+		t.Fatalf("bar columns differ: active=%d done=%d failed=%d\n%s", active, done, failed, m.View())
 	}
 }
 
