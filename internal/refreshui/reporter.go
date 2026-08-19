@@ -117,7 +117,7 @@ func (l *linearReporter) Progress(string, int, int) {}
 func (l *linearReporter) APIDone(label string, dur time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	_, _ = fmt.Fprintf(l.w, "  [%s] Complete in %dms\n", label, dur.Milliseconds())
+	_, _ = fmt.Fprintf(l.w, "  [%s] Complete in %s\n", label, formatDur(dur))
 }
 
 func (l *linearReporter) APIError(label string, err error) {

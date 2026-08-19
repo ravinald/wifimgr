@@ -61,7 +61,7 @@ func TestBoardModelDoneAndError(t *testing.T) {
 	}
 
 	v := m.View()
-	if !strings.Contains(v, "Started 952ms") {
+	if !strings.Contains(v, "Done in 952ms") {
 		t.Fatalf("view missing done summary:\n%s", v)
 	}
 	if !strings.Contains(v, "Failed: connection refused") {
@@ -126,5 +126,26 @@ func TestBoardModelLineCountStable(t *testing.T) {
 	m.Update(errMsg{label: "b", err: errors.New("x")})
 	if got := strings.Count(m.View(), "\n"); got != want {
 		t.Fatalf("post-update line count = %d, want %d", got, want)
+	}
+}
+
+func TestFormatDur(t *testing.T) {
+	cases := []struct {
+		d    time.Duration
+		want string
+	}{
+		{748 * time.Millisecond, "748ms"},
+		{999 * time.Millisecond, "999ms"},
+		{time.Second, "1s"},
+		{2486 * time.Millisecond, "2.5s"},
+		{59500 * time.Millisecond, "59.5s"},
+		{time.Minute, "1m0s"},
+		{269559 * time.Millisecond, "4m30s"},
+		{2 * time.Hour, "2h0m0s"},
+	}
+	for _, c := range cases {
+		if got := formatDur(c.d); got != c.want {
+			t.Errorf("formatDur(%v) = %q, want %q", c.d, got, c.want)
+		}
 	}
 }
