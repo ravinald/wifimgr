@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"golang.org/x/term"
+
+	"github.com/ravinald/wifimgr/internal/durfmt"
 )
 
 // Reporter receives progress events for a cache refresh. doRefreshAPI drives the
@@ -117,7 +119,7 @@ func (l *linearReporter) Progress(string, int, int) {}
 func (l *linearReporter) APIDone(label string, dur time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	_, _ = fmt.Fprintf(l.w, "  [%s] Complete in %s\n", label, formatDur(dur))
+	_, _ = fmt.Fprintf(l.w, "  [%s] Complete in %s\n", label, durfmt.Elapsed(dur))
 }
 
 func (l *linearReporter) APIError(label string, err error) {
