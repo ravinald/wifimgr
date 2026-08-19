@@ -11,6 +11,8 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/ravinald/wifimgr/internal/durfmt"
 )
 
 // barWidth is the cell width of the determinate progress bar and the dotted
@@ -131,7 +133,7 @@ func (m *boardModel) View() string {
 			b = append(b, doneStyle.Render("✔")...)
 			b = append(b, ' ')
 			b = append(b, m.bar.ViewAs(1)...)
-			b = append(b, fmt.Sprintf("  Done in %s", formatDur(r.dur))...)
+			b = append(b, fmt.Sprintf("  Done in %s", durfmt.Elapsed(r.dur))...)
 		case rowFailed:
 			b = append(b, failStyle.Render("✖")...)
 			b = append(b, ' ')
@@ -152,20 +154,6 @@ func (m *boardModel) View() string {
 		b = append(b, '\n')
 	}
 	return string(b)
-}
-
-// formatDur renders an elapsed time at the scale an operator reads it: exact
-// milliseconds below a second, tenths below a minute, whole seconds above.
-// Milliseconds are right for a 748ms refresh and unreadable for a 269559ms one.
-func formatDur(d time.Duration) string {
-	switch {
-	case d < time.Second:
-		return fmt.Sprintf("%dms", d.Milliseconds())
-	case d < time.Minute:
-		return d.Round(100 * time.Millisecond).String()
-	default:
-		return d.Round(time.Second).String()
-	}
 }
 
 // friendlyError reduces a wrapped refresh error to a short, operator-readable

@@ -128,24 +128,3 @@ func TestBoardModelLineCountStable(t *testing.T) {
 		t.Fatalf("post-update line count = %d, want %d", got, want)
 	}
 }
-
-func TestFormatDur(t *testing.T) {
-	cases := []struct {
-		d    time.Duration
-		want string
-	}{
-		{748 * time.Millisecond, "748ms"},
-		{999 * time.Millisecond, "999ms"},
-		{time.Second, "1s"},
-		{2486 * time.Millisecond, "2.5s"},
-		{59500 * time.Millisecond, "59.5s"},
-		{time.Minute, "1m0s"},
-		{269559 * time.Millisecond, "4m30s"},
-		{2 * time.Hour, "2h0m0s"},
-	}
-	for _, c := range cases {
-		if got := formatDur(c.d); got != c.want {
-			t.Errorf("formatDur(%v) = %q, want %q", c.d, got, c.want)
-		}
-	}
-}
