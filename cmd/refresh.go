@@ -16,6 +16,7 @@ import (
 
 	"github.com/ravinald/wifimgr/internal/cmdutils"
 	"github.com/ravinald/wifimgr/internal/config"
+	"github.com/ravinald/wifimgr/internal/durfmt"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/refreshui"
 	"github.com/ravinald/wifimgr/internal/vendors"
@@ -295,7 +296,7 @@ func runMultiVendorClientDetailRefresh() error {
 			total += len(records)
 		}
 		fmt.Printf("  %d clients across %d sites (%d errors) in %s\n",
-			total, siteCount, errCount, time.Since(start).Round(time.Millisecond))
+			total, siteCount, errCount, durfmt.Elapsed(time.Since(start)))
 	}
 
 	return nil

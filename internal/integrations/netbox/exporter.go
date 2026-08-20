@@ -80,6 +80,9 @@ func (e *Exporter) Export(ctx context.Context, opts ExportOptions) (*ExportResul
 	}
 
 	// Calculate final stats
+	// Stats.Duration is a JSON field a script reads, not a line an operator
+	// reads, so it keeps millisecond precision rather than durfmt's display
+	// rounding.
 	result.Stats.Created = len(result.Created)
 	result.Stats.Updated = len(result.Updated)
 	result.Stats.Skipped = len(result.Skipped)

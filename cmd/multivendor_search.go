@@ -15,6 +15,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/ravinald/wifimgr/internal/cmdutils"
+	"github.com/ravinald/wifimgr/internal/durfmt"
 	"github.com/ravinald/wifimgr/internal/formatter"
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
@@ -153,7 +154,7 @@ func searchWirelessMultiVendor(ctx context.Context, searchText, siteID, format s
 				"vlan":          client.VLAN,
 				"site_id":       client.SiteID,
 				"site_name":     client.SiteName,
-				"last_seen_ago": formatLastSeenAgo(client.LastSeen),
+				"last_seen_ago": durfmt.AgeSince(client.LastSeen),
 				"api":           apiLabel,
 				"vendor":        vendorName,
 			}
@@ -597,49 +598,6 @@ func buildWiredSearchColumns(siteFilter string, targetAPICount int, _ bool) []fo
 	return cols
 }
 
-// formatLastSeenAgo renders `time.Since(t)` as two-unit d/h/m/s.
-// Zero and future times render as "—" — a future timestamp is almost certainly
-// vendor-side clock skew, not a real reading, so we don't show a negative.
-func formatLastSeenAgo(t time.Time) string {
-	if t.IsZero() {
-		return "—"
-	}
-	d := time.Since(t)
-	if d < 0 {
-		return "—"
-	}
-	if d < time.Minute {
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	}
-	if d < time.Hour {
-		m := int(d / time.Minute)
-		s := int(d/time.Second) % 60
-		if s == 0 {
-			return fmt.Sprintf("%dm", m)
-		}
-		return fmt.Sprintf("%dm%ds", m, s)
-	}
-	if d < 24*time.Hour {
-		h := int(d / time.Hour)
-		m := int(d/time.Minute) % 60
-		if m == 0 {
-			return fmt.Sprintf("%dh", h)
-		}
-		return fmt.Sprintf("%dh%dm", h, m)
-	}
-	days := int(d / (24 * time.Hour))
-	h := int(d/time.Hour) % 24
-	if h == 0 {
-		return fmt.Sprintf("%dd", days)
-	}
-	return fmt.Sprintf("%dd%dh", days, h)
-}
-
-// printBandCacheFooter emits the provenance footer under the wireless search
-// table. The Band column carries a `[*]` marker; this footer explains when
-// the Band cache was last refreshed or nudges the operator to populate it.
-// Fires whenever cacheHits > 0 OR the operator asked for detail/extensive
-// (so they see the footer even when nothing matched).
 func printBandCacheFooter(cacheHits int, newest time.Time, siteFilter string) {
 	fmt.Println()
 	if cacheHits == 0 {

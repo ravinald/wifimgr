@@ -61,7 +61,7 @@ func TestBoardModelDoneAndError(t *testing.T) {
 	}
 
 	v := m.View()
-	if !strings.Contains(v, "Started 952ms") {
+	if !strings.Contains(v, "Done in 952ms") {
 		t.Fatalf("view missing done summary:\n%s", v)
 	}
 	if !strings.Contains(v, "Failed: connection refused") {
