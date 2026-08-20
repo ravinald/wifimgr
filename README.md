@@ -66,6 +66,7 @@ wifimgr search wireless laptop target meraki-corp
 - **[Multi-Vendor Setup](docs/multi-vendor/user-guide.md)** - Managing Mist, Meraki, and Ubiquiti together
 - **[CHANGELOG](CHANGELOG.md)** - Release notes and roadmap
 - **[Known Issues](docs/known-issues.md)** - Current limitations and workarounds
+- **[NAF Framework](docs/naf-framework.md)** - How wifimgr maps onto the Network Automation Forum reference framework
 
 ## Development
 
