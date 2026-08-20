@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ravinald/wifimgr/internal/cmdutils"
+	"github.com/ravinald/wifimgr/internal/durfmt"
 )
 
 // showAPIStatusCmd represents the show api status command
@@ -99,13 +100,13 @@ func runShowAPIStatus(cmd *cobra.Command, args []string) error {
 		}
 		if !lastSuccess.IsZero() {
 			fmt.Printf("    Last Success: %s (%s ago)\n",
-				lastSuccess.Format("2006-01-02 15:04:05"), formatDuration(time.Since(lastSuccess)))
+				lastSuccess.Format("2006-01-02 15:04:05"), durfmt.Age(time.Since(lastSuccess)))
 		}
 		// Only surface a failure that the latest success hasn't already superseded.
 		// An older failure is stale history; a success newer than it means recovery.
 		if lastFailure.After(lastSuccess) {
 			fmt.Printf("    Last Failure: %s (%s ago)\n",
-				lastFailure.Format("2006-01-02 15:04:05"), formatDuration(time.Since(lastFailure)))
+				lastFailure.Format("2006-01-02 15:04:05"), durfmt.Age(time.Since(lastFailure)))
 		}
 		fmt.Println()
 	}
@@ -122,7 +123,7 @@ func runShowAPIStatus(cmd *cobra.Command, args []string) error {
 			}
 			line := cacheStatus.String()
 			if cache, cerr := cacheMgr.GetAPICache(status.Label); cerr == nil && !cache.Meta.LastRefresh.IsZero() {
-				line += fmt.Sprintf(" (%s old)", formatDuration(time.Since(cache.Meta.LastRefresh)))
+				line += fmt.Sprintf(" (%s old)", durfmt.Age(time.Since(cache.Meta.LastRefresh)))
 			}
 			fmt.Printf("  %s: %s\n", status.Label, line)
 		}

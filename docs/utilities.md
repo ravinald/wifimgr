@@ -37,11 +37,13 @@ One rule, split by audience:
 ### Terminal-Aware Behavior
 
 **Terminal Environments** (when output goes to a terminal that supports colors):
+
 - **⏺** (bold green) - Success/Connected/True states
 - **⏺** (bold red) - Failed/Disconnected/False states
 - **⏺** (bold blue) - Unknown/Undefined/Question states
 
 **Non-Terminal Environments** (when output is redirected, piped, or used in tests):
+
 - **Y** - Success/Connected/True states
 - **N** - Failed/Disconnected/False states
 - **?** - Unknown/Undefined/Question states
@@ -77,12 +79,14 @@ func isTerminal() bool {
 ```
 
 **Why Multi-FD Detection is Required:**
+
 - Different execution contexts may have different FD configurations
 - Some terminals/environments redirect specific file descriptors
 - The fallback chain ensures reliable detection across various scenarios
 - Simplified detection (checking only stdout) breaks color display
 
 **DO NOT:**
+
 - Simplify to check only `os.Stdout.Fd()`
 - Remove the fallback checks for stdin/stderr
 - Modify this logic without extensive testing across different environments
@@ -125,9 +129,47 @@ All sorting functions are implemented in `/api/sort.go`:
    - Maintained for backward compatibility
 
 ### Natural Sorting Benefits
+
 - Handles numeric components: "AP2", "AP10", "AP20" (not "AP10", "AP2", "AP20")
 - Case-insensitive comparison
 - Handles mixed alphanumeric strings intuitively
+
+## Duration Formatting
+
+`internal/durfmt` owns every duration a person reads. Two questions get asked of a duration and they take different answers, so the package exports two formatters rather than one.
+
+### Elapsed — how long an operation took
+
+`durfmt.Elapsed(d)` bands by magnitude so the field stays short and its width stays stable:
+
+| Range         | Format        | Example |
+| ------------- | ------------- | ------- |
+| `< 1s`        | whole ms      | `748ms` |
+| `1s` – `< 1m` | tenths        | `2.5s`  |
+| `>= 1m`       | whole seconds | `4m30s` |
+
+Negative input clamps to zero. Used by the refresh progress board, its linear (piped) counterpart, and the `refresh` command's own summary lines, so a board row and a piped log never disagree about how long a refresh took.
+
+### Age — how long ago something happened
+
+`durfmt.Age(d)` renders two units of `d`/`h`/`m`/`s`, dropping the minor unit when it is zero:
+
+| Range          | Format    | Example  |
+| -------------- | --------- | -------- |
+| `< 1m`         | seconds   | `45s`    |
+| `1m` – `< 1h`  | `m` + `s` | `15m20s` |
+| `1h` – `< 24h` | `h` + `m` | `2h30m`  |
+| `>= 24h`       | `d` + `h` | `3d4h`   |
+
+Two units is deliberate: `3d4h` answers the staleness question a cache footer asks, where `3d4h17m52s` buries it.
+
+`durfmt.AgeSince(t)` wraps `Age(time.Since(t))` with the guards a timestamp needs. A zero time means never recorded and a future time means vendor-side clock skew; both render as `—` rather than `0s`, which would read as "just now".
+
+Used by the `search` command's `last_seen_ago` column, the cache-refresh footers on `show` output, and `show api status`.
+
+### What stays raw
+
+Machine-read fields keep their own units and do not route through this package: `CacheMeta.RefreshDurationMs` (an `int64` in the cache file), the netbox exporter's `Stats.Duration` (a JSON stat a script parses), and debug-level log lines. Display rounding in any of those loses precision a consumer may want.
 
 ## Site ID and Name Handling
 

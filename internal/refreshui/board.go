@@ -11,6 +11,8 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/ravinald/wifimgr/internal/durfmt"
 )
 
 // barWidth is the cell width of the determinate progress bar and the dotted
@@ -131,7 +133,7 @@ func (m *boardModel) View() string {
 			b = append(b, doneStyle.Render("✔")...)
 			b = append(b, ' ')
 			b = append(b, m.bar.ViewAs(1)...)
-			b = append(b, fmt.Sprintf("  Started %dms", r.dur.Milliseconds())...)
+			b = append(b, fmt.Sprintf("  Done in %s", durfmt.Elapsed(r.dur))...)
 		case rowFailed:
 			b = append(b, failStyle.Render("✖")...)
 			b = append(b, ' ')

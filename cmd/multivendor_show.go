@@ -11,6 +11,7 @@ import (
 
 	"github.com/ravinald/wifimgr/internal/cmdutils"
 	"github.com/ravinald/wifimgr/internal/config"
+	"github.com/ravinald/wifimgr/internal/durfmt"
 	"github.com/ravinald/wifimgr/internal/formatter"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/vendors"
@@ -886,7 +887,7 @@ func refreshStampAndParens(success, failure time.Time, errMsg string) (string, s
 	var stamp, parens string
 	if !success.IsZero() {
 		stamp = success.Format(layout)
-		parens = formatDuration(time.Since(success)) + " ago"
+		parens = durfmt.Age(time.Since(success)) + " ago"
 	} else {
 		stamp = failure.Format(layout)
 		parens = "never succeeded"
@@ -896,35 +897,9 @@ func refreshStampAndParens(success, failure time.Time, errMsg string) (string, s
 		if note == "" {
 			note = "refresh failed"
 		}
-		parens += fmt.Sprintf(", %s %s ago", note, formatDuration(time.Since(failure)))
+		parens += fmt.Sprintf(", %s %s ago", note, durfmt.Age(time.Since(failure)))
 	}
 	return stamp, parens
-}
-
-// formatDuration formats a duration in a human-readable way.
-func formatDuration(d time.Duration) string {
-	if d < time.Minute {
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	}
-	if d < time.Hour {
-		mins := int(d.Minutes())
-		if mins == 1 {
-			return "1 minute"
-		}
-		return fmt.Sprintf("%d minutes", mins)
-	}
-	if d < 24*time.Hour {
-		hours := int(d.Hours())
-		if hours == 1 {
-			return "1 hour"
-		}
-		return fmt.Sprintf("%d hours", hours)
-	}
-	days := int(d.Hours() / 24)
-	if days == 1 {
-		return "1 day"
-	}
-	return fmt.Sprintf("%d days", days)
 }
 
 // deviceIntent holds the intended configuration for a device from local site configs.

@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ravinald/wifimgr/internal/cmdutils"
+	"github.com/ravinald/wifimgr/internal/durfmt"
 	"github.com/ravinald/wifimgr/internal/logging"
 	"github.com/ravinald/wifimgr/internal/vendors"
 )
@@ -150,7 +151,7 @@ func refreshClientDetailForSite(ctx context.Context, site *vendors.SiteInfo) err
 
 	logging.Debugf("refresh client wrote %d records, newest=%s", len(records), newest)
 	fmt.Printf("  %d clients — band from connection stats (last 24h)\n", len(records))
-	fmt.Printf("  done in %s\n", time.Since(start).Round(time.Millisecond))
+	fmt.Printf("  done in %s\n", durfmt.Elapsed(time.Since(start)))
 	return nil
 }
 
