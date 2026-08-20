@@ -17,6 +17,7 @@
 ## Reference
 
 - **[Field Mappings](field-mappings.md)** - Vendor API field mapping reference
+- **[NAF Framework](naf-framework.md)** - How wifimgr maps onto the Network Automation Forum reference framework, and where it falls short
 - **[Table Formatter](table-formatter.md)** - Output formats (table, CSV, JSON) and column customization
 - **[Utilities](utilities.md)** - MAC address handling, symbols, sorting, and site management
 - **[Known Issues](known-issues.md)** - Current limitations and workarounds
