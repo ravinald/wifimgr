@@ -1,6 +1,5 @@
 # Claude Code
 .claude/
-CLAUDE.md
 DOCUMENTATION_CHANGES_*.md
 DOCUMENTATION_REVIEW_*.md
 
@@ -84,5 +83,6 @@ coverage.html
 *.bak
 devicetype.json
 # BEGIN attic — managed by `attic`, do not edit between markers
+CLAUDE.md
 docs-internal
 # END attic
