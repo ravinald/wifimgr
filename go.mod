@@ -17,7 +17,7 @@ require (
 	github.com/netbox-community/go-netbox/v4 v4.3.0
 	github.com/ravinald/jsondiff v1.1.3
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
-	github.com/sirupsen/logrus v1.10.0
+	github.com/sirupsen/logrus v1.10.1
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	golang.org/x/crypto v0.55.0
