@@ -95,3 +95,17 @@ jobs:
         uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
+
+  # One stable context for branch protection to require. Requiring the real job
+  # names instead means any rename leaves a required check that never reports,
+  # and every pull request blocks with no failure to point at. dependency-review
+  # is skipped on push, which `always()` plus a failure-only test tolerates.
+  ci-ok:
+    name: ci-ok
+    needs: [lint, test, security, dependency-review]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any job did not succeed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
