@@ -17,6 +17,9 @@ on: pull_request_target
 permissions:
   contents: write
   pull-requests: write
+  # Labels live on the issues API even when applied to a pull request, so the
+  # major-bump path cannot create its own label without this.
+  issues: write
 
 jobs:
   auto-merge:
@@ -40,9 +43,17 @@ jobs:
 
       # A major bump is a code change wearing a dependency's clothes. Label it so
       # it is visibly waiting on a human rather than silently stalled.
+      #
+      # The label is created first because `--add-label` fails outright on a name
+      # the repo does not have ("'needs-review' not found"), which turns the one
+      # path that exists to flag a major bump into a red X that flags nothing.
+      # `--force` makes this idempotent, so no repo needs a setup step.
       - name: Label major bumps for review
         if: steps.meta.outputs.update-type == 'version-update:semver-major'
-        run: gh pr edit "$PR_URL" --add-label "needs-review"
+        run: |
+          gh label create needs-review --color d93f0b --force \
+            --description "Dependency major bump waiting on a human"
+          gh pr edit "$PR_URL" --add-label needs-review
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
