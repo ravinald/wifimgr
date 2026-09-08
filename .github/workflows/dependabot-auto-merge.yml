@@ -57,3 +57,8 @@ jobs:
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This job checks out nothing, so gh has no git remote to infer a
+          # repository from and `gh label create` exits on "not a git
+          # repository". The commands taking a PR URL read the repo out of it
+          # and are unaffected, which is why only the label path broke.
+          GH_REPO: ${{ github.repository }}
