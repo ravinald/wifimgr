@@ -83,6 +83,7 @@ coverage.html
 *.bak
 devicetype.json
 # BEGIN attic — managed by `attic`, do not edit between markers
+.drover.toml
 CLAUDE.md
 docs-internal
 # END attic
